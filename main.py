@@ -7,23 +7,36 @@ balance = 1000
 
 start = 244994
 end = 245602
-
 is_order_open = False
 
-def fetch_closing_prices(start: int, end: int):
+
+
+def fetch_all_data(start : int, end : int):
     df = pd.read_csv('btc_15m_data.csv')
     data = df.iloc[start:end]
-    closes_orders_lst = []
+
+    open_times_lst = []
+    close_times_lst = []
+    closes_prices_lst = []
+    opens_prices_lst = []
 
     for index, row in data.iterrows():
-        closes_orders_lst.append(row['Close'])
+        open_times_lst.append(row['Open time'])
+        close_times_lst.append(row['Close time'])
+        opens_prices_lst.append(row['Open'])
+        closes_prices_lst.append(row['Close'])
 
-    return closes_orders_lst
+    return {"Open time": open_times_lst, 
+            "Close time": close_times_lst,
+            "Open": opens_prices_lst,
+            "Close": closes_prices_lst
+            }
 
+all_data = fetch_all_data(start, end)
+close_prices = all_data["Close"]
 
 def get_MA(period):
     closes_orders_ma_lst = []
-    close_prices = fetch_closing_prices(start, end)
     ma_lst = []
     for price in close_prices:
         closes_orders_ma_lst.append(price)
@@ -43,7 +56,6 @@ def open_long(index):
     global is_order_open
     if is_order_open == False:
         is_order_open = True
-        close_prices = fetch_closing_prices(start, end)
         open_price = close_prices[index]
         print("Open Long at price: ", open_price)
         return open_price
@@ -52,7 +64,6 @@ def close_long(index):
     global is_order_open
     if is_order_open == True:
         is_order_open = False
-        close_prices = fetch_closing_prices(start, end)
         close_price = close_prices[index]
         print("Close Long at price: ", close_price)
         return close_price
@@ -60,7 +71,6 @@ def close_long(index):
 def when_open_order():
     global balance
     
-    close_prices = fetch_closing_prices(start, end)
     ma_9 = get_MA(9)
     ma_21 = get_MA(21)
     signals = []
