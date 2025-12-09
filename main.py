@@ -7,10 +7,10 @@ import pandas as pd
 # 2025/06/01 15m candle of btc_15m_data.csv is: 259440 <--- 2025/06/01
 # the last last 15m candle of btc_15m_data.csv is: 277581 <--- end
 
-start = 244944
-end = 277581
+start = 250608
+end = 259440
 
-is_order_open = False
+current_position = None  # None | "long" | "short"
 
 # Fetch data from CSV file
 def fetch_all_data(start : int, end : int):
@@ -59,28 +59,7 @@ def get_MA(period):
 
     return ma_lst
 
-# Open Long Position
-def open_long(index):
-    global is_order_open
-    if is_order_open == False:
-        is_order_open = True
-        open_price = open_prices[index]
-        # print("Open Long at price: ", open_price)
-        return open_price
-    else:
-        return None
-
-# Close Long Position
-def close_long(index):
-    global is_order_open
-    if is_order_open == True:
-        is_order_open = False
-        close_price = open_prices[index]
-        # print("Close Long at price: ", close_price)
-        return close_price
-    else:
-        return None
-
+# Calculate Trade Duration
 def trade_duration(open_time: str, close_time: str):
     # format: YYYY-MM-DD HH:MM:SS.microseconds
 
@@ -112,84 +91,187 @@ def trade_duration(open_time: str, close_time: str):
 
     return days, hours, minutes
 
+# Open Long Position
+def open_long(index):
+    global current_position
+    if current_position is None:
+        current_position = "long"
+        return open_prices[index]
+    return None
+
+
+# open Short Position
+def open_short(index):
+    global current_position
+    if current_position is None:
+        current_position = "short"
+        return open_prices[index]
+    return None
+
+
+# Close Long Position
+def close_long(index):
+    global current_position
+    if current_position == "long":
+        current_position = None
+        return open_prices[index]
+    return None
+
+
+# close Short Position
+def close_short(index):
+    global current_position
+    if current_position == "short":
+        current_position = None
+        return open_prices[index]
+    return None
+
+
 # Main Trading Logic
 def execute_trading_logic():
 
+    global current_position
+
     balance = 1000
     balance_without_fee = 1000
-    ma_9 = get_MA(15)
-    ma_21 = get_MA(32)
-    signals = []
-    order = []
-    profits = []
+    first_balance = 1000
+
+    fee_rate = 0.0005  # 0.05%
+
     deducting_fee_total = 0
     count_closed_orders = 0
+    profits_lst = []
+
+    current_position = None
+    entry_price = None
+    position_size = None
+    position_size_no_fee = None
+    balance_before_trade = None
+    balance_before_trade_no_fee = None
+    open_time_value = None
+
+    ma_9 = get_MA(15)
+    ma_21 = get_MA(15)
+    ma_35 = get_MA(45)
 
     for i in range(len(open_prices)):
-        if ma_9[i] is None or ma_21[i] is None:
-            signals.append("No Signal")
+
+        if ma_9[i] is None or ma_21[i] is None or ma_35[i] is None:
             continue
 
-        if ma_9[i] > ma_21[i]:
-            signals.append("Buy")
-            open_order = open_long(i)
-            if open_order is not None:
-                open_order_price = (balance * 1) / open_order
-                open_order_price_without_fee = (balance_without_fee * 1) / open_order
-                open_time_value = open_times[i]
-                order.append("open is " + str(open_order))
-                
-                print("Open Long at price:  ", open_order , " | Open Time:  ", open_time_value)
-                # print("your balance is:", round(balance, 2))
-                
+        # ===================== OPEN LONG =====================
+        if ma_21[i] > ma_35[i] and current_position is None:
 
-        elif ma_9[i] < ma_21[i]:
-            signals.append("Sell")
-            close_order = close_long(i)
-            if close_order is not None:
+            entry_price = open_prices[i]
 
-                count_closed_orders += 1
+            position_size = balance / entry_price
+            position_size_no_fee = balance_without_fee / entry_price
 
-                last_balance = balance
-                close_order_price = open_order_price * close_order / 1
-                close_order_price_without_fee = open_order_price_without_fee * close_order / 1
-                fee = close_order_price * 0.0005   # 0.05%
-                balance = close_order_price - fee
-                balance_without_fee = close_order_price_without_fee
-                deducting_fee_total += fee
-                order.append("close is " + str(close_order))
-                profit = balance - last_balance
-                profit_percent = balance * 100 / last_balance - 100
-                profits.append(profit)
-                # close_time_value = close_times[i]               #<----- maybe bug here
-                close_time_value = open_times[i]                  #<----- maybe bug here
+            balance_before_trade = balance
+            balance_before_trade_no_fee = balance_without_fee
 
-                days, hours, minutes = trade_duration(open_time = open_time_value, close_time= close_time_value)
+            open_time_value = open_times[i]
+            current_position = "long"
 
-                
-                print("Close Long at price: ", close_order , " | Close Time: ", close_time_value)
-                print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
-                print("balance:", round(last_balance, 2), "| new balance is:", round(balance, 2) ,
-                       " | Profit: ", round(profit, 2), "$" , " | Profit Percent: ", round(profit_percent, 2), "%")
-                print("Deducting Fee for this order: ", round(fee, 3), "$")
-                
-                print("--------------------------------------------------------------------------------------")
+            print("Open LONG at price:", entry_price, "| Open Time:", open_time_value)
 
-        else:
-            signals.append("Hold")
+        # ===================== CLOSE LONG =====================
+        elif ma_9[i] < ma_35[i] and current_position == "long":
 
-    # footer information
-    print("count closed orders is : ", count_closed_orders)
-    print("Final Balance: ", round(balance, 2))
-    print("balance without fee is: ", round(balance_without_fee, 2), "$")
-    print("Total Deducting Fee: ", round(deducting_fee_total, 2))
-    print("Total Profit: ", round(sum(profits), 2))
-    print("Fee compounding impact:",
-      round(balance_without_fee - deducting_fee_total - balance, 2), "$")
+            close_price = open_prices[i]
 
-    # print("Orders: " + str(order))
-    # print("Profits: ", profits)
-    # return signals
+            # -------- WITH FEE --------
+            close_value = position_size * close_price
+            fee = close_value * fee_rate
+            balance = close_value - fee
+
+            # -------- WITHOUT FEE --------
+            close_value_no_fee = position_size_no_fee * close_price
+            balance_without_fee = close_value_no_fee
+
+            profit = balance - balance_before_trade
+            profit_percent = profit * 100 / balance_before_trade
+
+            deducting_fee_total += fee
+            profits_lst.append(profit)
+            count_closed_orders += 1
+
+            close_time_value = open_times[i]
+            days, hours, minutes = trade_duration(open_time_value, close_time_value)
+
+            print("Close LONG at price:", close_price, "| Close Time:", close_time_value)
+            print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
+            print("Balance (no fee):",
+                  round(balance_before_trade_no_fee, 2), "→", round(balance_without_fee, 2))
+            print("Profit:", round(profit, 2), "$ |", round(profit_percent, 2), "%")
+            print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
+            print("-" * 90)
+
+            current_position = None
+
+        # ===================== OPEN SHORT =====================
+        elif ma_21[i] < ma_35[i] and current_position is None:
+
+            entry_price = open_prices[i]
+
+            position_size = balance / entry_price
+            position_size_no_fee = balance_without_fee / entry_price
+
+            balance_before_trade = balance
+            balance_before_trade_no_fee = balance_without_fee
+
+            open_time_value = open_times[i]
+            current_position = "short"
+
+            print("Open SHORT at price:", entry_price, "| Open Time:", open_time_value)
+
+        # ===================== CLOSE SHORT =====================
+        elif ma_9[i] > ma_35[i] and current_position == "short":
+
+            close_price = open_prices[i]
+
+            # -------- WITH FEE --------
+            profit = position_size * (entry_price - close_price)
+            close_value = balance_before_trade + profit
+            fee = close_value * fee_rate
+            balance = close_value - fee
+
+            # -------- WITHOUT FEE --------
+            profit_no_fee = position_size_no_fee * (entry_price - close_price)
+            balance_without_fee = balance_before_trade_no_fee + profit_no_fee
+
+            profit = balance - balance_before_trade
+            profit_percent = profit * 100 / balance_before_trade
+
+            deducting_fee_total += fee
+            profits_lst.append(profit)
+            count_closed_orders += 1
+
+            close_time_value = open_times[i]
+            days, hours, minutes = trade_duration(open_time_value, close_time_value)
+
+            print("Close SHORT at price:", close_price, "| Close Time:", close_time_value)
+            print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
+            print("Balance (no fee):",
+                  round(balance_before_trade_no_fee, 2), "→", round(balance_without_fee, 2))
+            print("Profit:", round(profit, 2), "$ |", round(profit_percent, 2), "%")
+            print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
+            print("-" * 90)
+
+            current_position = None
+
+    total_profit_percent = balance * 100 / first_balance - 100
+
+    print("✅ BACKTEST FINISHED")
+    print("Closed Trades:", count_closed_orders)
+    print("Final Balance:", round(balance, 2))
+    print("Final Balance (No Fee):", round(balance_without_fee, 2))
+    print("Total Fees Paid:", round(deducting_fee_total, 2))
+    print("Fee Compounding Impact:",
+          round(balance_without_fee - balance - deducting_fee_total, 2), "$")
+    print("Total Profit:", round(sum(profits_lst), 2), "$")
+    print("Total Profit Percent:", round(total_profit_percent, 2), "%")
+
 
 # Run the trading logic
 execute_trading_logic()
