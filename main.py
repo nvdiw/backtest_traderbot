@@ -161,18 +161,28 @@ def execute_trading_logic():
     first_open_time = open_times[0]
     last_close_time = open_times[-1]
 
+    # cooldown = 4     #180 is very good
+    # last_trade_index = -cooldown
+
+    cooldown_after_big_profit = 4 * 48  # 4 * x   [x] ---> number of candles per hour
+    cooldown_until_index = -1
+
+
+
     for i in range(len(open_prices)):
 
         if ma_21[i] is None or ma_50[i] is None or ma_100[i] is None or ma_200[i] is None:
             continue
         
+        if i < cooldown_until_index:
+            continue
 
         ma_distance = abs(ma_21[i] - ma_50[i]) / ma_50[i]
 
 
         if ma_100[i] >= ma_200[i]:
             # ===================== OPEN LONG =====================
-            if ma_21[i] > ma_50[i] and current_position is None and ma_distance > 0.002:
+            if ma_21[i] > ma_50[i] and current_position is None and ma_distance > 0.002 :
 
                 entry_price = open_prices[i]
 
@@ -184,6 +194,8 @@ def execute_trading_logic():
 
                 open_time_value = open_times[i]
                 current_position = "long"
+
+                last_trade_index = i  # update last trade index
 
                 print("Open LONG at price:", entry_price, "| Open Time:", open_time_value)
 
@@ -209,6 +221,11 @@ def execute_trading_logic():
                     profits_lst.append(profit)
                     count_closed_orders += 1
 
+                    # ---- COOLDOWN AFTER BIG PROFIT ----
+                    if profit_percent >= 3:
+                        cooldown_until_index = i + cooldown_after_big_profit
+                        print(f"🟡 Cooldown Activated (LONG) until candle index {cooldown_until_index}")
+
                     close_time_value = open_times[i]
                     days, hours, minutes = trade_duration(open_time_value, close_time_value)
 
@@ -224,7 +241,7 @@ def execute_trading_logic():
 
         if ma_100[i] < ma_200[i]:
             # ===================== OPEN SHORT =====================
-            if ma_21[i] < ma_50[i] and current_position is None and ma_distance > 0.002:
+            if ma_21[i] < ma_50[i] and current_position is None and ma_distance > 0.002 :
 
                 entry_price = open_prices[i]
 
@@ -236,6 +253,8 @@ def execute_trading_logic():
 
                 open_time_value = open_times[i]
                 current_position = "short"
+
+                last_trade_index = i  # update last trade index
 
                 print("Open SHORT at price:", entry_price, "| Open Time:", open_time_value)
 
@@ -261,6 +280,12 @@ def execute_trading_logic():
                     deducting_fee_total += fee
                     profits_lst.append(profit)
                     count_closed_orders += 1
+
+                    # ---- COOLDOWN AFTER BIG PROFIT ----
+                    if profit_percent >= 3:
+                        cooldown_until_index = i + cooldown_after_big_profit
+                        print(f"🟡 Cooldown Activated (SHORT) until candle index {cooldown_until_index}")
+
 
                     close_time_value = open_times[i]
                     days, hours, minutes = trade_duration(open_time_value, close_time_value)
