@@ -7,8 +7,8 @@ import pandas as pd
 # 2025/06/01 15m candle of btc_15m_data.csv is: 259440 <--- 2025/06/01
 # the last last 15m candle of btc_15m_data.csv is: 277581 <--- end
 
-start = 250608
-end = 259440
+start = 244944
+end = 277581
 
 current_position = None  # None | "long" | "short"
 
@@ -41,6 +41,7 @@ close_prices = all_data["Close"]
 open_times = all_data["Open time"]
 close_times = all_data["Close time"]
 
+
 # Calculate Moving Average
 def get_MA(period):
     closes_orders_ma_lst = []
@@ -58,6 +59,7 @@ def get_MA(period):
             closes_orders_ma_lst.pop(0)
 
     return ma_lst
+
 
 # Calculate Trade Duration
 def trade_duration(open_time: str, close_time: str):
@@ -90,6 +92,7 @@ def trade_duration(open_time: str, close_time: str):
     minutes = diff // 60
 
     return days, hours, minutes
+
 
 # Open Long Position
 def open_long(index):
@@ -133,8 +136,8 @@ def execute_trading_logic():
     global current_position
 
     balance = 1000
-    balance_without_fee = 1000
-    first_balance = 1000
+    balance_without_fee = balance
+    first_balance = balance
 
     fee_rate = 0.0005  # 0.05%
 
@@ -150,115 +153,121 @@ def execute_trading_logic():
     balance_before_trade_no_fee = None
     open_time_value = None
 
-    ma_9 = get_MA(15)
     ma_21 = get_MA(15)
-    ma_35 = get_MA(45)
-
+    ma_50 = get_MA(45)
+    ma_100 = get_MA(100)
+    ma_200 = get_MA(200)
     for i in range(len(open_prices)):
 
-        if ma_9[i] is None or ma_21[i] is None or ma_35[i] is None:
+        if ma_21[i] is None or ma_50[i] is None or ma_100[i] is None or ma_200[i] is None:
             continue
+        
 
-        # ===================== OPEN LONG =====================
-        if ma_21[i] > ma_35[i] and current_position is None:
+        ma_distance = abs(ma_21[i] - ma_50[i]) / ma_50[i]
 
-            entry_price = open_prices[i]
 
-            position_size = balance / entry_price
-            position_size_no_fee = balance_without_fee / entry_price
+        if ma_100[i] >= ma_200[i]:
+            # ===================== OPEN LONG =====================
+            if ma_21[i] > ma_50[i] and current_position is None and ma_distance > 0.002:
 
-            balance_before_trade = balance
-            balance_before_trade_no_fee = balance_without_fee
+                entry_price = open_prices[i]
 
-            open_time_value = open_times[i]
-            current_position = "long"
+                position_size = balance / entry_price
+                position_size_no_fee = balance_without_fee / entry_price
 
-            print("Open LONG at price:", entry_price, "| Open Time:", open_time_value)
+                balance_before_trade = balance
+                balance_before_trade_no_fee = balance_without_fee
 
-        # ===================== CLOSE LONG =====================
-        elif ma_9[i] < ma_35[i] and current_position == "long":
+                open_time_value = open_times[i]
+                current_position = "long"
 
-            close_price = open_prices[i]
+                print("Open LONG at price:", entry_price, "| Open Time:", open_time_value)
 
-            # -------- WITH FEE --------
-            close_value = position_size * close_price
-            fee = close_value * fee_rate
-            balance = close_value - fee
+            # ===================== CLOSE LONG =====================
+            if ma_21[i] < ma_50[i] and current_position == "long":
 
-            # -------- WITHOUT FEE --------
-            close_value_no_fee = position_size_no_fee * close_price
-            balance_without_fee = close_value_no_fee
+                close_price = open_prices[i]
 
-            profit = balance - balance_before_trade
-            profit_percent = profit * 100 / balance_before_trade
+                # -------- WITH FEE --------
+                close_value = position_size * close_price
+                fee = close_value * fee_rate
+                balance = close_value - fee
 
-            deducting_fee_total += fee
-            profits_lst.append(profit)
-            count_closed_orders += 1
+                # -------- WITHOUT FEE --------
+                close_value_no_fee = position_size_no_fee * close_price
+                balance_without_fee = close_value_no_fee
 
-            close_time_value = open_times[i]
-            days, hours, minutes = trade_duration(open_time_value, close_time_value)
+                profit = balance - balance_before_trade
+                profit_percent = profit * 100 / balance_before_trade
 
-            print("Close LONG at price:", close_price, "| Close Time:", close_time_value)
-            print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
-            print("Balance (no fee):",
-                  round(balance_before_trade_no_fee, 2), "→", round(balance_without_fee, 2))
-            print("Profit:", round(profit, 2), "$ |", round(profit_percent, 2), "%")
-            print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
-            print("-" * 90)
+                deducting_fee_total += fee
+                profits_lst.append(profit)
+                count_closed_orders += 1
 
-            current_position = None
+                close_time_value = open_times[i]
+                days, hours, minutes = trade_duration(open_time_value, close_time_value)
 
-        # ===================== OPEN SHORT =====================
-        elif ma_21[i] < ma_35[i] and current_position is None:
+                print("Close LONG at price:", close_price, "| Close Time:", close_time_value)
+                print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
+                print("Balance (no fee):",
+                    round(balance_before_trade_no_fee, 2), "→", round(balance_without_fee, 2))
+                print("Profit:", round(profit, 2), "$ |", round(profit_percent, 2), "%")
+                print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
+                print("-" * 90)
 
-            entry_price = open_prices[i]
+                current_position = None
 
-            position_size = balance / entry_price
-            position_size_no_fee = balance_without_fee / entry_price
+        if ma_100[i] < ma_200[i]:
+            # ===================== OPEN SHORT =====================
+            if ma_21[i] < ma_50[i] and current_position is None and ma_distance > 0.002:
 
-            balance_before_trade = balance
-            balance_before_trade_no_fee = balance_without_fee
+                entry_price = open_prices[i]
 
-            open_time_value = open_times[i]
-            current_position = "short"
+                position_size = balance / entry_price
+                position_size_no_fee = balance_without_fee / entry_price
 
-            print("Open SHORT at price:", entry_price, "| Open Time:", open_time_value)
+                balance_before_trade = balance
+                balance_before_trade_no_fee = balance_without_fee
 
-        # ===================== CLOSE SHORT =====================
-        elif ma_9[i] > ma_35[i] and current_position == "short":
+                open_time_value = open_times[i]
+                current_position = "short"
 
-            close_price = open_prices[i]
+                print("Open SHORT at price:", entry_price, "| Open Time:", open_time_value)
 
-            # -------- WITH FEE --------
-            profit = position_size * (entry_price - close_price)
-            close_value = balance_before_trade + profit
-            fee = close_value * fee_rate
-            balance = close_value - fee
+            # ===================== CLOSE SHORT =====================
+            if ma_21[i] > ma_50[i] and current_position == "short":
 
-            # -------- WITHOUT FEE --------
-            profit_no_fee = position_size_no_fee * (entry_price - close_price)
-            balance_without_fee = balance_before_trade_no_fee + profit_no_fee
+                close_price = open_prices[i]
 
-            profit = balance - balance_before_trade
-            profit_percent = profit * 100 / balance_before_trade
+                # -------- WITH FEE --------
+                profit = position_size * (entry_price - close_price)
+                close_value = balance_before_trade + profit
+                fee = close_value * fee_rate
+                balance = close_value - fee
 
-            deducting_fee_total += fee
-            profits_lst.append(profit)
-            count_closed_orders += 1
+                # -------- WITHOUT FEE --------
+                profit_no_fee = position_size_no_fee * (entry_price - close_price)
+                balance_without_fee = balance_before_trade_no_fee + profit_no_fee
 
-            close_time_value = open_times[i]
-            days, hours, minutes = trade_duration(open_time_value, close_time_value)
+                profit = balance - balance_before_trade
+                profit_percent = profit * 100 / balance_before_trade
 
-            print("Close SHORT at price:", close_price, "| Close Time:", close_time_value)
-            print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
-            print("Balance (no fee):",
-                  round(balance_before_trade_no_fee, 2), "→", round(balance_without_fee, 2))
-            print("Profit:", round(profit, 2), "$ |", round(profit_percent, 2), "%")
-            print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
-            print("-" * 90)
+                deducting_fee_total += fee
+                profits_lst.append(profit)
+                count_closed_orders += 1
 
-            current_position = None
+                close_time_value = open_times[i]
+                days, hours, minutes = trade_duration(open_time_value, close_time_value)
+
+                print("Close SHORT at price:", close_price, "| Close Time:", close_time_value)
+                print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
+                print("Balance (no fee):",
+                    round(balance_before_trade_no_fee, 2), "→", round(balance_without_fee, 2))
+                print("Profit:", round(profit, 2), "$ |", round(profit_percent, 2), "%")
+                print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
+                print("-" * 90)
+
+                current_position = None
 
     total_profit_percent = balance * 100 / first_balance - 100
 
