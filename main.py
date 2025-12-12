@@ -7,6 +7,9 @@ import pandas as pd
 # 2025/06/01 15m candle of btc_15m_data.csv is: 259440 <--- 2025/06/01
 # the last last 15m candle of btc_15m_data.csv is: 277580 <--- end
 
+# 25 oct 2025 00:00 = 273456
+# 6 dec 2025 00:00 = 277580
+
 start = 244944
 end = 277580
 
@@ -180,125 +183,121 @@ def execute_trading_logic():
         ma_distance = abs(ma_21[i] - ma_50[i]) / ma_50[i]
 
 
-        if ma_100[i] >= ma_200[i]:
-            # ===================== OPEN LONG =====================
-            if ma_21[i] > ma_50[i] and current_position is None and ma_distance > 0.002 :
 
-                entry_price = open_prices[i]
+        # ===================== OPEN LONG =====================
+        if ma_100[i] >= ma_200[i] and ma_21[i] > ma_50[i] and current_position is None and ma_distance > 0.002 :
 
-                position_size = balance / entry_price
-                position_size_no_fee = balance_without_fee / entry_price
+            entry_price = open_prices[i]
 
-                balance_before_trade = balance
-                balance_before_trade_no_fee = balance_without_fee
+            position_size = balance / entry_price
+            position_size_no_fee = balance_without_fee / entry_price
 
-                open_time_value = open_times[i]
-                current_position = "long"
+            balance_before_trade = balance
+            balance_before_trade_no_fee = balance_without_fee
 
-                last_trade_index = i  # update last trade index
+            open_time_value = open_times[i]
+            current_position = "long"
 
-                print("Open LONG at price:", entry_price, "| Open Time:", open_time_value)
+            print("Open LONG at price:", entry_price, "| Open Time:", open_time_value)
 
-            # ===================== CLOSE LONG =====================
-            if current_position == "long":
-                if ma_21[i] < ma_50[i] and open_prices[i] < ma_21[i]:
+        # ===================== CLOSE LONG =====================
+        if current_position == "long":
+            if (ma_21[i] < ma_50[i] and open_prices[i] < ma_21[i]) or (ma_100[i] < ma_200[i]):
 
-                    close_price = open_prices[i]
+                close_price = open_prices[i]
 
-                    # -------- WITH FEE --------
-                    close_value = position_size * close_price
-                    fee = close_value * fee_rate
-                    balance = close_value - fee
+                # -------- WITH FEE --------
+                close_value = position_size * close_price
+                fee = close_value * fee_rate
+                balance = close_value - fee
 
-                    # -------- WITHOUT FEE --------
-                    close_value_no_fee = position_size_no_fee * close_price
-                    balance_without_fee = close_value_no_fee
+                # -------- WITHOUT FEE --------
+                close_value_no_fee = position_size_no_fee * close_price
+                balance_without_fee = close_value_no_fee
 
-                    profit = balance - balance_before_trade
-                    profit_percent = profit * 100 / balance_before_trade
+                profit = balance - balance_before_trade
+                profit_percent = profit * 100 / balance_before_trade
 
-                    deducting_fee_total += fee
-                    profits_lst.append(profit)
-                    count_closed_orders += 1
+                deducting_fee_total += fee
+                profits_lst.append(profit)
+                count_closed_orders += 1
 
-                    # ---- COOLDOWN AFTER BIG PROFIT ----
-                    if profit_percent >= 3:
-                        cooldown_until_index = i + cooldown_after_big_profit
-                        print(f"🟡 Cooldown Activated (LONG) until candle index {cooldown_until_index}")
+                # ---- COOLDOWN AFTER BIG PROFIT ----
+                if profit_percent >= 3:
+                    cooldown_until_index = i + cooldown_after_big_profit
+                    print(f"🟡 Cooldown Activated (LONG) until candle index {cooldown_until_index}")
 
-                    close_time_value = open_times[i]
-                    days, hours, minutes = trade_duration(open_time_value, close_time_value)
+                close_time_value = open_times[i]
+                days, hours, minutes = trade_duration(open_time_value, close_time_value)
 
-                    print("Close LONG at price:", close_price, "| Close Time:", close_time_value)
-                    print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
-                    print("Balance (no fee):",
-                        round(balance_before_trade_no_fee, 2), "→", round(balance_without_fee, 2))
-                    print("Profit:", round(profit, 2), "$ |", round(profit_percent, 2), "%")
-                    print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
-                    print("-" * 90)
+                print("Close LONG at price:", close_price, "| Close Time:", close_time_value)
+                print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
+                print("Balance (no fee):",
+                    round(balance_before_trade_no_fee, 2), "→", round(balance_without_fee, 2))
+                print("Profit:", round(profit, 2), "$ |", round(profit_percent, 2), "%")
+                print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
+                print("-" * 90)
 
-                    current_position = None
-
-        if ma_100[i] < ma_200[i]:
-            # ===================== OPEN SHORT =====================
-            if ma_21[i] < ma_50[i] and current_position is None and ma_distance > 0.002 :
-
-                entry_price = open_prices[i]
-
-                position_size = balance / entry_price
-                position_size_no_fee = balance_without_fee / entry_price
-
-                balance_before_trade = balance
-                balance_before_trade_no_fee = balance_without_fee
-
-                open_time_value = open_times[i]
-                current_position = "short"
-
-                last_trade_index = i  # update last trade index
-
-                print("Open SHORT at price:", entry_price, "| Open Time:", open_time_value)
-
-            # ===================== CLOSE SHORT =====================
-            if current_position == "short":
-                if ma_21[i] > ma_50[i] and open_prices[i] > ma_21[i]:
-
-                    close_price = open_prices[i]
-
-                    # -------- WITH FEE --------
-                    profit = position_size * (entry_price - close_price)
-                    close_value = balance_before_trade + profit
-                    fee = close_value * fee_rate
-                    balance = close_value - fee
-
-                    # -------- WITHOUT FEE --------
-                    profit_no_fee = position_size_no_fee * (entry_price - close_price)
-                    balance_without_fee = balance_before_trade_no_fee + profit_no_fee
-
-                    profit = balance - balance_before_trade
-                    profit_percent = profit * 100 / balance_before_trade
-
-                    deducting_fee_total += fee
-                    profits_lst.append(profit)
-                    count_closed_orders += 1
-
-                    # ---- COOLDOWN AFTER BIG PROFIT ----
-                    if profit_percent >= 3:
-                        cooldown_until_index = i + cooldown_after_big_profit
-                        print(f"🟡 Cooldown Activated (SHORT) until candle index {cooldown_until_index}")
+                current_position = None
 
 
-                    close_time_value = open_times[i]
-                    days, hours, minutes = trade_duration(open_time_value, close_time_value)
+        # ===================== OPEN SHORT =====================
+        if ma_100[i] < ma_200[i] and ma_21[i] < ma_50[i] and current_position is None and ma_distance > 0.002 :
 
-                    print("Close SHORT at price:", close_price, "| Close Time:", close_time_value)
-                    print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
-                    print("Balance (no fee):",
-                        round(balance_before_trade_no_fee, 2), "→", round(balance_without_fee, 2))
-                    print("Profit:", round(profit, 2), "$ |", round(profit_percent, 2), "%")
-                    print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
-                    print("-" * 90)
+            entry_price = open_prices[i]
 
-                    current_position = None
+            position_size = balance / entry_price
+            position_size_no_fee = balance_without_fee / entry_price
+
+            balance_before_trade = balance
+            balance_before_trade_no_fee = balance_without_fee
+
+            open_time_value = open_times[i]
+            current_position = "short"
+
+            print("Open SHORT at price:", entry_price, "| Open Time:", open_time_value)
+
+        # ===================== CLOSE SHORT =====================
+        if current_position == "short":
+            if (ma_21[i] > ma_50[i] and open_prices[i] > ma_21[i]) or (ma_100[i] >= ma_200[i]):
+
+                close_price = open_prices[i]
+
+                # -------- WITH FEE --------
+                profit = position_size * (entry_price - close_price)
+                close_value = balance_before_trade + profit
+                fee = close_value * fee_rate
+                balance = close_value - fee
+
+                # -------- WITHOUT FEE --------
+                profit_no_fee = position_size_no_fee * (entry_price - close_price)
+                balance_without_fee = balance_before_trade_no_fee + profit_no_fee
+
+                profit = balance - balance_before_trade
+                profit_percent = profit * 100 / balance_before_trade
+
+                deducting_fee_total += fee
+                profits_lst.append(profit)
+                count_closed_orders += 1
+
+                # ---- COOLDOWN AFTER BIG PROFIT ----
+                if profit_percent >= 3:
+                    cooldown_until_index = i + cooldown_after_big_profit
+                    print(f"🟡 Cooldown Activated (SHORT) until candle index {cooldown_until_index}")
+
+
+                close_time_value = open_times[i]
+                days, hours, minutes = trade_duration(open_time_value, close_time_value)
+
+                print("Close SHORT at price:", close_price, "| Close Time:", close_time_value)
+                print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
+                print("Balance (no fee):",
+                    round(balance_before_trade_no_fee, 2), "→", round(balance_without_fee, 2))
+                print("Profit:", round(profit, 2), "$ |", round(profit_percent, 2), "%")
+                print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
+                print("-" * 90)
+
+                current_position = None
 
     total_profit_percent = balance * 100 / first_balance - 100
     days, hours, minutes = trade_duration(first_open_time, last_close_time)
