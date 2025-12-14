@@ -178,6 +178,8 @@ def execute_trading_logic():
     first_balance = balance
 
     fee_rate = 0.0005  # 0.05%
+    total_wins = 0
+    total_losses = 0
 
     deducting_fee_total = 0
     count_closed_orders = 0
@@ -263,6 +265,12 @@ def execute_trading_logic():
                 profits_lst.append(profit)
                 count_closed_orders += 1
 
+                # ---- count wins and losses ----
+                if profit_percent > 0:
+                    total_wins += 1
+                else:
+                    total_losses += 1
+
                 # ---- COOLDOWN AFTER BIG PROFIT ----
                 if profit_percent >= 3:
                     cooldown_until_index = i + cooldown_after_big_profit
@@ -339,6 +347,12 @@ def execute_trading_logic():
                 profits_lst.append(profit)
                 count_closed_orders += 1
 
+                # ---- count wins and losses ----
+                if profit_percent > 0:
+                    total_wins += 1
+                else:
+                    total_losses += 1
+
                 # ---- COOLDOWN AFTER BIG PROFIT ----
                 if profit_percent >= 3:
                     cooldown_until_index = i + cooldown_after_big_profit
@@ -375,19 +389,25 @@ def execute_trading_logic():
 
                 current_position = None
 
+
+
     total_profit_percent = balance * 100 / first_balance - 100
     days, hours, minutes = trade_duration(first_open_time, last_close_time)
     duration_minutes_total = days * 24 * 60 + hours * 60 + minutes
+    win_rate = (total_wins / (total_wins + total_losses)) * 100 if (total_wins + total_losses) > 0 else 0
 
 
     print("✅ BACKTEST FINISHED")
     print("Closed Trades:", count_closed_orders)
+    print("Total Wins:", total_wins)
+    print("Total Losses:", total_losses)
     print("Final Balance:", round(balance, 2))
     print("Final Balance (No Fee):", round(balance_without_fee, 2))
     print("Total Fees Paid:", round(deducting_fee_total, 2))
     print("Fee Compounding Impact:",
           round(balance_without_fee - balance - deducting_fee_total, 2), "$")
     print(f"Total Duration : {days} days, {hours} hours, {minutes} minutes")
+    print("Win Rate:", round(win_rate, 2), "%")
     print("Total Profit:", round(sum(profits_lst), 2), "$")
     print("Total Profit Percent:", round(total_profit_percent, 2), "%")
 
