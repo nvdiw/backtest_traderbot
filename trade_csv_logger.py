@@ -1,0 +1,73 @@
+import pandas as pd
+
+
+class TradeCSVLogger:
+    def __init__(self):
+        self.rows = []
+
+    def log_trade(
+        self,
+        trade_type,
+        open_time,
+        close_time,
+        entry_price,
+        close_price,
+        balance_before,
+        balance_after,
+        profit,
+        profit_percent,
+        fee,
+        days,
+        hours,
+        minutes
+    ):
+        self.rows.append({
+            "type": trade_type,
+            "open_time": open_time,
+            "close_time": close_time,
+            "entry_price": entry_price,
+            "close_price": close_price,
+            "balance_before": balance_before,
+            "balance_after": balance_after,
+            "profit": profit,
+            "profit_percent": profit_percent,
+            "fee_paid": fee,
+            "duration_days": days,
+            "duration_hours": hours,
+            "duration_minutes": minutes
+        })
+
+    def save_csv(
+        self,
+        first_balance,
+        final_balance,
+        total_profit,
+        total_profit_percent,
+        total_fee,
+        start_time,
+        end_time,
+        days,
+        hours,
+        minutes,
+        file_name="data_orders.csv"
+    ):
+        df = pd.DataFrame(self.rows)
+
+        summary_row = {
+            "type": "SUMMARY",
+            "open_time": start_time,
+            "close_time": end_time,
+            "entry_price": None,
+            "close_price": None,
+            "balance_before": first_balance,
+            "balance_after": final_balance,
+            "profit": total_profit,
+            "profit_percent": total_profit_percent,
+            "fee_paid": total_fee,
+            "duration_days": days,
+            "duration_hours": hours,
+            "duration_minutes": minutes
+        }
+
+        df = pd.concat([df, pd.DataFrame([summary_row])], ignore_index=True)
+        df.to_csv(file_name, index=False, encoding="utf-8")

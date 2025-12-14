@@ -2,13 +2,18 @@
 
 import pandas as pd
 
+# My Codes :
+from trade_csv_logger import TradeCSVLogger
+
+
 # 2025/01/01 first 15m candle of btc_15m_data.csv is: 244944 <--- start
 # 2025/03/01 15m candle of btc_15m_data.csv is: 250608 <--- 2025/03/01
 # 2025/06/01 15m candle of btc_15m_data.csv is: 259440 <--- 2025/06/01
 # the last last 15m candle of btc_15m_data.csv is: 277580 <--- end
-
 # 25 oct 2025 00:00 = 273456
 # 6 dec 2025 00:00 = 277580
+
+
 
 start = 244944
 end = 277580
@@ -138,6 +143,8 @@ def execute_trading_logic():
 
     global current_position
 
+    csv_logger = TradeCSVLogger()
+
     balance = 1000
     balance_without_fee = balance
     first_balance = balance
@@ -238,6 +245,23 @@ def execute_trading_logic():
                 print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
                 print("-" * 90)
 
+                csv_logger.log_trade(
+                    "LONG",
+                    open_time_value,
+                    close_time_value,
+                    entry_price,
+                    close_price,
+                    round(balance_before_trade, 2),
+                    round(balance, 2),
+                    round(profit, 2),
+                    round(profit_percent, 2),
+                    round(fee, 4),
+                    days,
+                    hours,
+                    minutes
+                )
+
+
                 current_position = None
 
 
@@ -297,6 +321,22 @@ def execute_trading_logic():
                 print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
                 print("-" * 90)
 
+                csv_logger.log_trade(
+                    "SHORT",
+                    open_time_value,
+                    close_time_value,
+                    entry_price,
+                    close_price,
+                    round(balance_before_trade, 2),
+                    round(balance, 2),
+                    round(profit, 2),
+                    round(profit_percent, 2),
+                    round(fee, 4),
+                    days,
+                    hours,
+                    minutes
+                )
+
                 current_position = None
 
     total_profit_percent = balance * 100 / first_balance - 100
@@ -312,6 +352,19 @@ def execute_trading_logic():
     print(f"Total Duration : {days} days, {hours} hours, {minutes} minutes")
     print("Total Profit:", round(sum(profits_lst), 2), "$")
     print("Total Profit Percent:", round(total_profit_percent, 2), "%")
+
+    csv_logger.save_csv(
+    first_balance=first_balance,
+    final_balance=balance,
+    total_profit=sum(profits_lst),
+    total_profit_percent=total_profit_percent,
+    total_fee=deducting_fee_total,
+    start_time=first_open_time,
+    end_time=last_close_time,
+    days=days,
+    hours=hours,
+    minutes=minutes
+    )
 
 
 # Run the trading logic
