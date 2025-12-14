@@ -32,6 +32,7 @@ class TradeCSVLogger:
             "profit": profit,
             "profit_percent": profit_percent,
             "fee_paid": fee,
+            "duration_minutes_total": days * 24 * 60 + hours * 60 + minutes,
             "duration_days": days,
             "duration_hours": hours,
             "duration_minutes": minutes

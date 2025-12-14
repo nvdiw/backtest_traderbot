@@ -236,6 +236,8 @@ def execute_trading_logic():
 
                 close_time_value = open_times[i]
                 days, hours, minutes = trade_duration(open_time_value, close_time_value)
+                duration_minutes_total = days * 24 * 60 + hours * 60 + minutes
+
 
                 print("Close LONG at price:", close_price, "| Close Time:", close_time_value)
                 print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
@@ -312,6 +314,8 @@ def execute_trading_logic():
 
                 close_time_value = open_times[i]
                 days, hours, minutes = trade_duration(open_time_value, close_time_value)
+                duration_minutes_total = days * 24 * 60 + hours * 60 + minutes
+
 
                 print("Close SHORT at price:", close_price, "| Close Time:", close_time_value)
                 print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
@@ -341,6 +345,8 @@ def execute_trading_logic():
 
     total_profit_percent = balance * 100 / first_balance - 100
     days, hours, minutes = trade_duration(first_open_time, last_close_time)
+    duration_minutes_total = days * 24 * 60 + hours * 60 + minutes
+
 
     print("✅ BACKTEST FINISHED")
     print("Closed Trades:", count_closed_orders)
