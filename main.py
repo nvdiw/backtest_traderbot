@@ -69,6 +69,34 @@ def get_MA(period):
     return ma_lst
 
 
+# Calculate Exponential Moving Average
+def get_EMA(period):
+    ema_lst = []
+    k = 2 / (period + 1)
+    ema_prev = None
+
+    for price in open_prices:
+
+        if ema_prev is None:
+            ema = None
+        else:
+            ema = (price * k) + (ema_prev * (1 - k))
+            ema = round(ema, 2)
+
+        ema_lst.append(ema)
+
+        if ema is not None:
+            ema_prev = ema
+
+        # مقدار اولیه EMA بعد از پر شدن دوره
+        if ema_prev is None and len(ema_lst) == period:
+            sma = sum(open_prices[:period]) / period
+            ema_prev = round(sma, 2)
+            ema_lst[-1] = ema_prev
+
+    return ema_lst
+
+
 # Calculate Trade Duration
 def trade_duration(open_time: str, close_time: str):
     # format: YYYY-MM-DD HH:MM:SS.microseconds
@@ -163,9 +191,10 @@ def execute_trading_logic():
     balance_before_trade_no_fee = None
     open_time_value = None
 
-    ma_21 = get_MA(15)
-    ma_50 = get_MA(45)
-    ma_100 = get_MA(100)
+    # ma_21 = get_MA(15)
+    ema_14 = get_EMA(14)
+    ma_50 = get_MA(50)
+    ma_130 = get_MA(130)
     ma_200 = get_MA(200)
 
     first_open_time = open_times[0]
@@ -178,21 +207,26 @@ def execute_trading_logic():
     cooldown_until_index = -1
 
 
+    # check data loaded correctly :
+        # print(len(open_prices), "candles loaded.")
+        # print("len(ema_14):", len(ema_14))
+        # print("len(ma_50):", len(ma_50))
+
 
     for i in range(len(open_prices)):
 
-        if ma_21[i] is None or ma_50[i] is None or ma_100[i] is None or ma_200[i] is None:
+        if ema_14[i] is None or ma_50[i] is None or ma_130[i] is None or ma_200[i] is None:
             continue
         
         if i < cooldown_until_index:
             continue
 
-        ma_distance = abs(ma_21[i] - ma_50[i]) / ma_50[i]
+        ma_distance = abs(ema_14[i] - ma_50[i]) / ma_50[i]
 
 
 
         # ===================== OPEN LONG =====================
-        if ma_100[i] >= ma_200[i] and ma_21[i] > ma_50[i] and current_position is None and ma_distance > 0.002 :
+        if ma_130[i] >= ma_200[i] and ema_14[i] > ma_50[i] and current_position is None and ma_distance > 0.002 :
 
             entry_price = open_prices[i]
 
@@ -209,7 +243,7 @@ def execute_trading_logic():
 
         # ===================== CLOSE LONG =====================
         if current_position == "long":
-            if (ma_21[i] < ma_50[i] and open_prices[i] < ma_21[i]) or (ma_100[i] < ma_200[i]):
+            if (ema_14[i] < ma_50[i] and open_prices[i] < ema_14[i]) or (ma_130[i] < ma_200[i]):
 
                 close_price = open_prices[i]
 
@@ -236,7 +270,6 @@ def execute_trading_logic():
 
                 close_time_value = open_times[i]
                 days, hours, minutes = trade_duration(open_time_value, close_time_value)
-                duration_minutes_total = days * 24 * 60 + hours * 60 + minutes
 
 
                 print("Close LONG at price:", close_price, "| Close Time:", close_time_value)
@@ -268,7 +301,7 @@ def execute_trading_logic():
 
 
         # ===================== OPEN SHORT =====================
-        if ma_100[i] < ma_200[i] and ma_21[i] < ma_50[i] and current_position is None and ma_distance > 0.002 :
+        if ma_130[i] < ma_200[i] and ema_14[i] < ma_50[i] and current_position is None and ma_distance > 0.002 :
 
             entry_price = open_prices[i]
 
@@ -285,7 +318,7 @@ def execute_trading_logic():
 
         # ===================== CLOSE SHORT =====================
         if current_position == "short":
-            if (ma_21[i] > ma_50[i] and open_prices[i] > ma_21[i]) or (ma_100[i] >= ma_200[i]):
+            if (ema_14[i] > ma_50[i] and open_prices[i] > ema_14[i]) or (ma_130[i] >= ma_200[i]):
 
                 close_price = open_prices[i]
 
@@ -314,7 +347,6 @@ def execute_trading_logic():
 
                 close_time_value = open_times[i]
                 days, hours, minutes = trade_duration(open_time_value, close_time_value)
-                duration_minutes_total = days * 24 * 60 + hours * 60 + minutes
 
 
                 print("Close SHORT at price:", close_price, "| Close Time:", close_time_value)
