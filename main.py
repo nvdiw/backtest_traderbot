@@ -176,6 +176,7 @@ def execute_trading_logic():
     balance = 1000
     balance_without_fee = balance
     first_balance = balance
+    levelrage = 1
 
     fee_rate = 0.0005  # 0.05%
     total_wins = 0
@@ -207,7 +208,7 @@ def execute_trading_logic():
     # cooldown = 4     #180 is very good
     # last_trade_index = -cooldown
 
-    cooldown_after_big_profit = 4 * 48  # 4 * x   [x] ---> number of candles per hour
+    cooldown_after_big_pnl = 4 * 48  # 4 * x   [x] ---> number of candles per hour
     cooldown_until_index = -1
 
 
@@ -234,8 +235,8 @@ def execute_trading_logic():
 
             entry_price = open_prices[i]
 
-            position_size = balance / entry_price
-            position_size_no_fee = balance_without_fee / entry_price
+            position_size = ( balance * levelrage ) / entry_price
+            position_size_no_fee = ( balance_without_fee * levelrage ) / entry_price
 
             balance_before_trade = balance
             balance_before_trade_no_fee = balance_without_fee
@@ -253,7 +254,7 @@ def execute_trading_logic():
 
                 # -------- WITH FEE --------
                 pnl = position_size * (close_price - entry_price)
-                close_value = balance_before_trade + pnl
+                close_value = position_size * entry_price + pnl
                 fee = close_value * fee_rate
                 balance = balance_before_trade + pnl - fee
 
@@ -264,6 +265,7 @@ def execute_trading_logic():
                 # profit after fee
                 profit = balance - balance_before_trade
                 profit_percent = profit * 100 / balance_before_trade
+                pnl_percent = (pnl * 100) / (position_size * entry_price)
 
                 deducting_fee_total += fee
                 profits_lst.append(profit)
@@ -282,8 +284,8 @@ def execute_trading_logic():
                     total_losses += 1
 
                 # ---- COOLDOWN AFTER BIG PROFIT ----
-                if profit_percent >= 3 or profit_percent <= -2:
-                    cooldown_until_index = i + cooldown_after_big_profit
+                if pnl_percent >= 3 or pnl_percent <= -2:
+                    cooldown_until_index = i + cooldown_after_big_pnl
                     print(f"🟡 Cooldown Activated (LONG) until candle index {cooldown_until_index}")
 
                 close_time_value = open_times[i]
@@ -323,8 +325,8 @@ def execute_trading_logic():
 
             entry_price = open_prices[i]
 
-            position_size = balance / entry_price
-            position_size_no_fee = balance_without_fee / entry_price
+            position_size = ( balance * levelrage ) / entry_price
+            position_size_no_fee = ( balance_without_fee * levelrage ) / entry_price
 
             balance_before_trade = balance
             balance_before_trade_no_fee = balance_without_fee
@@ -342,7 +344,7 @@ def execute_trading_logic():
 
                 # -------- WITH FEE --------
                 pnl = position_size * (entry_price - close_price)
-                close_value = balance_before_trade + pnl
+                close_value = position_size * entry_price + pnl
                 fee = close_value * fee_rate
                 balance = balance_before_trade + pnl - fee
 
@@ -353,6 +355,7 @@ def execute_trading_logic():
                 # profit after fee
                 profit = balance - balance_before_trade
                 profit_percent = profit * 100 / balance_before_trade
+                pnl_percent = (pnl * 100) / (position_size * entry_price)
 
                 deducting_fee_total += fee
                 profits_lst.append(profit)
@@ -371,8 +374,8 @@ def execute_trading_logic():
                     total_losses += 1
 
                 # ---- COOLDOWN AFTER BIG PROFIT ----
-                if profit_percent >= 3 or profit_percent <= -2:
-                    cooldown_until_index = i + cooldown_after_big_profit
+                if pnl_percent >= 3 or pnl_percent <= -2:
+                    cooldown_until_index = i + cooldown_after_big_pnl
                     print(f"🟡 Cooldown Activated (SHORT) until candle index {cooldown_until_index}")
 
 
