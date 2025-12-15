@@ -183,6 +183,8 @@ def execute_trading_logic():
 
     deducting_fee_total = 0
     count_closed_orders = 0
+    max_drawdown = 0
+    equity_curve = []
     profits_lst = []
 
     current_position = None
@@ -245,7 +247,7 @@ def execute_trading_logic():
 
         # ===================== CLOSE LONG =====================
         if current_position == "long":
-            if (ema_14[i] < ma_50[i] and open_prices[i] < ema_14[i]) or (ma_130[i] < ma_200[i]):
+            if (ema_14[i] < ma_50[i]) or (ma_130[i] < ma_200[i]):
 
                 close_price = open_prices[i]
 
@@ -265,6 +267,12 @@ def execute_trading_logic():
                 profits_lst.append(profit)
                 count_closed_orders += 1
 
+                equity_curve.append(balance)
+                # ---- calculate max drawdown ----
+                peak = max(equity_curve)
+                drawdown = (balance - peak) / peak * 100
+                max_drawdown = min(max_drawdown, drawdown)
+
                 # ---- count wins and losses ----
                 if profit_percent > 0:
                     total_wins += 1
@@ -272,7 +280,7 @@ def execute_trading_logic():
                     total_losses += 1
 
                 # ---- COOLDOWN AFTER BIG PROFIT ----
-                if profit_percent >= 3:
+                if profit_percent >= 3 or profit_percent <= -2:
                     cooldown_until_index = i + cooldown_after_big_profit
                     print(f"🟡 Cooldown Activated (LONG) until candle index {cooldown_until_index}")
 
@@ -326,7 +334,7 @@ def execute_trading_logic():
 
         # ===================== CLOSE SHORT =====================
         if current_position == "short":
-            if (ema_14[i] > ma_50[i] and open_prices[i] > ema_14[i]) or (ma_130[i] >= ma_200[i]):
+            if (ema_14[i] > ma_50[i]) or (ma_130[i] >= ma_200[i]):
 
                 close_price = open_prices[i]
 
@@ -347,6 +355,12 @@ def execute_trading_logic():
                 profits_lst.append(profit)
                 count_closed_orders += 1
 
+                equity_curve.append(balance)
+                # ---- calculate max drawdown ----
+                peak = max(equity_curve)
+                drawdown = (balance - peak) / peak * 100
+                max_drawdown = min(max_drawdown, drawdown)
+
                 # ---- count wins and losses ----
                 if profit_percent > 0:
                     total_wins += 1
@@ -354,7 +368,7 @@ def execute_trading_logic():
                     total_losses += 1
 
                 # ---- COOLDOWN AFTER BIG PROFIT ----
-                if profit_percent >= 3:
+                if profit_percent >= 3 or profit_percent <= -2:
                     cooldown_until_index = i + cooldown_after_big_profit
                     print(f"🟡 Cooldown Activated (SHORT) until candle index {cooldown_until_index}")
 
@@ -406,6 +420,7 @@ def execute_trading_logic():
     print("Total Fees Paid:", round(deducting_fee_total, 2))
     print("Fee Compounding Impact:",
           round(balance_without_fee - balance - deducting_fee_total, 2), "$")
+    print("Maximum Drawdown:", round(max_drawdown, 2), "%")
     print(f"Total Duration : {days} days, {hours} hours, {minutes} minutes")
     print("Win Rate:", round(win_rate, 2), "%")
     print("Total Profit:", round(sum(profits_lst), 2), "$")
