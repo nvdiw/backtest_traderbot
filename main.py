@@ -252,7 +252,8 @@ def execute_trading_logic():
                 close_price = open_prices[i]
 
                 # -------- WITH FEE --------
-                close_value = position_size * close_price
+                profit = position_size * (close_price - entry_price)
+                close_value = balance_before_trade + profit
                 fee = close_value * fee_rate
                 balance = close_value - fee
 
