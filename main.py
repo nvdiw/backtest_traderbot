@@ -252,15 +252,16 @@ def execute_trading_logic():
                 close_price = open_prices[i]
 
                 # -------- WITH FEE --------
-                profit = position_size * (close_price - entry_price)
-                close_value = balance_before_trade + profit
+                pnl = position_size * (close_price - entry_price)
+                close_value = balance_before_trade + pnl
                 fee = close_value * fee_rate
-                balance = close_value - fee
+                balance = balance_before_trade + pnl - fee
 
                 # -------- WITHOUT FEE --------
-                close_value_no_fee = position_size_no_fee * close_price
-                balance_without_fee = close_value_no_fee
+                pnl_no_fee = position_size_no_fee * (close_price - entry_price)
+                balance_without_fee = balance_before_trade_no_fee + pnl_no_fee
 
+                # profit after fee
                 profit = balance - balance_before_trade
                 profit_percent = profit * 100 / balance_before_trade
 
@@ -340,15 +341,16 @@ def execute_trading_logic():
                 close_price = open_prices[i]
 
                 # -------- WITH FEE --------
-                profit = position_size * (entry_price - close_price)
-                close_value = balance_before_trade + profit
+                pnl = position_size * (entry_price - close_price)
+                close_value = balance_before_trade + pnl
                 fee = close_value * fee_rate
-                balance = close_value - fee
+                balance = balance_before_trade + pnl - fee
 
                 # -------- WITHOUT FEE --------
-                profit_no_fee = position_size_no_fee * (entry_price - close_price)
-                balance_without_fee = balance_before_trade_no_fee + profit_no_fee
+                pnl_no_fee = position_size_no_fee * (entry_price - close_price)
+                balance_without_fee = balance_before_trade_no_fee + pnl_no_fee
 
+                # profit after fee
                 profit = balance - balance_before_trade
                 profit_percent = profit * 100 / balance_before_trade
 
