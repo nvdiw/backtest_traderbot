@@ -179,11 +179,14 @@ def execute_trading_logic():
     levelrage = 1
 
     fee_rate = 0.0005  # 0.05%
+
     total_wins = 0
     total_losses = 0
-
+    total_long = 0
+    total_short = 0
     deducting_fee_total = 0
     count_closed_orders = 0
+
     max_drawdown = 0
     equity_curve = []
     profits_lst = []
@@ -283,6 +286,9 @@ def execute_trading_logic():
                 else:
                     total_losses += 1
 
+                # ---- count LONG trades ----
+                total_long += 1
+
                 # ---- COOLDOWN AFTER BIG PROFIT ----
                 if pnl_percent >= 3 or pnl_percent <= -2:
                     cooldown_until_index = i + cooldown_after_big_pnl
@@ -373,6 +379,9 @@ def execute_trading_logic():
                 else:
                     total_losses += 1
 
+                # ---- count shorts ----
+                total_short += 1
+
                 # ---- COOLDOWN AFTER BIG PROFIT ----
                 if pnl_percent >= 3 or pnl_percent <= -2:
                     cooldown_until_index = i + cooldown_after_big_pnl
@@ -413,12 +422,11 @@ def execute_trading_logic():
 
     total_profit_percent = balance * 100 / first_balance - 100
     days, hours, minutes = trade_duration(first_open_time, last_close_time)
-    duration_minutes_total = days * 24 * 60 + hours * 60 + minutes
     win_rate = (total_wins / (total_wins + total_losses)) * 100 if (total_wins + total_losses) > 0 else 0
 
 
     print("✅ BACKTEST FINISHED")
-    print("Closed Trades:", count_closed_orders)
+    print("Closed Trades:", count_closed_orders, "(Longs:", total_long, "| Shorts:", total_short, ")")
     print("Total Wins:", total_wins)
     print("Total Losses:", total_losses)
     print("Final Balance:", round(balance, 2))
