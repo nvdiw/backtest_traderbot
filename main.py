@@ -130,42 +130,6 @@ def trade_duration(open_time: str, close_time: str):
     return days, hours, minutes
 
 
-# Open Long Position
-def open_long(index):
-    global current_position
-    if current_position is None:
-        current_position = "long"
-        return open_prices[index]
-    return None
-
-
-# open Short Position
-def open_short(index):
-    global current_position
-    if current_position is None:
-        current_position = "short"
-        return open_prices[index]
-    return None
-
-
-# Close Long Position
-def close_long(index):
-    global current_position
-    if current_position == "long":
-        current_position = None
-        return open_prices[index]
-    return None
-
-
-# close Short Position
-def close_short(index):
-    global current_position
-    if current_position == "short":
-        current_position = None
-        return open_prices[index]
-    return None
-
-
 # Main Trading Logic
 def execute_trading_logic():
 
@@ -426,7 +390,7 @@ def execute_trading_logic():
 
 
     print("✅ BACKTEST FINISHED")
-    print("Closed Trades:", count_closed_orders, "(Longs:", total_long, "| Shorts:", total_short, ")")
+    print("Closed Trades:", count_closed_orders, "( Longs:", total_long, "| Shorts:", total_short, ")")
     print("Total Wins:", total_wins)
     print("Total Losses:", total_losses)
     print("Final Balance:", round(balance, 2))
