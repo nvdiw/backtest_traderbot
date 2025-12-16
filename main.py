@@ -4,7 +4,7 @@ import pandas as pd
 
 # My Codes :
 from trade_csv_logger import TradeCSVLogger
-
+from indicators import get_MA, get_EMA
 
 # 2025/01/01 first 15m candle of btc_15m_data.csv is: 244944 <--- start
 # 2025/03/01 15m candle of btc_15m_data.csv is: 250608 <--- 2025/03/01
@@ -48,54 +48,6 @@ open_prices = all_data["Open"]
 close_prices = all_data["Close"]
 open_times = all_data["Open time"]
 close_times = all_data["Close time"]
-
-
-# Calculate Moving Average
-def get_MA(period):
-    closes_orders_ma_lst = []
-    ma_lst = []
-    for price in open_prices:
-        closes_orders_ma_lst.append(price)
-
-        if len(closes_orders_ma_lst) < period:
-            ma = None
-            ma_lst.append(ma)
-
-        if len(closes_orders_ma_lst) >= period:
-            ma = sum(closes_orders_ma_lst) / period
-            ma_lst.append(round(ma , 2))
-            closes_orders_ma_lst.pop(0)
-
-    return ma_lst
-
-
-# Calculate Exponential Moving Average
-def get_EMA(period):
-    ema_lst = []
-    k = 2 / (period + 1)
-    ema_prev = None
-
-    for price in open_prices:
-
-        if ema_prev is None:
-            ema = None
-        else:
-            ema = (price * k) + (ema_prev * (1 - k))
-            ema = round(ema, 2)
-
-        ema_lst.append(ema)
-
-        if ema is not None:
-            ema_prev = ema
-
-        # مقدار اولیه EMA بعد از پر شدن دوره
-        if ema_prev is None and len(ema_lst) == period:
-            sma = sum(open_prices[:period]) / period
-            ema_prev = round(sma, 2)
-            ema_lst[-1] = ema_prev
-
-    return ema_lst
-
 
 # Calculate Trade Duration
 def trade_duration(open_time: str, close_time: str):
@@ -141,6 +93,7 @@ def execute_trading_logic():
     balance_without_fee = balance
     first_balance = balance
     levelrage = 1
+    # save_money = 0
 
     fee_rate = 0.0005  # 0.05%
 
@@ -163,11 +116,11 @@ def execute_trading_logic():
     balance_before_trade_no_fee = None
     open_time_value = None
 
-    # ma_21 = get_MA(15)
-    ema_14 = get_EMA(14)
-    ma_50 = get_MA(50)
-    ma_130 = get_MA(130)
-    ma_200 = get_MA(200)
+    # ma_21 = get_MA(15, open_prices)
+    ema_14 = get_EMA(14, open_prices)
+    ma_50 = get_MA(50, open_prices)
+    ma_130 = get_MA(130, open_prices)
+    ma_200 = get_MA(200, open_prices)
 
     first_open_time = open_times[0]
     last_close_time = open_times[-1]
@@ -195,7 +148,9 @@ def execute_trading_logic():
 
         ma_distance = abs(ema_14[i] - ma_50[i]) / ma_50[i]
 
-
+        # if balance > 1100 :
+        #     save_money += 50
+        #     balance -= 50
 
         # ===================== OPEN LONG =====================
         if ma_130[i] >= ma_200[i] and ema_14[i] > ma_50[i] and current_position is None and ma_distance > 0.002 :
@@ -403,6 +358,7 @@ def execute_trading_logic():
     print("Win Rate:", round(win_rate, 2), "%")
     print("Total Profit:", round(sum(profits_lst), 2), "$")
     print("Total Profit Percent:", round(total_profit_percent, 2), "%")
+    # print("saved Money:", save_money, "$")
 
     csv_logger.save_csv(
     first_balance=first_balance,
