@@ -116,21 +116,20 @@ def execute_trading_logic():
     balance_before_trade_no_fee = None
     open_time_value = None
 
-    # ma_21 = get_MA(15, open_prices)
+    first_open_time = open_times[0]
+    last_close_time = open_times[-1]
+
     ema_14 = get_EMA(14, open_prices)
     ma_50 = get_MA(50, open_prices)
     ma_130 = get_MA(130, open_prices)
     ma_200 = get_MA(200, open_prices)
 
-    first_open_time = open_times[0]
-    last_close_time = open_times[-1]
-
-    # cooldown = 4     #180 is very good
-    # last_trade_index = -cooldown
 
     cooldown_after_big_pnl = 4 * 48  # 4 * x   [x] ---> number of candles per hour
     cooldown_until_index = -1
 
+    ma_distance_threshold = 0.00204  # 0.2٪
+    candle_move_threshold = 0.0082 # 0.8٪
 
     # check data loaded correctly :
         # print(len(open_prices), "candles loaded.")
@@ -145,28 +144,35 @@ def execute_trading_logic():
         
         if i < cooldown_until_index:
             continue
-
+        
+        # Calculate MA Distance
         ma_distance = abs(ema_14[i] - ma_50[i]) / ma_50[i]
+
+        # Calculate Distance New Candle Move and Last Candle Move
+        if i > 0:
+            last_candle_move = abs(open_prices[i] - open_prices[i-1]) / open_prices[i-1]
+        else:
+            last_candle_move = 0
 
         # if balance > 1100 :
         #     save_money += 50
         #     balance -= 50
 
         # ===================== OPEN LONG =====================
-        if ma_130[i] >= ma_200[i] and ema_14[i] > ma_50[i] and current_position is None and ma_distance > 0.002 :
+        if ma_130[i] >= ma_200[i] and ema_14[i] > ma_50[i] and current_position is None:
+            if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
+                entry_price = open_prices[i]
 
-            entry_price = open_prices[i]
+                position_size = ( balance * levelrage ) / entry_price
+                position_size_no_fee = ( balance_without_fee * levelrage ) / entry_price
 
-            position_size = ( balance * levelrage ) / entry_price
-            position_size_no_fee = ( balance_without_fee * levelrage ) / entry_price
+                balance_before_trade = balance
+                balance_before_trade_no_fee = balance_without_fee
 
-            balance_before_trade = balance
-            balance_before_trade_no_fee = balance_without_fee
+                open_time_value = open_times[i]
+                current_position = "long"
 
-            open_time_value = open_times[i]
-            current_position = "long"
-
-            print("Open LONG at price:", entry_price, "| Open Time:", open_time_value)
+                print("Open LONG at price:", entry_price, "| Open Time:", open_time_value)
 
         # ===================== CLOSE LONG =====================
         if current_position == "long":
@@ -246,20 +252,21 @@ def execute_trading_logic():
 
 
         # ===================== OPEN SHORT =====================
-        if ma_130[i] < ma_200[i] and ema_14[i] < ma_50[i] and current_position is None and ma_distance > 0.002 :
+        if ma_130[i] < ma_200[i] and ema_14[i] < ma_50[i] and current_position is None:
+            if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
 
-            entry_price = open_prices[i]
+                entry_price = open_prices[i]
 
-            position_size = ( balance * levelrage ) / entry_price
-            position_size_no_fee = ( balance_without_fee * levelrage ) / entry_price
+                position_size = ( balance * levelrage ) / entry_price
+                position_size_no_fee = ( balance_without_fee * levelrage ) / entry_price
 
-            balance_before_trade = balance
-            balance_before_trade_no_fee = balance_without_fee
+                balance_before_trade = balance
+                balance_before_trade_no_fee = balance_without_fee
 
-            open_time_value = open_times[i]
-            current_position = "short"
+                open_time_value = open_times[i]
+                current_position = "short"
 
-            print("Open SHORT at price:", entry_price, "| Open Time:", open_time_value)
+                print("Open SHORT at price:", entry_price, "| Open Time:", open_time_value)
 
         # ===================== CLOSE SHORT =====================
         if current_position == "short":
