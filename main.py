@@ -93,6 +93,7 @@ def execute_trading_logic():
     balance_without_fee = balance
     first_balance = balance
     leverage = 1
+    trade_amount_percent = 1  # 100%
     # save_money = 0
 
     fee_rate = 0.00025  # 0.05%
@@ -167,13 +168,17 @@ def execute_trading_logic():
                 balance_before_trade_no_fee = balance_without_fee
 
                 # ---------- LVR Margin ----------
-                margin = balance / leverage
+                margin = balance * trade_amount_percent
                 position_value = margin * leverage
                 position_size = position_value / entry_price
 
-                margin_no_fee = balance_without_fee / leverage
+                margin_no_fee = balance_without_fee * trade_amount_percent
                 position_value_no_fee = margin_no_fee * leverage
                 position_size_no_fee = position_value_no_fee / entry_price
+
+                # update balance after allocating margin
+                balance -= margin
+                balance_without_fee -= margin_no_fee
 
                 # update open time and current position
                 open_time_value = open_times[i]
@@ -197,13 +202,13 @@ def execute_trading_logic():
                 total_fee = entry_fee + exit_fee
 
                 # Update balance
-                balance = balance_before_trade + pnl - total_fee               
-                balance_without_fee = balance_before_trade_no_fee + pnl_no_fee
+                balance += margin + pnl - total_fee
+                balance_without_fee += margin_no_fee + pnl_no_fee
 
                 # profit after fee
                 profit = balance - balance_before_trade
                 profit_percent = profit * 100 / balance_before_trade
-                pnl_percent = (pnl / (balance_before_trade * leverage)) * 100
+                pnl_percent = (pnl / margin) * 100
 
                 deducting_fee_total += total_fee
                 profits_lst.append(profit)
@@ -225,7 +230,8 @@ def execute_trading_logic():
                 total_long += 1
 
                 # ---- COOLDOWN AFTER BIG PROFIT ----
-                if pnl_percent >= 3 or pnl_percent <= -2:
+                pnl_percent_without_leverage = (pnl / ( balance_before_trade * leverage )) * 100
+                if pnl_percent_without_leverage >= 3 or pnl_percent_without_leverage <= -2:
                     cooldown_until_index = i + cooldown_after_big_pnl
                     print(f"🟡 Cooldown Activated (LONG) until candle index {cooldown_until_index}")
 
@@ -271,13 +277,17 @@ def execute_trading_logic():
                 balance_before_trade_no_fee = balance_without_fee
 
                 # ---------- LVR Margin ----------
-                margin = balance / leverage
+                margin = balance * trade_amount_percent
                 position_value = margin * leverage
                 position_size = position_value / entry_price
 
-                margin_no_fee = balance_without_fee / leverage
+                margin_no_fee = balance_without_fee * trade_amount_percent
                 position_value_no_fee = margin_no_fee * leverage
                 position_size_no_fee = position_value_no_fee / entry_price
+
+                # update balance after allocating margin
+                balance -= margin
+                balance_without_fee -= margin_no_fee
 
                 # update open time and current position
                 open_time_value = open_times[i]
@@ -301,13 +311,13 @@ def execute_trading_logic():
                 total_fee = entry_fee + exit_fee
 
                 # Update balance
-                balance = balance_before_trade + pnl - total_fee               
-                balance_without_fee = balance_before_trade_no_fee + pnl_no_fee
+                balance += margin + pnl - total_fee
+                balance_without_fee += margin_no_fee + pnl_no_fee
 
                 # profit after fee
                 profit = balance - balance_before_trade
                 profit_percent = profit * 100 / balance_before_trade
-                pnl_percent = (pnl / ( balance_before_trade * leverage )) * 100
+                pnl_percent = (pnl / margin) * 100
 
                 deducting_fee_total += total_fee
                 profits_lst.append(profit)
@@ -329,7 +339,8 @@ def execute_trading_logic():
                 total_short += 1
 
                 # ---- COOLDOWN AFTER BIG PROFIT ----
-                if pnl_percent >= 3 or pnl_percent <= -2:
+                pnl_percent_without_leverage = (pnl / ( balance_before_trade * leverage )) * 100
+                if pnl_percent_without_leverage >= 3 or pnl_percent_without_leverage <= -2:
                     cooldown_until_index = i + cooldown_after_big_pnl
                     print(f"🟡 Cooldown Activated (SHORT) until candle index {cooldown_until_index}")
 
@@ -364,7 +375,11 @@ def execute_trading_logic():
 
                 current_position = None
 
+    # ========== BACKTEST SUMMARY ==========
 
+    if current_position is not None:
+        balance += margin  # return margin if position still open
+        balance_without_fee += margin_no_fee # return margin if position still open
 
     total_profit_percent = balance * 100 / first_balance - 100
     days, hours, minutes = trade_duration(first_open_time, last_close_time)
