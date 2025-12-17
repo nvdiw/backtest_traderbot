@@ -92,10 +92,10 @@ def execute_trading_logic():
     balance = 1000
     balance_without_fee = balance
     first_balance = balance
-    levelrage = 1
+    leverage = 1
     # save_money = 0
 
-    fee_rate = 0.0005  # 0.05%
+    fee_rate = 0.00025  # 0.05%
 
     total_wins = 0
     total_losses = 0
@@ -163,11 +163,11 @@ def execute_trading_logic():
             if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
                 entry_price = open_prices[i]
 
-                position_size = ( balance * levelrage ) / entry_price
-                position_size_no_fee = ( balance_without_fee * levelrage ) / entry_price
-
                 balance_before_trade = balance
                 balance_before_trade_no_fee = balance_without_fee
+
+                position_size = ( balance * leverage ) / entry_price
+                position_size_no_fee = ( balance_without_fee * leverage ) / entry_price
 
                 open_time_value = open_times[i]
                 current_position = "long"
@@ -180,22 +180,25 @@ def execute_trading_logic():
 
                 close_price = open_prices[i]
 
-                # -------- WITH FEE --------
+                # PnL
                 pnl = position_size * (close_price - entry_price)
-                close_value = position_size * entry_price + pnl
-                fee = close_value * fee_rate
-                balance = balance_before_trade + pnl - fee
-
-                # -------- WITHOUT FEE --------
                 pnl_no_fee = position_size_no_fee * (close_price - entry_price)
+
+                # Fee like Toobit
+                entry_fee = entry_price * position_size * fee_rate
+                exit_fee = close_price * position_size * fee_rate
+                total_fee = entry_fee + exit_fee
+
+                # Update balance
+                balance = balance_before_trade + pnl - total_fee               
                 balance_without_fee = balance_before_trade_no_fee + pnl_no_fee
 
                 # profit after fee
                 profit = balance - balance_before_trade
                 profit_percent = profit * 100 / balance_before_trade
-                pnl_percent = (pnl * 100) / (position_size * entry_price)
+                pnl_percent = (pnl / (balance_before_trade * leverage)) * 100
 
-                deducting_fee_total += fee
+                deducting_fee_total += total_fee
                 profits_lst.append(profit)
                 count_closed_orders += 1
 
@@ -241,7 +244,7 @@ def execute_trading_logic():
                     round(balance, 2),
                     round(profit, 2),
                     round(profit_percent, 2),
-                    round(fee, 4),
+                    round(total_fee, 4),
                     days,
                     hours,
                     minutes
@@ -257,11 +260,11 @@ def execute_trading_logic():
 
                 entry_price = open_prices[i]
 
-                position_size = ( balance * levelrage ) / entry_price
-                position_size_no_fee = ( balance_without_fee * levelrage ) / entry_price
-
                 balance_before_trade = balance
                 balance_before_trade_no_fee = balance_without_fee
+
+                position_size = ( balance * leverage ) / entry_price
+                position_size_no_fee = ( balance_without_fee * leverage ) / entry_price
 
                 open_time_value = open_times[i]
                 current_position = "short"
@@ -274,22 +277,25 @@ def execute_trading_logic():
 
                 close_price = open_prices[i]
 
-                # -------- WITH FEE --------
+                # PnL
                 pnl = position_size * (entry_price - close_price)
-                close_value = position_size * entry_price + pnl
-                fee = close_value * fee_rate
-                balance = balance_before_trade + pnl - fee
-
-                # -------- WITHOUT FEE --------
                 pnl_no_fee = position_size_no_fee * (entry_price - close_price)
+
+                # Fee like Toobit
+                entry_fee = entry_price * position_size * fee_rate
+                exit_fee = close_price * position_size * fee_rate
+                total_fee = entry_fee + exit_fee
+
+                # Update balance
+                balance = balance_before_trade + pnl - total_fee               
                 balance_without_fee = balance_before_trade_no_fee + pnl_no_fee
 
                 # profit after fee
                 profit = balance - balance_before_trade
                 profit_percent = profit * 100 / balance_before_trade
-                pnl_percent = (pnl * 100) / (position_size * entry_price)
+                pnl_percent = (pnl / ( balance_before_trade * leverage )) * 100
 
-                deducting_fee_total += fee
+                deducting_fee_total += total_fee
                 profits_lst.append(profit)
                 count_closed_orders += 1
 
@@ -336,7 +342,7 @@ def execute_trading_logic():
                     round(balance, 2),
                     round(profit, 2),
                     round(profit_percent, 2),
-                    round(fee, 4),
+                    round(total_fee, 4),
                     days,
                     hours,
                     minutes
