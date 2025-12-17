@@ -166,9 +166,16 @@ def execute_trading_logic():
                 balance_before_trade = balance
                 balance_before_trade_no_fee = balance_without_fee
 
-                position_size = ( balance * leverage ) / entry_price
-                position_size_no_fee = ( balance_without_fee * leverage ) / entry_price
+                # ---------- LVR Margin ----------
+                margin = balance / leverage
+                position_value = margin * leverage
+                position_size = position_value / entry_price
 
+                margin_no_fee = balance_without_fee / leverage
+                position_value_no_fee = margin_no_fee * leverage
+                position_size_no_fee = position_value_no_fee / entry_price
+
+                # update open time and current position
                 open_time_value = open_times[i]
                 current_position = "long"
 
@@ -263,9 +270,16 @@ def execute_trading_logic():
                 balance_before_trade = balance
                 balance_before_trade_no_fee = balance_without_fee
 
-                position_size = ( balance * leverage ) / entry_price
-                position_size_no_fee = ( balance_without_fee * leverage ) / entry_price
+                # ---------- LVR Margin ----------
+                margin = balance / leverage
+                position_value = margin * leverage
+                position_size = position_value / entry_price
 
+                margin_no_fee = balance_without_fee / leverage
+                position_value_no_fee = margin_no_fee * leverage
+                position_size_no_fee = position_value_no_fee / entry_price
+
+                # update open time and current position
                 open_time_value = open_times[i]
                 current_position = "short"
 
