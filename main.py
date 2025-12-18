@@ -10,13 +10,16 @@ from indicators import get_MA, get_EMA
 # 2025/03/01 15m candle of btc_15m_data.csv is: 250608 <--- 2025/03/01
 # 2025/06/01 15m candle of btc_15m_data.csv is: 259440 <--- 2025/06/01
 # the last last 15m candle of btc_15m_data.csv is: 277580 <--- end
-# 25 oct 2025 00:00 = 273456
-# 6 dec 2025 00:00 = 277580
+
+# Candle Index Reference monthly :
+# 2025/01/01 : 244944   # 2025/02/01 : 247920   # 2025/03/01 : 250608   ( very good )
+# 2025/04/01 : 253584   # 2025/05/01 : 256464   # 2025/06/01 : 259440   ( bad )
+# 2025/07/01 : 262320   # 2025/08/01 : 265296   # 2025/09/01 : 268272   ( very bad )
+# 2025/10/01 : 271152   # 2025/11/01 : 274128   # 2025/12/01 : 277008   ( very good )
 
 
-
-start = 244944
-end = 277580
+start = 262320
+end = 271152
 
 current_position = None  # None | "long" | "short"
 
@@ -92,11 +95,11 @@ def execute_trading_logic():
     balance = 1000
     balance_without_fee = balance
     first_balance = balance
-    leverage = 1
-    trade_amount_percent = 1  # 100%
+    leverage = 5
+    trade_amount_percent = 0.5  # 100%
     # save_money = 0
 
-    fee_rate = 0.00025  # 0.05%
+    fee_rate = 0.0005  # 0.05%
 
     total_wins = 0
     total_losses = 0
@@ -230,7 +233,7 @@ def execute_trading_logic():
                 total_long += 1
 
                 # ---- COOLDOWN AFTER BIG PROFIT ----
-                pnl_percent_without_leverage = (pnl / ( balance_before_trade * leverage )) * 100
+                pnl_percent_without_leverage = ((pnl / margin) * 100 ) / leverage
                 if pnl_percent_without_leverage >= 3 or pnl_percent_without_leverage <= -2:
                     cooldown_until_index = i + cooldown_after_big_pnl
                     print(f"🟡 Cooldown Activated (LONG) until candle index {cooldown_until_index}")
@@ -243,6 +246,7 @@ def execute_trading_logic():
                 print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
                 print("Balance (no fee):",
                     round(balance_before_trade_no_fee, 2), "→", round(balance_without_fee, 2))
+                print("pnl:", round(pnl, 2), "$ |", round(pnl_percent, 2), "% |" , "Amount:", round(margin), "$")
                 print("Profit:", round(profit, 2), "$ |", round(profit_percent, 2), "%")
                 print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
                 print("-" * 90)
@@ -255,6 +259,7 @@ def execute_trading_logic():
                     close_price,
                     round(balance_before_trade, 2),
                     round(balance, 2),
+                    round(margin , 2),
                     round(profit, 2),
                     round(profit_percent, 2),
                     round(pnl_percent, 2),
@@ -340,7 +345,7 @@ def execute_trading_logic():
                 total_short += 1
 
                 # ---- COOLDOWN AFTER BIG PROFIT ----
-                pnl_percent_without_leverage = (pnl / ( balance_before_trade * leverage )) * 100
+                pnl_percent_without_leverage = ((pnl / margin) * 100) / leverage
                 if pnl_percent_without_leverage >= 3 or pnl_percent_without_leverage <= -2:
                     cooldown_until_index = i + cooldown_after_big_pnl
                     print(f"🟡 Cooldown Activated (SHORT) until candle index {cooldown_until_index}")
@@ -354,6 +359,7 @@ def execute_trading_logic():
                 print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
                 print("Balance (no fee):",
                     round(balance_before_trade_no_fee, 2), "→", round(balance_without_fee, 2))
+                print("pnl:", round(pnl, 2), "$ |", round(pnl_percent, 2), "% |", "Amount:", round(margin), "$")
                 print("Profit:", round(profit, 2), "$ |", round(profit_percent, 2), "%")
                 print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
                 print("-" * 90)
@@ -366,6 +372,7 @@ def execute_trading_logic():
                     close_price,
                     round(balance_before_trade, 2),
                     round(balance, 2),
+                    round(margin , 2),
                     round(profit, 2),
                     round(profit_percent, 2),
                     round(pnl_percent, 2),
