@@ -18,8 +18,8 @@ from indicators import get_MA, get_EMA
 # 2025/10/01 : 271152   # 2025/11/01 : 274128   # 2025/12/01 : 277008   ( very good )
 
 
-start = 262320
-end = 271152
+start = 244944
+end = 277580
 
 current_position = None  # None | "long" | "short"
 
@@ -95,7 +95,7 @@ def execute_trading_logic():
     balance = 1000
     balance_without_fee = balance
     first_balance = balance
-    leverage = 5
+    leverage = 3
     trade_amount_percent = 0.5  # 100%
     # save_money = 0
 
@@ -158,6 +158,19 @@ def execute_trading_logic():
         else:
             last_candle_move = 0
 
+        # if current_position is None:
+        #     if balance <= first_balance :
+        #         leverage = 1
+            
+        #     if balance >= first_balance :
+        #         leverage = 3
+
+        # if current_position is not None:
+        #     if balance + margin <= first_balance :
+        #         leverage = 1
+        #     if balance + margin >= first_balance :
+        #         leverage = 3
+
         # if balance > 1100 :
         #     save_money += 50
         #     balance -= 50
@@ -187,7 +200,7 @@ def execute_trading_logic():
                 open_time_value = open_times[i]
                 current_position = "long"
 
-                print("Open LONG at price:", entry_price, "| Open Time:", open_time_value)
+                print("Open LONG at price:", entry_price, "| Open Time:", open_time_value, "| leverage:", leverage)
 
         # ===================== CLOSE LONG =====================
         if current_position == "long":
@@ -242,7 +255,7 @@ def execute_trading_logic():
                 days, hours, minutes = trade_duration(open_time_value, close_time_value)
 
 
-                print("Close LONG at price:", close_price, "| Close Time:", close_time_value)
+                print("Close LONG at price:", close_price, "| Close Time:", close_time_value, "| leverage:", leverage)
                 print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
                 print("Balance (no fee):",
                     round(balance_before_trade_no_fee, 2), "→", round(balance_without_fee, 2))
@@ -260,6 +273,7 @@ def execute_trading_logic():
                     round(balance_before_trade, 2),
                     round(balance, 2),
                     round(margin , 2),
+                    leverage,
                     round(profit, 2),
                     round(profit_percent, 2),
                     round(pnl_percent, 2),
@@ -299,7 +313,7 @@ def execute_trading_logic():
                 open_time_value = open_times[i]
                 current_position = "short"
 
-                print("Open SHORT at price:", entry_price, "| Open Time:", open_time_value)
+                print("Open SHORT at price:", entry_price, "| Open Time:", open_time_value, "| leverage:", leverage)
 
         # ===================== CLOSE SHORT =====================
         if current_position == "short":
@@ -355,7 +369,7 @@ def execute_trading_logic():
                 days, hours, minutes = trade_duration(open_time_value, close_time_value)
 
 
-                print("Close SHORT at price:", close_price, "| Close Time:", close_time_value)
+                print("Close SHORT at price:", close_price, "| Close Time:", close_time_value, "| leverage:", leverage)
                 print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
                 print("Balance (no fee):",
                     round(balance_before_trade_no_fee, 2), "→", round(balance_without_fee, 2))
@@ -373,6 +387,7 @@ def execute_trading_logic():
                     round(balance_before_trade, 2),
                     round(balance, 2),
                     round(margin , 2),
+                    leverage,
                     round(profit, 2),
                     round(profit_percent, 2),
                     round(pnl_percent, 2),
