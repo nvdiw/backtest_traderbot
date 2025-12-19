@@ -7,13 +7,10 @@ from trade_csv_logger import TradeCSVLogger
 from indicators import get_MA, get_EMA
 
 # 2025/01/01 first 15m candle of btc_15m_data.csv is: 244944 <--- start
-# 2025/03/01 15m candle of btc_15m_data.csv is: 250608 <--- 2025/03/01
-# 2025/06/01 15m candle of btc_15m_data.csv is: 259440 <--- 2025/06/01
-# the last last 15m candle of btc_15m_data.csv is: 278640 <--- end
+# the last last 15m candle of btc_15m_data.csv is:    278640 <--- end
 
 # 2025/12/10 00:00 : 277872
 # 2025/12/18 00:00 : 278640
-
 # Candle Index Reference monthly :
 # 2025/01/01 : 244944   # 2025/02/01 : 247920   # 2025/03/01 : 250608   ( very good )
 # 2025/04/01 : 253584   # 2025/05/01 : 256464   # 2025/06/01 : 259440   ( bad )
@@ -100,7 +97,7 @@ def execute_trading_logic():
     first_balance = balance
     leverage = 3
     trade_amount_percent = 0.5  # 100%
-    # save_money = 0
+    save_money = 0
 
     fee_rate = 0.0005  # 0.05%
 
@@ -161,22 +158,27 @@ def execute_trading_logic():
         else:
             last_candle_move = 0
 
-        # if current_position is None:
-        #     if balance <= first_balance :
-        #         leverage = 1
-            
-        #     if balance >= first_balance :
-        #         leverage = 3
+        if current_position is None:
+            if balance <= 800 :
+                if save_money >= 100:
+                    balance += save_money
+                    save_money -= save_money
 
-        # if current_position is not None:
-        #     if balance + margin <= first_balance :
-        #         leverage = 1
-        #     if balance + margin >= first_balance :
-        #         leverage = 3
+            if balance >= 1200 :
+                if save_money <= 100:
+                    balance -= 200
+                    save_money += 200
 
-        # if balance > 1100 :
-        #     save_money += 50
-        #     balance -= 50
+        if current_position is not None:
+            if balance + margin <= 800 :
+                if save_money >= 100:
+                    balance += save_money
+                    save_money -= save_money
+
+            if balance + margin >= 1200 :
+                if save_money <= 100:
+                    balance -= 200
+                    save_money += 200
 
         # ===================== OPEN LONG =====================
         if ma_130[i] >= ma_200[i] and ema_14[i] > ma_50[i] and current_position is None:
@@ -202,7 +204,7 @@ def execute_trading_logic():
                 # update open time and current position
                 open_time_value = open_times[i]
                 current_position = "long"
-
+                print(save_money)
                 print("Open LONG at price:", entry_price, "| Open Time:", open_time_value, "| leverage:", leverage)
 
         # ===================== CLOSE LONG =====================
@@ -283,7 +285,8 @@ def execute_trading_logic():
                     round(total_fee, 4),
                     days,
                     hours,
-                    minutes
+                    minutes,
+                    save_money
                 )
 
 
@@ -315,7 +318,7 @@ def execute_trading_logic():
                 # update open time and current position
                 open_time_value = open_times[i]
                 current_position = "short"
-
+                print(save_money)
                 print("Open SHORT at price:", entry_price, "| Open Time:", open_time_value, "| leverage:", leverage)
 
         # ===================== CLOSE SHORT =====================
@@ -397,7 +400,8 @@ def execute_trading_logic():
                     round(total_fee, 4),
                     days,
                     hours,
-                    minutes
+                    minutes,
+                    save_money
                 )
 
                 current_position = None
@@ -407,6 +411,8 @@ def execute_trading_logic():
     if current_position is not None:
         balance += margin  # return margin if position still open
         balance_without_fee += margin_no_fee # return margin if position still open
+
+    balance += save_money
 
     total_profit_percent = balance * 100 / first_balance - 100
     days, hours, minutes = trade_duration(first_open_time, last_close_time)
