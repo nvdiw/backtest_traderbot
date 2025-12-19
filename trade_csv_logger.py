@@ -22,7 +22,8 @@ class TradeCSVLogger:
         fee,
         days,
         hours,
-        minutes
+        minutes,
+        save_money
     ):
         self.rows.append({
             "type": trade_type,
@@ -41,7 +42,8 @@ class TradeCSVLogger:
             "duration_minutes_total": days * 24 * 60 + hours * 60 + minutes,
             "duration_days": days,
             "duration_hours": hours,
-            "duration_minutes": minutes
+            "duration_minutes": minutes,
+            "save_money" : save_money
         })
 
     def save_csv(
