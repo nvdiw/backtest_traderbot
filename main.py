@@ -4,7 +4,7 @@ import pandas as pd
 
 # My Codes :
 from trade_csv_logger import TradeCSVLogger
-from indicators import get_MA, get_EMA
+from indicators import Indicator
 
 # 2025/01/01 first 15m candle of btc_15m_data.csv is: 244944 <--- start
 # the last last 15m candle of btc_15m_data.csv is:    278640 <--- end
@@ -123,11 +123,11 @@ def execute_trading_logic():
     first_open_time = open_times[0]
     last_close_time = open_times[-1]
 
-    ema_14 = get_EMA(14, open_prices)
-    ma_50 = get_MA(50, open_prices)
-    ma_130 = get_MA(130, open_prices)
-    ma_200 = get_MA(200, open_prices)
-
+    indicator = Indicator(open_prices, period=None)
+    ema_14 = indicator.get_EMA(14)
+    ma_50 = indicator.get_MA(50)
+    ma_130 = indicator.get_MA(130)
+    ma_200 = indicator.get_MA(200)
 
     cooldown_after_big_pnl = 4 * 48  # 4 * x   [x] ---> number of candles per hour
     cooldown_until_index = -1
@@ -204,7 +204,7 @@ def execute_trading_logic():
                 # update open time and current position
                 open_time_value = open_times[i]
                 current_position = "long"
-                print(save_money)
+
                 print("Open LONG at price:", entry_price, "| Open Time:", open_time_value, "| leverage:", leverage)
 
         # ===================== CLOSE LONG =====================
@@ -261,7 +261,7 @@ def execute_trading_logic():
 
 
                 print("Close LONG at price:", close_price, "| Close Time:", close_time_value, "| leverage:", leverage)
-                print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
+                print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2), "| Save Money:", round(save_money, 2))
                 print("Balance (no fee):",
                     round(balance_before_trade_no_fee, 2), "→", round(balance_without_fee, 2))
                 print("pnl:", round(pnl, 2), "$ |", round(pnl_percent, 2), "% |" , "Amount:", round(margin), "$")
@@ -318,7 +318,7 @@ def execute_trading_logic():
                 # update open time and current position
                 open_time_value = open_times[i]
                 current_position = "short"
-                print(save_money)
+
                 print("Open SHORT at price:", entry_price, "| Open Time:", open_time_value, "| leverage:", leverage)
 
         # ===================== CLOSE SHORT =====================
@@ -376,7 +376,7 @@ def execute_trading_logic():
 
 
                 print("Close SHORT at price:", close_price, "| Close Time:", close_time_value, "| leverage:", leverage)
-                print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2))
+                print("Balance:", round(balance_before_trade, 2), "→", round(balance, 2), "| Save Money:", round(save_money, 2))
                 print("Balance (no fee):",
                     round(balance_before_trade_no_fee, 2), "→", round(balance_without_fee, 2))
                 print("pnl:", round(pnl, 2), "$ |", round(pnl_percent, 2), "% |", "Amount:", round(margin), "$")
