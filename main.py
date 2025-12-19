@@ -9,7 +9,10 @@ from indicators import get_MA, get_EMA
 # 2025/01/01 first 15m candle of btc_15m_data.csv is: 244944 <--- start
 # 2025/03/01 15m candle of btc_15m_data.csv is: 250608 <--- 2025/03/01
 # 2025/06/01 15m candle of btc_15m_data.csv is: 259440 <--- 2025/06/01
-# the last last 15m candle of btc_15m_data.csv is: 277580 <--- end
+# the last last 15m candle of btc_15m_data.csv is: 278640 <--- end
+
+# 2025/12/10 00:00 : 277872
+# 2025/12/18 00:00 : 278640
 
 # Candle Index Reference monthly :
 # 2025/01/01 : 244944   # 2025/02/01 : 247920   # 2025/03/01 : 250608   ( very good )
@@ -19,13 +22,13 @@ from indicators import get_MA, get_EMA
 
 
 start = 244944
-end = 277580
+end = 278640
 
 current_position = None  # None | "long" | "short"
 
 # Fetch data from CSV file
 def fetch_all_data(start : int, end : int):
-    df = pd.read_csv('btc_15m_data.csv')
+    df = pd.read_csv('./data_candle/btc_15m_data_2018_to_2025.csv')
     data = df.iloc[start:end]
 
     open_times_lst = []
