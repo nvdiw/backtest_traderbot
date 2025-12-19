@@ -96,11 +96,12 @@ def execute_trading_logic():
     balance_without_fee = balance
     first_balance = balance
     leverage = 3
-    trade_amount_percent = 0.5  # 100%
+    trade_amount_percent = 0.5  # 50% of balance per trade
+    money_for_save = 200 # amount to save
+
+    fee_rate = 0.0005  # 0.05% per trade (entry or exit)
+
     save_money = 0
-
-    fee_rate = 0.0005  # 0.05%
-
     total_wins = 0
     total_losses = 0
     total_long = 0
@@ -158,27 +159,18 @@ def execute_trading_logic():
         else:
             last_candle_move = 0
 
-        if current_position is None:
-            if balance <= 800 :
-                if save_money >= 100:
-                    balance += save_money
-                    save_money -= save_money
+        # ===================== MANAGE SAVE MONEY =====================
+        total_balance = balance + (margin if current_position is not None else 0)
 
-            if balance >= 1200 :
-                if save_money <= 100:
-                    balance -= 200
-                    save_money += 200
+        if total_balance <= 800 :
+            if save_money == money_for_save:
+                balance += save_money
+                save_money -= save_money
 
-        if current_position is not None:
-            if balance + margin <= 800 :
-                if save_money >= 100:
-                    balance += save_money
-                    save_money -= save_money
-
-            if balance + margin >= 1200 :
-                if save_money <= 100:
-                    balance -= 200
-                    save_money += 200
+        if total_balance >= 1200 :
+            if save_money == 0:
+                balance -= money_for_save
+                save_money += money_for_save
 
         # ===================== OPEN LONG =====================
         if ma_130[i] >= ma_200[i] and ema_14[i] > ma_50[i] and current_position is None:
