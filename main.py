@@ -97,7 +97,7 @@ def execute_trading_logic():
     first_balance = balance
     leverage = 3
     trade_amount_percent = 0.5  # 50% of balance per trade
-    money_for_save = 200 # amount to save
+    # money_for_save = first_balance * 5 / 100 # amount to save 40% of first balance
 
     fee_rate = 0.0005  # 0.05% per trade (entry or exit)
 
@@ -159,18 +159,7 @@ def execute_trading_logic():
         else:
             last_candle_move = 0
 
-        # ===================== MANAGE SAVE MONEY =====================
-        total_balance = balance + (margin if current_position is not None else 0)
-
-        if total_balance <= 800 :
-            if save_money == money_for_save:
-                balance += save_money
-                save_money -= save_money
-
-        if total_balance >= 1200 :
-            if save_money == 0:
-                balance -= money_for_save
-                save_money += money_for_save
+        # total_balance = balance + (margin if current_position is not None else 0)
 
         # ===================== OPEN LONG =====================
         if ma_130[i] >= ma_200[i] and ema_14[i] > ma_50[i] and current_position is None:
