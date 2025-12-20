@@ -32,18 +32,24 @@ def fetch_all_data(start : int, end : int):
     close_times_lst = []
     closes_prices_lst = []
     opens_prices_lst = []
+    low_prices_lst = []
+    high_prices_lst = []
 
     for index, row in data.iterrows():
         open_times_lst.append(row['Open time'])
         close_times_lst.append(row['Close time'])
         opens_prices_lst.append(row['Open'])
         closes_prices_lst.append(row['Close'])
+        low_prices_lst.append(row['Low'])
+        high_prices_lst.append(row['High'])
 
     return {
             "Open time": open_times_lst, 
             "Close time": close_times_lst,
             "Open": opens_prices_lst,
-            "Close": closes_prices_lst
+            "Close": closes_prices_lst,
+            "Low": low_prices_lst,
+            "High": high_prices_lst
             }
 
 all_data = fetch_all_data(start, end)
@@ -51,7 +57,8 @@ open_prices = all_data["Open"]
 close_prices = all_data["Close"]
 open_times = all_data["Open time"]
 close_times = all_data["Close time"]
-
+low_prices = all_data["Low"]
+high_prices = all_data["High"]
 # Calculate Trade Duration
 def trade_duration(open_time: str, close_time: str):
     # format: YYYY-MM-DD HH:MM:SS.microseconds
@@ -95,7 +102,7 @@ def execute_trading_logic():
     balance = 1000
     balance_without_fee = balance
     first_balance = balance
-    leverage = 3
+    leverage = 5
     trade_amount_percent = 0.5  # 50% of balance per trade
     # money_for_save = first_balance * 5 / 100 # amount to save 40% of first balance
 
@@ -159,7 +166,122 @@ def execute_trading_logic():
         else:
             last_candle_move = 0
 
-        # total_balance = balance + (margin if current_position is not None else 0)
+        total_balance = balance + (margin if current_position is not None else 0)
+
+        # ===================== CHECK LIQUIDATION =====================
+        if current_position == "long":
+            liquid_price_long = entry_price * (1 - 1 / leverage)
+
+            if low_prices[i] <= liquid_price_long:
+
+                close_price = liquid_price_long
+                close_time_value = open_times[i]
+
+                profit = -margin
+                profit_percent = -100
+                pnl_percent = -100
+                total_fee_liq = 0 
+
+                balance = balance_before_trade - margin
+                balance_without_fee = balance_before_trade_no_fee - margin_no_fee
+
+                deducting_fee_total += total_fee_liq
+                count_closed_orders += 1
+                total_losses += 1
+                total_long += 1
+
+                equity_curve.append(balance)
+                peak = max(equity_curve)
+                drawdown = (balance - peak) / peak * 100
+                max_drawdown = min(max_drawdown, drawdown)
+
+                days, hours, minutes = trade_duration(open_time_value, close_time_value)
+
+                print("🔴 LONG LIQUIDATED at price:", round(close_price, 2),
+                    "| Time:", close_time_value)
+
+                # -------- CSV LOG --------
+                csv_logger.log_trade(
+                    "LONG_LIQUIDATED",           # Trade type
+                    open_time_value,             # Open Time
+                    close_time_value,            # Close Time
+                    entry_price,                 # Entry Price
+                    close_price,                 # Close Price
+                    round(balance_before_trade,2),  # Balance before trade
+                    round(balance,2),            # Balance after trade
+                    round(margin,2),             # Margin used
+                    leverage,                    # Leverage
+                    trade_amount_percent,        # Trade amount percent
+                    round(profit,2),             # Profit in $
+                    round(profit_percent,2),     # Profit %
+                    round(pnl_percent,2),        # PnL %
+                    round(total_fee_liq,4),      # Total Fee
+                    days,
+                    hours,
+                    minutes,
+                    save_money
+                )
+
+                current_position = None
+                continue
+
+        # ===================== CHECK LIQUIDATION =====================
+        if current_position == "short":
+            liquid_price_short = entry_price * (1 + 1 / leverage)
+
+            if high_prices[i] >= liquid_price_short:
+
+                close_price = liquid_price_short
+                close_time_value = open_times[i]
+
+                profit = -margin
+                profit_percent = -100
+                pnl_percent = -100
+                total_fee_liq = 0
+
+                balance = balance_before_trade - margin
+                balance_without_fee = balance_before_trade_no_fee - margin_no_fee
+
+                deducting_fee_total += total_fee_liq
+                count_closed_orders += 1
+                total_losses += 1
+                total_short += 1
+
+                equity_curve.append(balance)
+                peak = max(equity_curve)
+                drawdown = (balance - peak) / peak * 100
+                max_drawdown = min(max_drawdown, drawdown)
+
+                days, hours, minutes = trade_duration(open_time_value, close_time_value)
+
+                print("🔴 SHORT LIQUIDATED at price:", round(close_price, 2),
+                    "| Time:", close_time_value)
+
+                # -------- CSV LOG --------
+                csv_logger.log_trade(
+                    "SHORT_LIQUIDATED",          # Trade type
+                    open_time_value,             # Open Time
+                    close_time_value,            # Close Time
+                    entry_price,                 # Entry Price
+                    close_price,                 # Close Price
+                    round(balance_before_trade,2),  # Balance before trade
+                    round(balance,2),            # Balance after trade
+                    round(margin,2),             # Margin used
+                    leverage,                    # Leverage
+                    trade_amount_percent,        # Trade amount percent
+                    round(profit,2),             # Profit in $
+                    round(profit_percent,2),     # Profit %
+                    round(pnl_percent,2),        # PnL %
+                    round(total_fee_liq,4),      # Total Fee
+                    days,
+                    hours,
+                    minutes,
+                    save_money
+                )
+
+                current_position = None
+                continue
+
 
         # ===================== OPEN LONG =====================
         if ma_130[i] >= ma_200[i] and ema_14[i] > ma_50[i] and current_position is None:
@@ -169,11 +291,17 @@ def execute_trading_logic():
                 balance_before_trade = balance
                 balance_before_trade_no_fee = balance_without_fee
 
-                # ---------- LVR Margin ----------
+                # ---------- Margin ----------
                 if balance >= 50 / 100 * first_balance:
-                    margin = 500
+                    margin = 50 / 100 * first_balance
                 else:
                     margin = balance * trade_amount_percent
+                
+                # ---------- Leverage ----------
+                if total_balance <= first_balance * 90 / 100:
+                    leverage = 3
+                else:
+                    leverage = 5
 
                 position_value = margin * leverage
                 position_size = position_value / entry_price
@@ -290,9 +418,15 @@ def execute_trading_logic():
 
                 # ---------- LVR Margin ----------
                 if balance >= 50 / 100 * first_balance:
-                    margin = 500
+                    margin = 50 / 100 * first_balance
                 else:
                     margin = balance * trade_amount_percent
+
+                # ---------- Leverage ----------
+                if total_balance <= first_balance * 90 / 100:
+                    leverage = 3
+                else:
+                    leverage = 5
 
                 position_value = margin * leverage
                 position_size = position_value / entry_price
