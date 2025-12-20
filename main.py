@@ -170,7 +170,11 @@ def execute_trading_logic():
                 balance_before_trade_no_fee = balance_without_fee
 
                 # ---------- LVR Margin ----------
-                margin = balance * trade_amount_percent
+                if balance >= 50 / 100 * first_balance:
+                    margin = 500
+                else:
+                    margin = balance * trade_amount_percent
+
                 position_value = margin * leverage
                 position_size = position_value / entry_price
 
@@ -260,6 +264,7 @@ def execute_trading_logic():
                     round(balance, 2),
                     round(margin , 2),
                     leverage,
+                    trade_amount_percent,
                     round(profit, 2),
                     round(profit_percent, 2),
                     round(pnl_percent, 2),
@@ -284,7 +289,11 @@ def execute_trading_logic():
                 balance_before_trade_no_fee = balance_without_fee
 
                 # ---------- LVR Margin ----------
-                margin = balance * trade_amount_percent
+                if balance >= 50 / 100 * first_balance:
+                    margin = 500
+                else:
+                    margin = balance * trade_amount_percent
+
                 position_value = margin * leverage
                 position_size = position_value / entry_price
 
@@ -375,6 +384,7 @@ def execute_trading_logic():
                     round(balance, 2),
                     round(margin , 2),
                     leverage,
+                    trade_amount_percent,
                     round(profit, 2),
                     round(profit_percent, 2),
                     round(pnl_percent, 2),
