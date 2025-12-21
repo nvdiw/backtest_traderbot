@@ -5,7 +5,7 @@ import pandas as pd
 # My Codes :
 from trade_csv_logger import TradeCSVLogger
 from indicators import Indicator
-from get_candle_index import get_candle_index
+from get_candle_index import get_candle_index, get_month_start_indices
 from trademanager import TradeManager
 
 # 2025/01/01 first 15m candle of btc_15m_data.csv is: 244944 <--- start
@@ -24,8 +24,9 @@ from trademanager import TradeManager
 # start = get_candle_index("2025-01-01")   ----> 244944
 # end = get_candle_index("2025-12-18")     ----> 278640
 
-start = get_candle_index("2019-01-01")
-end = get_candle_index("2025-12-18")
+# get (index or ID) of start, end of csv
+start, end = get_candle_index(("2025-08-01","2025-12-01"))
+lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 current_position = None  # None | "long" | "short"
 
@@ -506,3 +507,4 @@ execute_trading_logic()
 # print(open_times[0])
 # print(open_times[1])
 # print(start, end)
+print(lst_month_starts)
