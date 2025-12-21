@@ -24,7 +24,7 @@ from trademanager import TradeManager
 # start = get_candle_index("2025-01-01")   ----> 244944
 # end = get_candle_index("2025-12-18")     ----> 278640
 
-start = get_candle_index("2025-01-01")
+start = get_candle_index("2019-01-01")
 end = get_candle_index("2025-12-18")
 
 current_position = None  # None | "long" | "short"
@@ -122,6 +122,8 @@ def execute_trading_logic():
 
     save_money = 0
     total_wins = 0
+    total_wins_long = 0
+    total_wins_short = 0
     total_losses = 0
     total_long = 0
     total_short = 0
@@ -348,6 +350,7 @@ def execute_trading_logic():
                     equity_curve,
                     max_drawdown,
                     total_wins,
+                    total_wins_long,
                     total_losses,
                     total_long,
                     cooldown_after_big_pnl,
@@ -367,6 +370,7 @@ def execute_trading_logic():
                 equity_curve = updates['equity_curve']
                 max_drawdown = updates['max_drawdown']
                 total_wins = updates['total_wins']
+                total_wins_long = updates['total_wins_long']
                 total_losses = updates['total_losses']
                 total_long = updates['total_long']
                 cooldown_until_index = updates['cooldown_until_index']
@@ -426,6 +430,7 @@ def execute_trading_logic():
                     equity_curve,
                     max_drawdown,
                     total_wins,
+                    total_wins_short,
                     total_losses,
                     total_short,
                     cooldown_after_big_pnl,
@@ -445,6 +450,7 @@ def execute_trading_logic():
                 equity_curve = updates['equity_curve']
                 max_drawdown = updates['max_drawdown']
                 total_wins = updates['total_wins']
+                total_wins_short = updates['total_wins_short']
                 total_losses = updates['total_losses']
                 total_short = updates['total_short']
                 cooldown_until_index = updates['cooldown_until_index']
@@ -465,7 +471,7 @@ def execute_trading_logic():
 
     print("✅ BACKTEST FINISHED")
     print("Closed Trades:", count_closed_orders, "( Longs:", total_long, "| Shorts:", total_short, ")")
-    print("Total Wins:", total_wins)
+    print("Total Wins:", total_wins, "| Total Wins Long:", total_wins_long, "| Total Wins Short:", total_wins_short)
     print("Total Losses:", total_losses)
     print("Final Balance:", round(balance, 2), "$")
     print("Final Balance (No Fee):", round(balance_without_fee, 2), "$")

@@ -100,7 +100,7 @@ class TradeManager:
                 balance_before_trade, balance_before_trade_no_fee,
                 deducting_fee_total, profits_lst,
                 count_closed_orders, equity_curve,
-                max_drawdown, total_wins, total_losses,
+                max_drawdown, total_wins, total_wins_long, total_losses,
                 total_long, cooldown_after_big_pnl, leverage,
                 cooldown_until_index, open_time_value, csv_logger, trade_amount_percent, save_money):
 
@@ -137,6 +137,7 @@ class TradeManager:
         # ---- count wins and losses ----
         if profit_percent > 0:
             total_wins += 1
+            total_wins_long += 1
         else:
             total_losses += 1
 
@@ -195,6 +196,7 @@ class TradeManager:
             'equity_curve': equity_curve,
             'max_drawdown': max_drawdown,
             'total_wins': total_wins,
+            'total_wins_long': total_wins_long,
             'total_losses': total_losses,
             'total_long': total_long,
             'cooldown_until_index': cooldown_until_index,
@@ -265,7 +267,7 @@ class TradeManager:
             balance_before_trade, balance_before_trade_no_fee,
             deducting_fee_total, profits_lst,
             count_closed_orders, equity_curve,
-            max_drawdown, total_wins, total_losses,
+            max_drawdown, total_wins, total_wins_short, total_losses,
             total_short, cooldown_after_big_pnl, leverage,
             cooldown_until_index, open_time_value, csv_logger, trade_amount_percent, save_money):
 
@@ -302,6 +304,7 @@ class TradeManager:
         # ---- count wins and losses ----
         if profit_percent > 0:
             total_wins += 1
+            total_wins_short += 1
         else:
             total_losses += 1
 
@@ -360,6 +363,7 @@ class TradeManager:
             'equity_curve': equity_curve,
             'max_drawdown': max_drawdown,
             'total_wins': total_wins,
+            'total_wins_short': total_wins_short,
             'total_losses': total_losses,
             'total_short': total_short,
             'cooldown_until_index': cooldown_until_index,
