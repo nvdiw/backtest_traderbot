@@ -5,6 +5,7 @@ import pandas as pd
 # My Codes :
 from trade_csv_logger import TradeCSVLogger
 from indicators import Indicator
+from get_candle_index import get_candle_index
 
 # 2025/01/01 first 15m candle of btc_15m_data.csv is: 244944 <--- start
 # the last last 15m candle of btc_15m_data.csv is:    278640 <--- end
@@ -16,15 +17,21 @@ from indicators import Indicator
 # 2025/04/01 : 253584   # 2025/05/01 : 256464   # 2025/06/01 : 259440   ( bad )
 # 2025/07/01 : 262320   # 2025/08/01 : 265296   # 2025/09/01 : 268272   ( very bad )
 # 2025/10/01 : 271152   # 2025/11/01 : 274128   # 2025/12/01 : 277008   ( very good )
+# start = 244944
+# end = 277008
 
 
-start = 244944
-end = 278640
+start = get_candle_index("2025-01-01", "00:00")
+end = get_candle_index("2025-12-01", "00:00")
 
 current_position = None  # None | "long" | "short"
 
 # Fetch data from CSV file
 def fetch_all_data(start : int, end : int):
+
+    if start is None or end is None:
+        return None
+    
     df = pd.read_csv('./data_candle/btc_15m_data_2018_to_2025.csv')
     data = df.iloc[start:end]
 
@@ -576,3 +583,7 @@ def execute_trading_logic():
 
 # Run the trading logic
 execute_trading_logic()
+
+# print(open_prices[0])
+# print(open_times[0])
+# print(open_times[1])
