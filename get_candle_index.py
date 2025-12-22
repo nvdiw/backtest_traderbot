@@ -56,6 +56,10 @@ def get_month_start_indices(start_idx: int, end_idx: int, just_index : bool):
 
     for i in range(start_idx, end_idx):
         ts = df["Open time"].iloc[i]
+
+        if ts.day != 1:
+            continue
+
         month_key = ts.strftime("%Y-%m")
 
         if month_key not in seen_months:
