@@ -24,7 +24,8 @@ class TradeCSVLogger:
         days,
         hours,
         minutes,
-        save_money
+        save_money,
+        profit_percent_per_month
     ):
         self.rows.append({
             "type": trade_type,
@@ -45,7 +46,8 @@ class TradeCSVLogger:
             "duration_days": days,
             "duration_hours": hours,
             "duration_minutes": minutes,
-            "save_money" : save_money
+            "save_money" : save_money,
+            "profit_percent_per_month" : profit_percent_per_month
         })
 
     def save_csv(
