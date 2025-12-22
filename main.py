@@ -25,7 +25,7 @@ from trademanager import TradeManager
 # end = get_candle_index("2025-12-18")     ----> 278640
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2025-08-01","2025-12-01"))
+start, end = get_candle_index(("2025-01-01","2025-12-18"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 current_position = None  # None | "long" | "short"
@@ -117,6 +117,7 @@ def execute_trading_logic():
     first_balance = balance
     leverage = 5
     trade_amount_percent = 0.5  # 50% of balance per trade
+    monthly_profit_percent_stop_trade = 6
     # money_for_save = first_balance * 5 / 100 # amount to save 40% of first balance
 
     fee_rate = 0.0005  # 0.05% per trade (entry or exit)
@@ -128,8 +129,11 @@ def execute_trading_logic():
     total_losses = 0
     total_long = 0
     total_short = 0
+    total_profit_percent = 0
     deducting_fee_total = 0
     count_closed_orders = 0
+    profit_percent_per_month = 0
+    lst_profit_percent_per_month = []
 
     max_drawdown = 0
     equity_curve = []
@@ -142,6 +146,8 @@ def execute_trading_logic():
     balance_before_trade = None
     balance_before_trade_no_fee = None
     open_time_value = None
+
+    trade_power = True
 
     first_open_time = open_times[0]
     last_close_time = open_times[-1]
@@ -163,13 +169,22 @@ def execute_trading_logic():
         # print("len(ema_14):", len(ema_14))
         # print("len(ma_50):", len(ma_50))
 
-    trade_manager = TradeManager(csv_logger)
+    trade_manager = TradeManager(csv_logger, first_balance, monthly_profit_percent_stop_trade)
 
     for i in range(len(open_prices)):
-
+        # print(start+i)
         if ema_14[i] is None or ma_50[i] is None or ma_130[i] is None or ma_200[i] is None:
             continue
-        
+
+        if trade_power == False:
+            if int(start+i) in lst_month_starts:
+                lst_profit_percent_per_month.append(profit_percent_per_month)
+                profit_percent_per_month = 0
+                trade_power = True
+                
+            else:
+                continue
+
         if i < cooldown_until_index:
             continue
         
@@ -327,6 +342,7 @@ def execute_trading_logic():
                 open_time_value = updates['open_time_value']
                 current_position = updates['current_position']
 
+
         # ===================== CLOSE LONG =====================
         if current_position == "long":
             if (ema_14[i] < ma_50[i]) or (ma_130[i] < ma_200[i]):
@@ -347,6 +363,7 @@ def execute_trading_logic():
                     balance_before_trade_no_fee,
                     deducting_fee_total,
                     profits_lst,
+                    total_profit_percent,
                     count_closed_orders,
                     equity_curve,
                     max_drawdown,
@@ -360,13 +377,16 @@ def execute_trading_logic():
                     open_time_value,
                     csv_logger,
                     trade_amount_percent,
-                    save_money)
+                    profit_percent_per_month,
+                    save_money,
+                    trade_power)
                 
 
                 balance = updates['balance']
                 balance_without_fee = updates['balance_without_fee']
                 deducting_fee_total = updates['deducting_fee_total']
                 profits_lst = updates['profits_lst']
+                total_profit_percent = updates['total_profit_percent']
                 count_closed_orders = updates['count_closed_orders']
                 equity_curve = updates['equity_curve']
                 max_drawdown = updates['max_drawdown']
@@ -376,6 +396,9 @@ def execute_trading_logic():
                 total_long = updates['total_long']
                 cooldown_until_index = updates['cooldown_until_index']
                 current_position = updates['current_position']
+                profit_percent_per_month = updates['profit_percent_per_month']
+                save_money = updates["save_money"]
+                trade_power = updates['trade_power']
 
 
         # ===================== OPEN SHORT =====================
@@ -407,6 +430,7 @@ def execute_trading_logic():
                 open_time_value = updates['open_time_value']
                 current_position = updates['current_position']
 
+
         # ===================== CLOSE SHORT =====================
         if current_position == "short":
             if (ema_14[i] > ma_50[i]) or (ma_130[i] >= ma_200[i]):
@@ -427,6 +451,7 @@ def execute_trading_logic():
                     balance_before_trade_no_fee,
                     deducting_fee_total,
                     profits_lst,
+                    total_profit_percent,
                     count_closed_orders,
                     equity_curve,
                     max_drawdown,
@@ -440,13 +465,17 @@ def execute_trading_logic():
                     open_time_value,
                     csv_logger,
                     trade_amount_percent,
-                    save_money)
+                    profit_percent_per_month,
+                    save_money,
+                    trade_power
+                    )
                     
 
                 balance = updates['balance']
                 balance_without_fee = updates['balance_without_fee']
                 deducting_fee_total = updates['deducting_fee_total']
                 profits_lst = updates['profits_lst']
+                total_profit_percent = updates['total_profit_percent']
                 count_closed_orders = updates['count_closed_orders']
                 equity_curve = updates['equity_curve']
                 max_drawdown = updates['max_drawdown']
@@ -456,8 +485,12 @@ def execute_trading_logic():
                 total_short = updates['total_short']
                 cooldown_until_index = updates['cooldown_until_index']
                 current_position = updates['current_position']
+                profit_percent_per_month = updates['profit_percent_per_month']
+                save_money = updates['save_money']
+                trade_power = updates['trade_power']
 
-    # ========== BACKTEST SUMMARY ==========
+
+    # ===================== BACKTEST SUMMARY =====================
 
     if current_position is not None:
         balance += margin  # return margin if position still open
@@ -465,7 +498,7 @@ def execute_trading_logic():
 
     balance += save_money
 
-    total_profit_percent = balance * 100 / first_balance - 100
+    t_profit_percent = balance * 100 / first_balance - 100
     days, hours, minutes = trade_duration(first_open_time, last_close_time)
     win_rate = (total_wins / (total_wins + total_losses)) * 100 if (total_wins + total_losses) > 0 else 0
 
@@ -483,14 +516,15 @@ def execute_trading_logic():
     print(f"Total Duration : {days} days, {hours} hours, {minutes} minutes")
     print("Win Rate:", round(win_rate, 2), "%")
     print("Total Profit:", round(sum(profits_lst), 2), "$")
-    print("Total Profit Percent:", round(total_profit_percent, 2), "%")
+    print("Total Profit Percent:", round(t_profit_percent, 2), "%", "or", round(total_profit_percent, 2), "%")
     print("saved Money:", save_money, "$")
+    print("profit_percent_per_month:", lst_profit_percent_per_month)
 
     csv_logger.save_csv(
     first_balance=first_balance,
     final_balance=balance,
     total_profit=sum(profits_lst),
-    total_profit_percent=total_profit_percent,
+    total_profit_percent=t_profit_percent,
     total_fee=deducting_fee_total,
     start_time=first_open_time,
     end_time=last_close_time,
@@ -507,4 +541,6 @@ execute_trading_logic()
 # print(open_times[0])
 # print(open_times[1])
 # print(start, end)
-print(lst_month_starts)
+# print(lst_month_starts)
+# print(get_candle_index("2025-03-01"))
+# print(get_candle_index("2025-02-27"))

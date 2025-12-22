@@ -33,9 +33,10 @@ def trade_duration(open_time: str, close_time: str):
 
 # Trade manager class to encapsulate open/close logic without changing behavior
 class TradeManager:
-    def __init__(self, csv_logger):
+    def __init__(self, csv_logger, first_balance, monthly_profit_percent_stop_trade):
         self.csv_logger = csv_logger
-    
+        self.first_balance = first_balance
+        self.monthly_profit_percent_stop_trade = monthly_profit_percent_stop_trade
     # open long processes
     def open_long(self, i, open_prices, open_times,
                     balance, balance_without_fee, first_balance,
@@ -92,17 +93,19 @@ class TradeManager:
             'current_position': current_position
         }
 
+
     # close long processes
     def close_long(self, i, open_prices, open_times,
                 entry_price, position_size, position_size_no_fee,
                 fee_rate, margin, margin_no_fee,
                 balance, balance_without_fee,
                 balance_before_trade, balance_before_trade_no_fee,
-                deducting_fee_total, profits_lst,
+                deducting_fee_total, profits_lst, total_profit_percent,
                 count_closed_orders, equity_curve,
                 max_drawdown, total_wins, total_wins_long, total_losses,
                 total_long, cooldown_after_big_pnl, leverage,
-                cooldown_until_index, open_time_value, csv_logger, trade_amount_percent, save_money):
+                cooldown_until_index, open_time_value, csv_logger, trade_amount_percent, profit_percent_per_month,
+                save_money, trade_power):
 
         close_price = open_prices[i]
 
@@ -122,10 +125,12 @@ class TradeManager:
         # profit after fee
         profit = balance - balance_before_trade
         profit_percent = profit * 100 / balance_before_trade
+        profit_percent_per_month += (pnl - total_fee) / 1000 * 100
         pnl_percent = (pnl / margin) * 100
 
         deducting_fee_total += total_fee
         profits_lst.append(profit)
+        total_profit_percent += profit_percent
         count_closed_orders += 1
 
         equity_curve.append(balance)
@@ -182,8 +187,16 @@ class TradeManager:
             days,
             hours,
             minutes,
-            save_money
+            save_money,
+            profit_percent_per_month
         )
+
+        # stop trade if we got 10% for this month
+        if profit_percent_per_month >= self.monthly_profit_percent_stop_trade:
+            save_money += balance - self.first_balance
+            balance = self.first_balance
+            cooldown_until_index = i
+            trade_power = False    # off
 
         current_position = None
 
@@ -192,6 +205,7 @@ class TradeManager:
             'balance_without_fee': balance_without_fee,
             'deducting_fee_total': deducting_fee_total,
             'profits_lst': profits_lst,
+            'total_profit_percent': total_profit_percent,
             'count_closed_orders': count_closed_orders,
             'equity_curve': equity_curve,
             'max_drawdown': max_drawdown,
@@ -200,7 +214,10 @@ class TradeManager:
             'total_losses': total_losses,
             'total_long': total_long,
             'cooldown_until_index': cooldown_until_index,
-            'current_position': current_position
+            'current_position': current_position,
+            'trade_power': trade_power,
+            'profit_percent_per_month': profit_percent_per_month,
+            'save_money' : save_money
         }
     
     # open short processes
@@ -265,11 +282,12 @@ class TradeManager:
             fee_rate, margin, margin_no_fee,
             balance, balance_without_fee,
             balance_before_trade, balance_before_trade_no_fee,
-            deducting_fee_total, profits_lst,
+            deducting_fee_total, profits_lst, total_profit_percent,
             count_closed_orders, equity_curve,
             max_drawdown, total_wins, total_wins_short, total_losses,
             total_short, cooldown_after_big_pnl, leverage,
-            cooldown_until_index, open_time_value, csv_logger, trade_amount_percent, save_money):
+            cooldown_until_index, open_time_value, csv_logger, trade_amount_percent, profit_percent_per_month,
+            save_money, trade_power):
 
         close_price = open_prices[i]
 
@@ -289,10 +307,12 @@ class TradeManager:
         # profit after fee
         profit = balance - balance_before_trade
         profit_percent = profit * 100 / balance_before_trade
+        profit_percent_per_month += (pnl - total_fee) / 1000 * 100
         pnl_percent = (pnl / margin) * 100
 
         deducting_fee_total += total_fee
         profits_lst.append(profit)
+        total_profit_percent += profit_percent
         count_closed_orders += 1
 
         equity_curve.append(balance)
@@ -349,9 +369,17 @@ class TradeManager:
             days,
             hours,
             minutes,
-            save_money
+            save_money,
+            profit_percent_per_month
         )
 
+        # stop trade if we got 10% for this month
+        if profit_percent_per_month >= self.monthly_profit_percent_stop_trade:
+            save_money += balance - self.first_balance
+            balance = self.first_balance
+            cooldown_until_index = i
+            trade_power = False    # off
+            
         current_position = None
 
         return {
@@ -359,6 +387,7 @@ class TradeManager:
             'balance_without_fee': balance_without_fee,
             'deducting_fee_total': deducting_fee_total,
             'profits_lst': profits_lst,
+            'total_profit_percent': total_profit_percent,
             'count_closed_orders': count_closed_orders,
             'equity_curve': equity_curve,
             'max_drawdown': max_drawdown,
@@ -367,5 +396,8 @@ class TradeManager:
             'total_losses': total_losses,
             'total_short': total_short,
             'cooldown_until_index': cooldown_until_index,
-            'current_position': current_position
+            'current_position': current_position,
+            'trade_power': trade_power,
+            'profit_percent_per_month': profit_percent_per_month,
+            'save_money' : save_money
         }
