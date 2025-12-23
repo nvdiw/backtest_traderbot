@@ -118,7 +118,7 @@ def execute_trading_logic():
     tactical_balance = first_balance
     leverage = 5
     trade_amount_percent = 0.5  # 50% of balance per trade
-    monthly_profit_percent_stop_trade = 8
+    monthly_profit_percent_stop_trade = 8 # if 8% per month profit --> don't trade on that month 
 
     # money_for_save = first_balance * 5 / 100 # amount to save 40% of first balance
 
@@ -519,7 +519,7 @@ def execute_trading_logic():
     print("Win Rate:", round(win_rate, 2), "%")
     print("Total Profit:", round(sum(profits_lst), 2), "$")
     print("Total Profit Percent:", round(t_profit_percent, 2), "%", "or", round(total_profit_percent, 2), "%")
-    print("saved Money:", save_money, "$")
+    print("saved Money:", round(save_money,2), "$")
     print("profit_percent_per_month:", len(lst_profit_percent_per_month))
 
     csv_logger.save_csv(

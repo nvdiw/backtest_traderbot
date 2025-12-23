@@ -49,8 +49,8 @@ class TradeManager:
         balance_before_trade_no_fee = balance_without_fee
 
         # ---------- Margin ----------
-        if balance >= 50 / 100 * first_balance:
-            margin = 50 / 100 * first_balance
+        if balance >= 50 / 100 * self.tactical_balance:
+            margin = 50 / 100 * self.tactical_balance
         else:
             margin = balance * trade_amount_percent
         
@@ -238,9 +238,9 @@ class TradeManager:
         balance_before_trade = balance
         balance_before_trade_no_fee = balance_without_fee
 
-        # ---------- LVR Margin ----------
-        if balance >= 50 / 100 * first_balance:
-            margin = 50 / 100 * first_balance
+        # ---------- Margin ----------
+        if balance >= 50 / 100 * self.tactical_balance:
+            margin = 50 / 100 * self.tactical_balance
         else:
             margin = balance * trade_amount_percent
 
