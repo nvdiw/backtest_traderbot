@@ -33,10 +33,11 @@ def trade_duration(open_time: str, close_time: str):
 
 # Trade manager class to encapsulate open/close logic without changing behavior
 class TradeManager:
-    def __init__(self, csv_logger, first_balance, monthly_profit_percent_stop_trade):
+    def __init__(self, csv_logger, first_balance, monthly_profit_percent_stop_trade,tactical_balance):
         self.csv_logger = csv_logger
         self.first_balance = first_balance
         self.monthly_profit_percent_stop_trade = monthly_profit_percent_stop_trade
+        self.tactical_balance = tactical_balance
     # open long processes
     def open_long(self, i, open_prices, open_times,
                     balance, balance_without_fee, first_balance,
@@ -125,7 +126,7 @@ class TradeManager:
         # profit after fee
         profit = balance - balance_before_trade
         profit_percent = profit * 100 / balance_before_trade
-        profit_percent_per_month += (pnl - total_fee) / 1000 * 100
+        profit_percent_per_month = ((balance * 100) / self.tactical_balance) - 100
         pnl_percent = (pnl / margin) * 100
 
         deducting_fee_total += total_fee
@@ -191,10 +192,17 @@ class TradeManager:
             profit_percent_per_month
         )
 
-        # stop trade if we got 10% for this month
+        # ---- save money ----
+        if balance < self.tactical_balance * 75 / 100:
+            if save_money >= self.tactical_balance * 25 / 100:
+                balance += self.tactical_balance * 25 / 100
+                save_money -= self.tactical_balance * 25 / 100
+
+        # stop trade if we got 6% for this month
         if profit_percent_per_month >= self.monthly_profit_percent_stop_trade:
-            save_money += balance - self.first_balance
-            balance = self.first_balance
+            self.tactical_balance = self.tactical_balance + (self.tactical_balance * 2.5 / 100)
+            save_money += balance - self.tactical_balance
+            balance = self.tactical_balance
             cooldown_until_index = i
             trade_power = False    # off
 
@@ -307,7 +315,7 @@ class TradeManager:
         # profit after fee
         profit = balance - balance_before_trade
         profit_percent = profit * 100 / balance_before_trade
-        profit_percent_per_month += (pnl - total_fee) / 1000 * 100
+        profit_percent_per_month = ((balance * 100) / self.tactical_balance) - 100
         pnl_percent = (pnl / margin) * 100
 
         deducting_fee_total += total_fee
@@ -373,10 +381,17 @@ class TradeManager:
             profit_percent_per_month
         )
 
-        # stop trade if we got 10% for this month
+        # ---- save money ----
+        if balance < self.tactical_balance * 75 / 100:
+            if save_money >= self.tactical_balance * 25 / 100:
+                balance += self.tactical_balance * 25 / 100
+                save_money -= self.tactical_balance * 25 / 100
+
+        # stop trade if we got 6% for this month
         if profit_percent_per_month >= self.monthly_profit_percent_stop_trade:
-            save_money += balance - self.first_balance
-            balance = self.first_balance
+            self.tactical_balance = self.tactical_balance + (self.tactical_balance * 2.5 / 100)
+            save_money += balance - self.tactical_balance
+            balance = self.tactical_balance
             cooldown_until_index = i
             trade_power = False    # off
             

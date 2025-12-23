@@ -115,9 +115,11 @@ def execute_trading_logic():
     balance = 1000
     balance_without_fee = balance
     first_balance = balance
+    tactical_balance = first_balance
     leverage = 5
     trade_amount_percent = 0.5  # 50% of balance per trade
-    monthly_profit_percent_stop_trade = 6
+    monthly_profit_percent_stop_trade = 8
+
     # money_for_save = first_balance * 5 / 100 # amount to save 40% of first balance
 
     fee_rate = 0.0005  # 0.05% per trade (entry or exit)
@@ -169,7 +171,7 @@ def execute_trading_logic():
         # print("len(ema_14):", len(ema_14))
         # print("len(ma_50):", len(ma_50))
 
-    trade_manager = TradeManager(csv_logger, first_balance, monthly_profit_percent_stop_trade)
+    trade_manager = TradeManager(csv_logger, first_balance, monthly_profit_percent_stop_trade, tactical_balance)
 
     for i in range(len(open_prices)):
         # print(start+i)
@@ -518,7 +520,7 @@ def execute_trading_logic():
     print("Total Profit:", round(sum(profits_lst), 2), "$")
     print("Total Profit Percent:", round(t_profit_percent, 2), "%", "or", round(total_profit_percent, 2), "%")
     print("saved Money:", save_money, "$")
-    print("profit_percent_per_month:", lst_profit_percent_per_month)
+    print("profit_percent_per_month:", len(lst_profit_percent_per_month))
 
     csv_logger.save_csv(
     first_balance=first_balance,
