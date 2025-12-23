@@ -112,14 +112,13 @@ def execute_trading_logic():
 
     csv_logger = TradeCSVLogger()
 
+    # ---- settings is here ----
     balance = 1000
-    balance_without_fee = balance
-    first_balance = balance
-    tactical_balance = first_balance
     leverage = 5
     trade_amount_percent = 0.5  # 50% of balance per trade
     monthly_profit_percent_stop_trade = 8 # if 8% per month profit --> don't trade on that month 
-
+    monthly_close_filter = True
+    adx_filter = False
     # money_for_save = first_balance * 5 / 100 # amount to save 40% of first balance
 
     fee_rate = 0.0005  # 0.05% per trade (entry or exit)
@@ -151,6 +150,10 @@ def execute_trading_logic():
 
     trade_power = True
 
+    balance_without_fee = balance
+    first_balance = balance
+    tactical_balance = first_balance
+
     first_open_time = open_times[0]
     last_close_time = open_times[-1]
 
@@ -171,21 +174,33 @@ def execute_trading_logic():
         # print("len(ema_14):", len(ema_14))
         # print("len(ma_50):", len(ma_50))
 
-    trade_manager = TradeManager(csv_logger, first_balance, monthly_profit_percent_stop_trade, tactical_balance)
+    # ---- MANAGE TRADES ----
+    trade_manager = TradeManager(csv_logger, first_balance, monthly_profit_percent_stop_trade, 
+                                 tactical_balance, monthly_close_filter)
 
+    # ---- get_ADX ----
+    indicator = Indicator(open_prices)
+    adx = indicator.get_ADX(
+        high_prices,
+        low_prices,
+        close_prices,
+        period=14
+    )
+
+    # ---- MAIN ----
     for i in range(len(open_prices)):
         # print(start+i)
         if ema_14[i] is None or ma_50[i] is None or ma_130[i] is None or ma_200[i] is None:
             continue
-
-        if trade_power == False:
-            if int(start+i) in lst_month_starts:
-                lst_profit_percent_per_month.append(profit_percent_per_month)
-                profit_percent_per_month = 0
-                trade_power = True
-                
-            else:
-                continue
+        
+        if monthly_close_filter == True:
+            if trade_power == False:
+                if int(start+i) in lst_month_starts:
+                    lst_profit_percent_per_month.append(profit_percent_per_month)
+                    profit_percent_per_month = 0
+                    trade_power = True 
+                else:
+                    continue
 
         if i < cooldown_until_index:
             continue
@@ -319,6 +334,12 @@ def execute_trading_logic():
         # ===================== OPEN LONG =====================
         if ma_130[i] >= ma_200[i] and ema_14[i] > ma_50[i] and current_position is None:
             if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
+                
+                # ===== ADX FILTER =====
+                if adx_filter == True :
+                    if adx[i] is None or adx[i] < 15:
+                        continue
+
                 updates = trade_manager.open_long(
                     i,
                     open_prices,
@@ -406,6 +427,11 @@ def execute_trading_logic():
         # ===================== OPEN SHORT =====================
         if ma_130[i] < ma_200[i] and ema_14[i] < ma_50[i] and current_position is None:
             if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
+                
+                # ===== ADX FILTER =====
+                if adx_filter == True :
+                    if adx[i] is None or adx[i] < 15:
+                        continue
 
                 updates = trade_manager.open_short(
                     i,
