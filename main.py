@@ -116,9 +116,10 @@ def execute_trading_logic():
     balance = 1000
     leverage = 5
     trade_amount_percent = 0.5  # 50% of balance per trade
-    monthly_profit_percent_stop_trade = 8 # if 8% per month profit --> don't trade on that month 
+    monthly_profit_percent_stop_trade = 8    # if 8% per month profit --> don't trade on that month 
+    monthly_compound = 3    # after get 'monthly_profit_percent_stop_trade' per month how much money goes for next month
     monthly_close_filter = True
-    adx_filter = False
+    adx_filter = True
     # money_for_save = first_balance * 5 / 100 # amount to save 40% of first balance
 
     fee_rate = 0.0005  # 0.05% per trade (entry or exit)
@@ -176,7 +177,7 @@ def execute_trading_logic():
 
     # ---- MANAGE TRADES ----
     trade_manager = TradeManager(csv_logger, first_balance, monthly_profit_percent_stop_trade, 
-                                 tactical_balance, monthly_close_filter)
+                                 tactical_balance, monthly_close_filter, monthly_compound)
 
     # ---- get_ADX ----
     indicator = Indicator(open_prices)
@@ -337,7 +338,7 @@ def execute_trading_logic():
                 
                 # ===== ADX FILTER =====
                 if adx_filter == True :
-                    if adx[i] is None or adx[i] < 15:
+                    if adx[i] is None or adx[i] < 13:
                         continue
 
                 updates = trade_manager.open_long(
@@ -430,7 +431,7 @@ def execute_trading_logic():
                 
                 # ===== ADX FILTER =====
                 if adx_filter == True :
-                    if adx[i] is None or adx[i] < 15:
+                    if adx[i] is None or adx[i] < 13:
                         continue
 
                 updates = trade_manager.open_short(

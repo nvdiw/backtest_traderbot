@@ -33,12 +33,13 @@ def trade_duration(open_time: str, close_time: str):
 
 # Trade manager class to encapsulate open/close logic without changing behavior
 class TradeManager:
-    def __init__(self, csv_logger, first_balance, monthly_profit_percent_stop_trade, tactical_balance, monthly_close_filter) :
+    def __init__(self, csv_logger, first_balance, monthly_profit_percent_stop_trade, tactical_balance, monthly_close_filter, monthly_compound) :
         self.csv_logger = csv_logger
         self.first_balance = first_balance
         self.monthly_profit_percent_stop_trade = monthly_profit_percent_stop_trade
         self.tactical_balance = tactical_balance
         self.monthly_close_filter = monthly_close_filter
+        self.monthly_compound = monthly_compound
     # open long processes
     def open_long(self, i, open_prices, open_times,
                     balance, balance_without_fee, first_balance,
@@ -202,7 +203,7 @@ class TradeManager:
         # stop trade if we got 6% for this month
         if self.monthly_close_filter == True :
             if profit_percent_per_month >= self.monthly_profit_percent_stop_trade:
-                self.tactical_balance = self.tactical_balance + (self.tactical_balance * 2.5 / 100)
+                self.tactical_balance = self.tactical_balance + (self.tactical_balance * self.monthly_compound / 100)
                 save_money += balance - self.tactical_balance
                 balance = self.tactical_balance
                 cooldown_until_index = i
@@ -392,7 +393,7 @@ class TradeManager:
         # stop trade if we got 6% for this month
         if self.monthly_close_filter == True :
             if profit_percent_per_month >= self.monthly_profit_percent_stop_trade:
-                self.tactical_balance = self.tactical_balance + (self.tactical_balance * 2.5 / 100)
+                self.tactical_balance = self.tactical_balance + (self.tactical_balance * self.monthly_compound / 100)
                 save_money += balance - self.tactical_balance
                 balance = self.tactical_balance
                 cooldown_until_index = i
