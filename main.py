@@ -46,6 +46,7 @@ def fetch_all_data(start : int, end : int):
     opens_prices_lst = []
     low_prices_lst = []
     high_prices_lst = []
+    volume_prices_lst = []
 
     for index, row in data.iterrows():
         open_times_lst.append(row['Open time'])
@@ -54,6 +55,7 @@ def fetch_all_data(start : int, end : int):
         closes_prices_lst.append(row['Close'])
         low_prices_lst.append(row['Low'])
         high_prices_lst.append(row['High'])
+        volume_prices_lst.append(row['Volume'])
 
     return {
             "Open time": open_times_lst, 
@@ -61,7 +63,8 @@ def fetch_all_data(start : int, end : int):
             "Open": opens_prices_lst,
             "Close": closes_prices_lst,
             "Low": low_prices_lst,
-            "High": high_prices_lst
+            "High": high_prices_lst,
+            "Volume" : volume_prices_lst
             }
 
 all_data = fetch_all_data(start, end)
@@ -71,6 +74,15 @@ open_times = all_data["Open time"]
 close_times = all_data["Close time"]
 low_prices = all_data["Low"]
 high_prices = all_data["High"]
+volume_prices = all_data["Volume"]
+
+
+# get average volume
+def get_avg_volume(i, window=20):
+    if i < window:
+        return sum(volume_prices[:i+1]) / (i+1)
+    else:
+        return sum(volume_prices[i-window+1:i+1]) / window
 
 
 # Calculate Trade Duration
@@ -107,7 +119,7 @@ def trade_duration(open_time: str, close_time: str):
 
 
 # Main Trading Logic
-def execute_trading_logic():
+def ma_strategy():
 
     global current_position
 
@@ -116,11 +128,12 @@ def execute_trading_logic():
     # ---- settings is here ----
     balance = 1000
     leverage = 5
-    trade_amount_percent = 0.8  # 80% of balance per trade
+    trade_amount_percent = 0.5  # 50% of balance per trade
     monthly_profit_percent_stop_trade = 8    # if 8% per month profit --> don't trade on that month 
     monthly_compound = 3    # after get 'monthly_profit_percent_stop_trade' per month how much money goes for next month
     monthly_close_filter = True
     adx_filter = True
+    volume_filter = True
     # money_for_save = first_balance * 5 / 100 # amount to save 40% of first balance
 
     fee_rate = 0.0005  # 0.05% per trade (entry or exit)
@@ -339,7 +352,25 @@ def execute_trading_logic():
                 
                 # ===== ADX FILTER =====
                 if adx_filter == True :
-                    if adx[i] is None or adx[i] < 20:
+                    if adx[i] is None or adx[i] < 20.5:
+                        continue
+
+                # ===== Volume FILTER =====
+                if volume_filter == True :
+
+                    vol_now = volume_prices[i]
+                    vol_avg15 = get_avg_volume(i, window=15)
+
+                    # ---- Strong Candle ----
+                    body = abs(close_prices[i] - open_prices[i])
+                    range_ = high_prices[i] - low_prices[i]
+
+                    strong_candle = range_ > 0 and body >= 0.6 * range_
+
+                    # ---- Volume Condition ----
+                    volume_pass = vol_now >= 1.2 * vol_avg15
+
+                    if not (volume_pass and strong_candle):
                         continue
 
                 updates = trade_manager.open_long(
@@ -432,8 +463,27 @@ def execute_trading_logic():
                 
                 # ===== ADX FILTER =====
                 if adx_filter == True :
-                    if adx[i] is None or adx[i] < 20:
+                    if adx[i] is None or adx[i] < 20.5:
                         continue
+ 
+                # ===== Volume FILTER =====
+                if volume_filter == True :
+
+                    vol_now = volume_prices[i]
+                    vol_avg15 = get_avg_volume(i, window=15)
+
+                    # ---- Strong Candle ----
+                    body = abs(close_prices[i] - open_prices[i])
+                    range_ = high_prices[i] - low_prices[i]
+
+                    strong_candle = range_ > 0 and body >= 0.6 * range_
+
+                    # ---- Volume Condition ----
+                    volume_pass = vol_now >= 1.2 * vol_avg15
+
+                    if not (volume_pass and strong_candle):
+                        continue
+
 
                 updates = trade_manager.open_short(
                     i,
@@ -572,7 +622,7 @@ def execute_trading_logic():
 
 
 # Run the trading logic
-execute_trading_logic()
+ma_strategy()
 
 # print(open_prices[0])
 # print(open_times[0])
