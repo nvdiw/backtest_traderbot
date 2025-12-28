@@ -52,7 +52,7 @@ class TradeManager:
 
         # ---------- Margin ----------
         if balance >= 50 / 100 * self.tactical_balance:
-            margin = 50 / 100 * self.tactical_balance
+            margin = trade_amount_percent * self.tactical_balance
         else:
             margin = balance * trade_amount_percent
         
@@ -243,7 +243,7 @@ class TradeManager:
 
         # ---------- Margin ----------
         if balance >= 50 / 100 * self.tactical_balance:
-            margin = 50 / 100 * self.tactical_balance
+            margin = trade_amount_percent * self.tactical_balance
         else:
             margin = balance * trade_amount_percent
 
