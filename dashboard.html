@@ -1,0 +1,354 @@
+<!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>Trading Backtest Dashboard</title>
+
+      <!-- Plotly -->
+      <script src="https://cdn.plot.ly/plotly-2.20.0.min.js"></script>
+      <!-- PapaParse for CSV parsing -->
+      <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+      <!-- Tabulator for table -->
+      <link href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator_midnight.min.css" rel="stylesheet">
+      <script src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
+
+      <style>
+        :root{--bg:#0b0b10;--card:#0f0f18;--muted:#9aa0b4;--accent:#9b59b6;--accent2:#6c3483;--green:#7be495;--red:#ff8b8b}
+        body{background:var(--bg);color:#e6e6fa;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;margin:0}
+        .container{max-width:1200px;margin:18px auto;padding:12px}
+        .header{display:flex;align-items:center;justify-content:space-between;padding:12px 0}
+        .title{font-size:20px;color:var(--accent);margin:0}
+        .controls{display:flex;gap:8px;align-items:center}
+        .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:12px 0}
+        .card{background:var(--card);padding:12px;border-radius:8px;box-shadow:0 1px 0 rgba(255,255,255,0.02)}
+        .kpi-label{font-size:12px;color:var(--muted)}
+        .kpi-value{font-size:18px;margin-top:6px}
+        .charts{display:grid;grid-template-columns:2fr 1fr;gap:12px}
+        .chart-box{background:var(--card);padding:8px;border-radius:8px}
+        #table-wrapper{margin-top:12px}
+        footer{margin-top:16px;color:var(--muted);font-size:12px}
+        .spinner{border:4px solid rgba(255,255,255,0.06);border-left-color:var(--accent);border-radius:50%;width:28px;height:28px;animation:spin 1s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .detail-panel{background:var(--card);padding:12px;border-radius:8px;color:#e6e6fa}
+        @media(max-width:900px){.charts{grid-template-columns:1fr}}
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1 class="title">Trading Backtest Dashboard</h1>
+          <div class="controls">
+            <button id="btn-refresh" class="card" style="cursor:pointer">Refresh CSV</button>
+            <div id="loading" style="display:none" class="spinner"></div>
+            <div id="status-info" style="color:var(--muted);font-size:13px;margin-left:8px"></div>
+          </div>
+        </div>
+
+        <div id="kpi-grid" class="kpi-grid"></div>
+
+        <div class="charts">
+          <div class="chart-box card">
+            <div id="equity-chart" style="height:320px;"></div>
+          </div>
+          <div class="chart-box card">
+            <div id="drawdown-chart" style="height:320px;"></div>
+          </div>
+        </div>
+
+        <div class="chart-box card" style="margin-top:12px">
+          <div id="hist-chart" style="height:240px"></div>
+        </div>
+
+        <div style="display:flex;gap:12px;margin-top:12px">
+          <div style="flex:1">
+            <div id="trades-table"></div>
+          </div>
+          <div style="width:360px">
+            <div id="trade-details" class="detail-panel">Select a trade row for details</div>
+          </div>
+        </div>
+
+        <footer>Serve this folder with a local HTTP server to enable CSV loading (e.g. <code>python -m http.server</code>).</footer>
+      </div>
+
+      <script>
+        // Utility: safe number
+        const toNum = v => (v === null || v === undefined || v === '') ? NaN : Number(v);
+
+        // Map CSV row to trade object with required fields
+        function mapRowToTrade(row, index){
+          // CSV uses columns: type, open_time, close_time, entry_price, close_price, amount, leverage, profit, profit_percent, pnl_percent, fee_paid, duration_minutes_total
+          const rawType = (row.type || row.TYPE || '').toString();
+          const side = rawType.toUpperCase().includes('SHORT') ? 'SHORT' : 'LONG';
+          const exitReason = (rawType.match(/TP|SL|LIQUID|LIQUIDATED|MANUAL/i) || [null])[0] || '';
+
+          const entry_price = toNum(row.entry_price || row.entryPrice || row.entry || row.Entry || row.entry_price);
+          const exit_price = toNum(row.close_price || row.close || row.exit_price || row.exit);
+          const margin_used = toNum(row.amount || row.margin || row.margin_used);
+          const leverage = toNum(row.leverage || row.Leverage) || 1;
+          const quantity = (!isNaN(margin_used) && !isNaN(entry_price) && entry_price !== 0) ? +(margin_used / entry_price).toFixed(6) : (toNum(row.quantity) || null);
+          const pnl = toNum(row.profit || row.pnl || 0);
+          const pnl_pct = toNum(row.pnl_percent || row.profit_percent || row.pnl_percent || 0);
+          const fees = toNum(row.fee_paid || row.fees_paid || 0);
+          const net_pnl = (!isNaN(pnl) ? pnl - (isNaN(fees)?0:fees) : (toNum(row.net_pnl) || 0));
+          const duration = toNum(row.duration_minutes_total || row.duration_minutes || row.duration || 0);
+
+          return {
+            trade_id: row.trade_id || (index + 1),
+            symbol: row.symbol || 'BTCUSDT',
+            side: side,
+            position_type: row.position_type || 'Market',
+            entry_price: entry_price,
+            exit_price: exit_price,
+            quantity: quantity,
+            leverage: leverage,
+            margin_used: margin_used,
+            pnl: pnl,
+            pnl_pct_no_leverage: pnl_pct,
+            fees_paid: fees,
+            net_pnl: net_pnl,
+            duration_minutes: duration,
+            entry_time: row.open_time || row.open_time || row.open || '',
+            exit_time: row.close_time || row.close_time || row.close || '',
+            exit_reason: exitReason || (row.exit_reason || ''),
+            trade_result: (net_pnl > 0) ? 'Win' : 'Loss'
+          };
+        }
+
+        function showLoading(on){
+          document.getElementById('loading').style.display = on ? 'inline-block' : 'none';
+        }
+
+        function createKPI(label, value){
+          const d = document.createElement('div'); d.className='card';
+          d.innerHTML = `<div class="kpi-label">${label}</div><div class="kpi-value">${value}</div>`;
+          return d;
+        }
+
+        function renderKPIs(metrics){
+          const container = document.getElementById('kpi-grid'); container.innerHTML='';
+          container.appendChild(createKPI('Initial Balance', `$${Number(metrics.initial_balance || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`));
+          container.appendChild(createKPI('Final Balance', `$${Number(metrics.final_balance || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`));
+          container.appendChild(createKPI('Total Profit ($)', `$${Number(metrics.total_profit || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`));
+          container.appendChild(createKPI('Total Profit (%)', `${Number(metrics.total_profit_percent || 0).toFixed(2)}%`));
+          container.appendChild(createKPI('Win Rate (%)', `${Number(metrics.win_rate || 0).toFixed(2)}%`));
+          container.appendChild(createKPI('Total Trades', `${metrics.total_trades || 0}`));
+          container.appendChild(createKPI('Total Fees Paid', `$${Number(metrics.total_fees_paid || 0).toFixed(2)}`));
+          container.appendChild(createKPI('Max Drawdown (%)', `${Number(metrics.max_drawdown_percent || 0).toFixed(2)}%`));
+          container.appendChild(createKPI('Backtest Duration (days)', `${metrics.duration_days || 0}`));
+        }
+
+        function computeMetricsFromTrades(trades){
+          if(!trades || trades.length === 0) return {};
+          const total_trades = trades.length;
+          const total_profit = trades.reduce((s,t)=>s+(isNaN(t.net_pnl)?0:t.net_pnl),0);
+          const total_fees = trades.reduce((s,t)=>s+(isNaN(t.fees_paid)?0:t.fees_paid),0);
+          const total_wins = trades.filter(t=>t.net_pnl>0).length;
+          const initial_balance = Number(trades[0].balance_before) || null;
+          const final_balance = trades[trades.length-1].balance_after || (initial_balance + total_profit);
+          const win_rate = total_trades ? (total_wins / total_trades * 100) : 0;
+          return {
+            initial_balance: initial_balance || 0,
+            final_balance: final_balance || 0,
+            total_profit: total_profit,
+            total_profit_percent: initial_balance ? (final_balance/initial_balance -1)*100 : 0,
+            win_rate: win_rate,
+            total_trades: total_trades,
+            total_fees_paid: total_fees,
+            max_drawdown_percent: 0,
+            duration_days: 0
+          };
+        }
+
+        function renderEquityFromBalances(trades, start_balance){
+          // Prefer using balance_after column when available
+          const ys = [];
+          for(let i=0;i<trades.length;i++){
+            const b = toNum(trades[i].balance_after);
+            if(!isNaN(b)) ys.push(b);
+          }
+          if(ys.length === 0){
+            // fallback cumulative net_pnl
+            let v = start_balance || 0; ys.push(v);
+            trades.forEach(t=>{ v += (t.net_pnl||0); ys.push(v); });
+          }
+          const x = ys.map((_,i)=>i);
+          const layout = {paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',margin:{l:40,r:10,t:30,b:30},height:320,font:{color:'#e6e6fa'}};
+          const trace = {x:x,y:ys,type:'scatter',mode:'lines',line:{color:'#9b59b6'}};
+          Plotly.newPlot('equity-chart',[trace],layout,{displayModeBar:false});
+        }
+
+        function renderDrawdownFromEquity(rawRows, mappedTrades, start_balance){
+          // Prefer using `balance_after` series from raw CSV rows when available
+          let eq = [];
+          if(Array.isArray(rawRows) && rawRows.length){
+            for(let i=0;i<rawRows.length;i++){
+              const b = toNum(rawRows[i].balance_after);
+              if(!isNaN(b)) eq.push(b);
+            }
+          }
+          if(eq.length === 0){
+            // fallback: cumulative net_pnl from mapped trades
+            let v = start_balance || 0; eq.push(v);
+            if(Array.isArray(mappedTrades)) mappedTrades.forEach(t=>{ v += (t.net_pnl||0); eq.push(v); });
+          }
+          if(eq.length === 0){
+            // nothing to plot
+            Plotly.purge('drawdown-chart');
+            return;
+          }
+          let peak = -Infinity; const dd = [];
+          eq.forEach(val=>{ peak = Math.max(peak, val); dd.push(((val - peak)/peak)*100); });
+          const layout={paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',margin:{l:40,r:10,t:30,b:30},height:320,font:{color:'#e6e6fa'}};
+          Plotly.newPlot('drawdown-chart',[{x:dd.map((_,i)=>i),y:dd,type:'bar',marker:{color:'#6c3483'}}],layout,{displayModeBar:false});
+        }
+
+        function renderHist(trades){
+          const vals = trades.map(t=>t.net_pnl||0);
+          Plotly.newPlot('hist-chart',[{x:vals,type:'histogram',marker:{color:'#ab7bc1'}}],{paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',margin:{l:40,r:10,t:30,b:30},height:240,font:{color:'#e6e6fa'}},{displayModeBar:false});
+        }
+
+        // Build Tabulator columns
+        function buildTable(trades){
+          const table = new Tabulator('#trades-table', {
+            data: trades,
+            layout: 'fitColumns',
+            pagination: 'local',
+            paginationSize: 12,
+            selectable: 1,
+            columns: [
+              {title:'Trade ID', field:'trade_id', sorter:'number', hozAlign:'left'},
+              {title:'Symbol', field:'symbol'},
+              {title:'Side', field:'side'},
+              {title:'Position Type', field:'position_type'},
+              {title:'Entry Price', field:'entry_price', sorter:'number', formatter:'money', formatterParams:{symbol:'$',precision:2}},
+              {title:'Exit Price', field:'exit_price', sorter:'number', formatter:'money', formatterParams:{symbol:'$',precision:2}},
+              {title:'Quantity', field:'quantity', sorter:'number'},
+              {title:'Leverage', field:'leverage', sorter:'number'},
+              {title:'Margin Used ($)', field:'margin_used', sorter:'number', formatter:'money', formatterParams:{symbol:'$',precision:2}},
+              {title:'PnL ($)', field:'pnl', sorter:'number', formatter:'money', formatterParams:{symbol:'$',precision:2}},
+              {title:'PnL (%)', field:'pnl_pct_no_leverage', sorter:'number'},
+              {title:'Fees Paid ($)', field:'fees_paid', formatter:'money', formatterParams:{symbol:'$',precision:4}, sorter:'number'},
+              {title:'Net PnL ($)', field:'net_pnl', sorter:'number', formatter:'money', formatterParams:{symbol:'$',precision:2}},
+              {title:'Duration (min)', field:'duration_minutes', sorter:'number'},
+              {title:'Entry Time', field:'entry_time'},
+              {title:'Exit Time', field:'exit_time'},
+              {title:'Exit Reason', field:'exit_reason'},
+              {title:'Result', field:'trade_result'},
+            ],
+            rowFormatter: function(row){
+              const data = row.getData();
+              // color-code profitable vs losing
+              if(!isNaN(data.net_pnl) && data.net_pnl > 0){
+                row.getElement().style.color = 'var(--green)';
+              } else {
+                row.getElement().style.color = 'var(--red)';
+              }
+              // subtle background for LONG/SHORT
+              if(data.side === 'LONG') row.getElement().style.backgroundColor = 'rgba(20,60,20,0.06)';
+              if(data.side === 'SHORT') row.getElement().style.backgroundColor = 'rgba(60,20,20,0.04)';
+            },
+            rowClick: function(e, row){
+              showTradeDetails(row.getData());
+            }
+          });
+        }
+
+        function showTradeDetails(d){
+          const el = document.getElementById('trade-details');
+          el.innerHTML = `
+            <h3 style="margin:0 0 8px 0">Trade ${d.trade_id} — ${d.symbol} (${d.side})</h3>
+            <div style="font-size:13px;color:var(--muted);margin-bottom:8px">${d.position_type} • ${d.entry_time} → ${d.exit_time}</div>
+            <div style="display:flex;gap:12px">
+              <div style="flex:1">
+                <div>Entry: <strong>$${Number(d.entry_price).toFixed(2)}</strong></div>
+                <div>Exit: <strong>$${Number(d.exit_price).toFixed(2)}</strong></div>
+                <div>Quantity: <strong>${d.quantity}</strong></div>
+                <div>Leverage: <strong>${d.leverage}x</strong></div>
+                <div>Margin: <strong>$${Number(d.margin_used).toFixed(2)}</strong></div>
+              </div>
+              <div style="flex:1">
+                <div>PnL: <strong style="color:${d.net_pnl>0? 'var(--green)':'var(--red)'}">$${Number(d.net_pnl).toFixed(2)}</strong></div>
+                <div>PnL %: <strong>${Number(d.pnl_pct_no_leverage).toFixed(2)}%</strong></div>
+                <div>Fees: <strong>$${Number(d.fees_paid).toFixed(4)}</strong></div>
+                <div>Duration: <strong>${d.duration_minutes} min</strong></div>
+                <div>Exit Reason: <strong>${d.exit_reason || '-'}</strong></div>
+              </div>
+            </div>
+            <div id="mini-chart" style="margin-top:8px;height:140px"></div>
+          `;
+          // draw mini chart
+          try{
+            const ep = Number(d.entry_price||0), xp = Number(d.exit_price||0);
+            const fig = {data:[{x:[0,1],y:[ep,xp],mode:'lines+markers',line:{color:'#9b59b6'}}],layout:{margin:{l:30,r:10,t:10,b:20},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',height:140,font:{color:'#e6e6fa'}}};
+            Plotly.newPlot('mini-chart', fig.data, fig.layout, {displayModeBar:false});
+          }catch(e){/* ignore */}
+        }
+
+        async function loadCSV(){
+          showLoading(true);
+          document.getElementById('status-info').textContent = '';
+          try{
+            const resp = await fetch('data_orders.csv', {cache: 'no-store'});
+            if(!resp.ok) throw new Error('no csv');
+            const text = await resp.text();
+            // detect delimiter: prefer tab if present
+            let delim = ',';
+            if(text.indexOf('\t') !== -1) delim = '\t';
+            else if(text.indexOf(';') !== -1) delim = ';';
+            const parsed = Papa.parse(text, {header:true, dynamicTyping:true, skipEmptyLines:true, delimiter: delim});
+            let rows = parsed.data || [];
+            console.log('parsed rows:', rows.length, 'delimiter=', delim);
+            document.getElementById('status-info').textContent = `Rows: ${rows.length}`;
+            // drop summary rows
+            const summary = rows.find(r=> (r.type||'').toString().toUpperCase() === 'SUMMARY');
+            rows = rows.filter(r => (r.type||'').toString().toUpperCase() !== 'SUMMARY');
+            // map rows
+            const trades = rows.map((r,i)=>{
+              const t = mapRowToTrade(r,i);
+              // keep raw balances for equity
+              t.balance_before = toNum(r.balance_before);
+              t.balance_after = toNum(r.balance_after);
+              // ensure net_pnl is numeric and computed from profit - fee when possible
+              if(isNaN(t.net_pnl) && !isNaN(toNum(r.profit))){
+                t.pnl = toNum(r.profit);
+                t.fees_paid = toNum(r.fee_paid) || toNum(r.fees_paid) || 0;
+                t.net_pnl = (t.pnl || 0) - (t.fees_paid || 0);
+              }
+              return t;
+            });
+
+            if(trades.length === 0){
+              document.getElementById('trades-table').innerHTML = '<div style="padding:12px;color:var(--muted)">No trades available in CSV.</div>';
+              renderKPIs({});
+              Plotly.purge('equity-chart'); Plotly.purge('drawdown-chart'); Plotly.purge('hist-chart');
+              showLoading(false);
+              return;
+            }
+
+            // compute metrics
+            const metrics = computeMetricsFromTrades(trades);
+            renderKPIs(metrics);
+            renderEquityFromBalances(rows, metrics.initial_balance || 0);
+            // pass raw rows and mapped trades to drawdown renderer
+            renderDrawdownFromEquity(rows, trades, metrics.initial_balance || 0);
+            renderHist(trades);
+            buildTable(trades);
+          }catch(err){
+            // fallback: no CSV or parse error
+            console.error('loadCSV error', err);
+            document.getElementById('trades-table').innerHTML = `<div style="padding:12px;color:var(--muted)">data_orders.csv not found or not served, or parse error: ${err.message}</div>`;
+            document.getElementById('status-info').textContent = 'Error';
+          }finally{
+            showLoading(false);
+          }
+        }
+
+        document.getElementById('btn-refresh').addEventListener('click', loadCSV);
+
+        // initial load
+        loadCSV();
+      </script>
+    </body>
+    </html>
