@@ -57,7 +57,7 @@ class TradeManager:
             margin = balance * trade_amount_percent
         
         # ---------- Leverage ----------
-        if total_balance <= first_balance * 90 / 100:
+        if total_balance <= self.tactical_balance * 90 / 100:
             leverage = 3
         else:
             leverage = 5
@@ -248,7 +248,7 @@ class TradeManager:
             margin = balance * trade_amount_percent
 
         # ---------- Leverage ----------
-        if total_balance <= first_balance * 90 / 100:
+        if total_balance <= self.tactical_balance * 90 / 100:
             leverage = 3
         else:
             leverage = 5
