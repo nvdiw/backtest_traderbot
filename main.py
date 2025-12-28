@@ -7,6 +7,7 @@ from trade_csv_logger import TradeCSVLogger
 from indicators import Indicator
 from get_candle_index import get_candle_index, get_month_start_indices
 from trademanager import TradeManager
+from check_monthly_data import write_monthly_summary
 
 # 2025/01/01 first 15m candle of btc_15m_data.csv is: 244944 <--- start
 # the last last 15m candle of btc_15m_data.csv is:    278640 <--- end
@@ -115,7 +116,7 @@ def execute_trading_logic():
     # ---- settings is here ----
     balance = 1000
     leverage = 5
-    trade_amount_percent = 0.5  # 50% of balance per trade
+    trade_amount_percent = 0.8  # 80% of balance per trade
     monthly_profit_percent_stop_trade = 8    # if 8% per month profit --> don't trade on that month 
     monthly_compound = 3    # after get 'monthly_profit_percent_stop_trade' per month how much money goes for next month
     monthly_close_filter = True
@@ -338,7 +339,7 @@ def execute_trading_logic():
                 
                 # ===== ADX FILTER =====
                 if adx_filter == True :
-                    if adx[i] is None or adx[i] < 13:
+                    if adx[i] is None or adx[i] < 20:
                         continue
 
                 updates = trade_manager.open_long(
@@ -431,7 +432,7 @@ def execute_trading_logic():
                 
                 # ===== ADX FILTER =====
                 if adx_filter == True :
-                    if adx[i] is None or adx[i] < 13:
+                    if adx[i] is None or adx[i] < 20:
                         continue
 
                 updates = trade_manager.open_short(
@@ -561,6 +562,13 @@ def execute_trading_logic():
     hours=hours,
     minutes=minutes
     )
+
+    # generate monthly summary CSV silently (no terminal output)
+    try:
+        write_monthly_summary(in_file='data_orders.csv', out_file='monthly_data_orders.csv', quiet=True)
+    except Exception:
+        # avoid crashing the backtest if monthly summary fails
+        pass
 
 
 # Run the trading logic
