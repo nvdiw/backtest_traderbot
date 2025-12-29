@@ -178,16 +178,12 @@ def ma_strategy():
     ma_130 = indicator.get_MA(130)
     ma_200 = indicator.get_MA(200)
 
-    cooldown_after_big_pnl = 4 * 48  # 4 * x   [x] ---> number of candles per hour
+    cooldown_after_big_pnl = 4 * 46  # 4 * 48  # 4 * x   [x] ---> number of candles per hour
     cooldown_until_index = -1
 
     ma_distance_threshold = 0.00204  # 0.2٪
     candle_move_threshold = 0.0082 # 0.8٪
 
-    # check data loaded correctly :
-        # print(len(open_prices), "candles loaded.")
-        # print("len(ema_14):", len(ema_14))
-        # print("len(ma_50):", len(ma_50))
 
     # ---- MANAGE TRADES ----
     trade_manager = TradeManager(csv_logger, first_balance, monthly_profit_percent_stop_trade, 
@@ -201,6 +197,12 @@ def ma_strategy():
         close_prices,
         period=14
     )
+
+    #   # check data loaded correctly :
+    # print(len(open_prices), "candles loaded.")
+    # print("len(ema_14):", len(ema_14))
+    # print("len(ma_50):", len(ma_50))
+    # print("len adx:", len(adx))
 
     # ---- MAIN ----
     for i in range(len(open_prices)):
@@ -373,6 +375,8 @@ def ma_strategy():
                     if not (volume_pass and strong_candle):
                         continue
 
+
+                # open order
                 updates = trade_manager.open_long(
                     i,
                     open_prices,
@@ -485,6 +489,7 @@ def ma_strategy():
                         continue
 
 
+                # open order
                 updates = trade_manager.open_short(
                     i,
                     open_prices,

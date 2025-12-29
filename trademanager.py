@@ -154,7 +154,7 @@ class TradeManager:
 
         # ---- COOLDOWN AFTER BIG PROFIT ----
         pnl_percent_without_leverage = ((pnl / margin) * 100 ) / leverage
-        if pnl_percent_without_leverage >= 3 or pnl_percent_without_leverage <= -2:
+        if pnl_percent_without_leverage >= 4:
             cooldown_until_index = i + cooldown_after_big_pnl
             print(f"🟡 Cooldown Activated (LONG) until candle index {cooldown_until_index}")
 
@@ -344,7 +344,7 @@ class TradeManager:
 
         # ---- COOLDOWN AFTER BIG PROFIT ----
         pnl_percent_without_leverage = ((pnl / margin) * 100) / leverage
-        if pnl_percent_without_leverage >= 3 or pnl_percent_without_leverage <= -2:
+        if pnl_percent_without_leverage >= 4:
             cooldown_until_index = i + cooldown_after_big_pnl
             print(f"🟡 Cooldown Activated (SHORT) until candle index {cooldown_until_index}")
 
