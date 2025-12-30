@@ -9,19 +9,7 @@ from get_candle_index import get_candle_index, get_month_start_indices
 from trademanager import TradeManager
 from check_monthly_data import write_monthly_summary
 
-# 2025/01/01 first 15m candle of btc_15m_data.csv is: 244944 <--- start
-# the last last 15m candle of btc_15m_data.csv is:    278640 <--- end
 
-# 2025/12/10 00:00 : 277872
-# 2025/12/18 00:00 : 278640
-# Candle Index Reference monthly :
-# 2025/01/01 : 244944   # 2025/02/01 : 247920   # 2025/03/01 : 250608   ( very good )
-# 2025/04/01 : 253584   # 2025/05/01 : 256464   # 2025/06/01 : 259440   ( bad )
-# 2025/07/01 : 262320   # 2025/08/01 : 265296   # 2025/09/01 : 268272   ( very bad )
-# 2025/10/01 : 271152   # 2025/11/01 : 274128   # 2025/12/01 : 277008   ( very good )
-
-# start = 244944
-# end = 278640
 # start = get_candle_index("2025-01-01")   ----> 244944
 # end = get_candle_index("2025-12-18")     ----> 278640
 
@@ -134,8 +122,14 @@ def ma_strategy():
     monthly_close_filter = True
     adx_filter = True
     volume_filter = True
-    # money_for_save = first_balance * 5 / 100 # amount to save 40% of first balance
 
+    cooldown_after_big_pnl = 4 * 46  # 4 * 48  # 4 * x   [x] ---> number of candles per hour
+    cooldown_until_index = -1
+
+    ma_distance_threshold = 0.00204  # 0.2٪
+    candle_move_threshold = 0.0082 # 0.8٪
+
+    # fee rate
     fee_rate = 0.0005  # 0.05% per trade (entry or exit)
 
     save_money = 0
@@ -178,11 +172,6 @@ def ma_strategy():
     ma_130 = indicator.get_MA(130)
     ma_200 = indicator.get_MA(200)
 
-    cooldown_after_big_pnl = 4 * 46  # 4 * 48  # 4 * x   [x] ---> number of candles per hour
-    cooldown_until_index = -1
-
-    ma_distance_threshold = 0.00204  # 0.2٪
-    candle_move_threshold = 0.0082 # 0.8٪
 
 
     # ---- MANAGE TRADES ----
@@ -401,12 +390,14 @@ def ma_strategy():
                 position_size_no_fee = updates['position_size_no_fee']
                 open_time_value = updates['open_time_value']
                 current_position = updates['current_position']
+                updates = None
 
 
         # ===================== CLOSE LONG =====================
         if current_position == "long":
             if (ema_14[i] < ma_50[i]) or (ma_130[i] < ma_200[i]):
 
+                # close order
                 updates = trade_manager.close_long(
                     i,
                     open_prices,
@@ -459,6 +450,7 @@ def ma_strategy():
                 profit_percent_per_month = updates['profit_percent_per_month']
                 save_money = updates["save_money"]
                 trade_power = updates['trade_power']
+                updates = None
 
 
         # ===================== OPEN SHORT =====================
@@ -514,12 +506,14 @@ def ma_strategy():
                 position_size_no_fee = updates['position_size_no_fee']
                 open_time_value = updates['open_time_value']
                 current_position = updates['current_position']
+                updates = None
 
 
         # ===================== CLOSE SHORT =====================
         if current_position == "short":
             if (ema_14[i] > ma_50[i]) or (ma_130[i] >= ma_200[i]):
 
+                # close order
                 updates = trade_manager.close_short(
                     i,
                     open_prices,
@@ -573,6 +567,7 @@ def ma_strategy():
                 profit_percent_per_month = updates['profit_percent_per_month']
                 save_money = updates['save_money']
                 trade_power = updates['trade_power']
+                updates = None
 
 
     # ===================== BACKTEST SUMMARY =====================
@@ -583,6 +578,7 @@ def ma_strategy():
 
     balance += save_money
 
+    # summary calculation
     t_profit_percent = balance * 100 / first_balance - 100
     days, hours, minutes = trade_duration(first_open_time, last_close_time)
     win_rate = (total_wins / (total_wins + total_losses)) * 100 if (total_wins + total_losses) > 0 else 0

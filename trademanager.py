@@ -40,6 +40,8 @@ class TradeManager:
         self.tactical_balance = tactical_balance
         self.monthly_close_filter = monthly_close_filter
         self.monthly_compound = monthly_compound
+
+
     # open long processes
     def open_long(self, i, open_prices, open_times,
                     balance, balance_without_fee, first_balance,
@@ -231,6 +233,7 @@ class TradeManager:
             'save_money' : save_money
         }
     
+
     # open short processes
     def open_short(self, i, open_prices, open_times,
                     balance, balance_without_fee, first_balance,
@@ -286,6 +289,7 @@ class TradeManager:
             'open_time_value': open_time_value,
             'current_position': current_position
         }
+
 
     # close short processes
     def close_short(self, i, open_prices, open_times,
