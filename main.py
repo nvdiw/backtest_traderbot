@@ -14,7 +14,7 @@ from check_monthly_data import write_monthly_summary
 # end = get_candle_index("2025-12-18")     ----> 278640
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2025-01-01","2025-12-18"))
+start, end = get_candle_index(("2025-10-01","2025-12-18"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 current_position = None  # None | "long" | "short"

@@ -83,4 +83,11 @@ class TradeCSVLogger:
         }
 
         df = pd.concat([df, pd.DataFrame([summary_row])], ignore_index=True)
-        df.to_csv(file_name, index=False, encoding="utf-8")
+        while True:
+            try:
+                df.to_csv(file_name, index=False, encoding="utf-8")
+                break
+            except PermissionError:
+                answer = input("please close: data_orders.csv after close write ok: ")
+                if answer == "ok":
+                    print("thanks!")
