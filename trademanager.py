@@ -53,7 +53,7 @@ class TradeManager:
         balance_before_trade_no_fee = balance_without_fee
 
         # ---------- Margin ----------
-        if balance >= 50 / 100 * self.tactical_balance:
+        if balance >= trade_amount_percent * self.tactical_balance:
             margin = trade_amount_percent * self.tactical_balance
         else:
             margin = balance * trade_amount_percent
@@ -202,7 +202,7 @@ class TradeManager:
                 balance += self.tactical_balance * 25 / 100
                 save_money -= self.tactical_balance * 25 / 100
 
-        # stop trade if we got 6% for this month
+        # stop trade if we got 7% for this month
         if self.monthly_close_filter == True :
             if profit_percent_per_month >= self.monthly_profit_percent_stop_trade:
                 self.tactical_balance = self.tactical_balance + (self.tactical_balance * self.monthly_compound / 100)
@@ -210,6 +210,10 @@ class TradeManager:
                 balance = self.tactical_balance
                 cooldown_until_index = i
                 trade_power = False    # off
+
+        else :
+            if balance * 1.08 >= self.tactical_balance:
+                self.tactical_balance = balance
 
         current_position = None
 
@@ -245,7 +249,7 @@ class TradeManager:
         balance_before_trade_no_fee = balance_without_fee
 
         # ---------- Margin ----------
-        if balance >= 50 / 100 * self.tactical_balance:
+        if balance >= trade_amount_percent * self.tactical_balance:
             margin = trade_amount_percent * self.tactical_balance
         else:
             margin = balance * trade_amount_percent
@@ -394,7 +398,7 @@ class TradeManager:
                 balance += self.tactical_balance * 25 / 100
                 save_money -= self.tactical_balance * 25 / 100
 
-        # stop trade if we got 6% for this month
+        # stop trade if we got 7% for this month
         if self.monthly_close_filter == True :
             if profit_percent_per_month >= self.monthly_profit_percent_stop_trade:
                 self.tactical_balance = self.tactical_balance + (self.tactical_balance * self.monthly_compound / 100)
@@ -402,7 +406,11 @@ class TradeManager:
                 balance = self.tactical_balance
                 cooldown_until_index = i
                 trade_power = False    # off
-            
+
+        else :
+            if balance * 1.08 >= self.tactical_balance:
+                self.tactical_balance = balance
+
         current_position = None
 
         return {
