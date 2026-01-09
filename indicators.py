@@ -107,3 +107,58 @@ class Indicator:
         df["adx"] = df["dx"].ewm(alpha=1/period, adjust=False).mean()
 
         return df["adx"].tolist()
+
+
+    # Calculate ATR (Average True Range) using True Range and Wilder smoothing
+    # Returns a list aligned with input candles. Values are None until ATR is fully formed.
+    def get_ATR(self, high, low, close, period=14):
+        tr_list = []
+
+        # Build True Range list (first entry None to keep alignment)
+        for i in range(len(high)):
+            if i == 0:
+                tr_list.append(None)
+                continue
+
+            tr = max(
+                high[i] - low[i],
+                abs(high[i] - close[i-1]),
+                abs(low[i] - close[i-1])
+            )
+            tr_list.append(tr)
+
+        # ATR calculation using Wilder's smoothing (seed with simple average)
+        atr_list = [None] * len(tr_list)
+
+        # need at least `period` TR values to seed the ATR
+        if len(tr_list) <= period:
+            return atr_list
+
+        # find first index with full period of TRs (skip initial None at index 0)
+        # the first usable TR index is 1, so the seed ATR will be at index `period`
+        seed_start = 1
+        seed_end = period + seed_start  # exclusive
+
+        seed_trs = [t for t in tr_list[seed_start:seed_end] if t is not None]
+        if len(seed_trs) < period:
+            return atr_list
+
+        # First ATR value is the simple average of the first `period` TRs
+        first_atr = sum(seed_trs) / period
+        first_atr_index = seed_end - 1
+        atr_list[first_atr_index] = round(first_atr, 6)
+
+        # Wilder smoothing for subsequent ATR values
+        prev_atr = first_atr
+        for i in range(first_atr_index + 1, len(tr_list)):
+            tr = tr_list[i]
+            if tr is None:
+                atr_list[i] = None
+                continue
+
+            atr = (prev_atr * (period - 1) + tr) / period
+            atr = round(atr, 6)
+            atr_list[i] = atr
+            prev_atr = atr
+
+        return atr_list
