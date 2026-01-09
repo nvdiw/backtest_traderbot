@@ -14,7 +14,7 @@ from check_monthly_data import write_monthly_summary
 # end = get_candle_index("2025-12-18")     ----> 278640
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2025-10-01","2025-12-18"))
+start, end = get_candle_index(("2025-01-01","2025-12-18"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 current_position = None  # None | "long" | "short"
@@ -107,7 +107,7 @@ def trade_duration(open_time: str, close_time: str):
 
 
 # Main Trading Logic
-def ma_strategy():
+def ma_strategy(tune: dict = None):
 
     global current_position
 
@@ -187,6 +187,42 @@ def ma_strategy():
         period=14
     )
 
+    # ---- get_ATR ----
+    atr = indicator.get_ATR(
+        high_prices,
+        low_prices,
+        close_prices,
+        period=14
+    )
+
+    # ---- Cross & Exit state and parameters ----
+    cross_seen = False               # whether EMA14/MA50 have crossed at least once
+    last_cross_dir = None           # 'bull' or 'bear'
+    last_cross_index = None
+    last_trade_cross_index = None   # index of the cross used to open the last trade
+
+    # Entry/exit tuning (avoid magic numbers; tweakable)
+    slope_window = 4                # candles for EMA slope check
+    exit_score_threshold = 3        # points required to trigger exit
+    atr_drawdown_mult = 1.5         # adverse move measured in ATR multiples
+    atr_time_multiplier = 2         # scales allowable time in trade based on ATR
+    atr_time_min = 3                # minimum candles before time-based exit contributes
+    baseline_time_pct = 0.01        # reference price % used to compute dynamic time window
+
+    # Apply tune overrides (explicit assignments to avoid relying on locals())
+    if tune:
+        if 'slope_window' in tune:
+            slope_window = int(tune['slope_window'])
+        if 'exit_score_threshold' in tune:
+            exit_score_threshold = int(tune['exit_score_threshold'])
+        if 'atr_drawdown_mult' in tune:
+            atr_drawdown_mult = float(tune['atr_drawdown_mult'])
+        if 'atr_time_multiplier' in tune:
+            atr_time_multiplier = int(tune['atr_time_multiplier'])
+        if 'atr_time_min' in tune:
+            atr_time_min = int(tune['atr_time_min'])
+        if 'baseline_time_pct' in tune:
+            baseline_time_pct = float(tune['baseline_time_pct'])
     #   # check data loaded correctly :
     # print(len(open_prices), "candles loaded.")
     # print("len(ema_14):", len(ema_14))
@@ -198,6 +234,19 @@ def ma_strategy():
         # print(start+i)
         if ema_14[i] is None or ma_50[i] is None or ma_130[i] is None or ma_200[i] is None:
             continue
+
+        # ----- Detect EMA14 / MA50 crosses (update cross state) -----
+        if i > 0 and ema_14[i-1] is not None and ma_50[i-1] is not None:
+            # bullish cross: EMA crosses above MA
+            if ema_14[i-1] <= ma_50[i-1] and ema_14[i] > ma_50[i]:
+                cross_seen = True
+                last_cross_dir = 'bull'
+                last_cross_index = i
+            # bearish cross: EMA crosses below MA
+            elif ema_14[i-1] >= ma_50[i-1] and ema_14[i] < ma_50[i]:
+                cross_seen = True
+                last_cross_dir = 'bear'
+                last_cross_index = i
         
         if monthly_close_filter == True:
             if trade_power == False:
@@ -338,7 +387,12 @@ def ma_strategy():
 
 
         # ===================== OPEN LONG =====================
-        if ma_130[i] >= ma_200[i] and ema_14[i] > ma_50[i] and current_position is None:
+        # Require that EMA/MA50 have crossed and the last cross was bullish,
+        # and avoid opening multiple trades for the same cross.
+        if (
+            cross_seen and last_cross_dir == 'bull' and last_trade_cross_index != last_cross_index
+            and ma_130[i] >= ma_200[i] and ema_14[i] > ma_50[i] and current_position is None
+        ):
             if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
                 
                 # ===== ADX FILTER =====
@@ -390,13 +444,49 @@ def ma_strategy():
                 position_size_no_fee = updates['position_size_no_fee']
                 open_time_value = updates['open_time_value']
                 current_position = updates['current_position']
+                # record which cross enabled this trade and ATR at entry
+                last_trade_cross_index = last_cross_index
+                entry_index = i
+                atr_at_entry = atr[i] if i < len(atr) else None
                 updates = None
 
 
         # ===================== CLOSE LONG =====================
         if current_position == "long":
-            if (ema_14[i] < ma_50[i]) or (ma_130[i] < ma_200[i]):
+            # exit scoring system (points accumulate; mirrored for short)
+            exit_score = 0
 
+            # 1) EMA slope weakness (look back `slope_window` candles)
+            if i - slope_window >= 0 and ema_14[i] < ema_14[i - slope_window]:
+                exit_score += 1
+
+            # 2) EMA crossing below MA50
+            if ema_14[i] < ma_50[i]:
+                exit_score += 1
+
+            # 3) long-term trend weakening (MA130 < MA200)
+            if ma_130[i] < ma_200[i]:
+                exit_score += 1
+
+            # 4) adverse price move measured in ATR multiples
+            if 'entry_price' in locals() and atr_at_entry is not None and atr_at_entry > 0:
+                adverse = entry_price - low_prices[i]
+                if adverse >= atr_at_entry * atr_drawdown_mult:
+                    exit_score += 1
+
+            # 5) ATR-based dynamic time exit (larger ATR -> shorter required time)
+            if 'entry_index' in locals() and atr[i] is not None and atr[i] > 0:
+                time_in_trade = i - entry_index
+                atr_pct = atr[i] / entry_price if entry_price else 0
+                # threshold_time scales inversely to ATR percentage relative to price
+                threshold_time = max(
+                    atr_time_min,
+                    int((atr_time_multiplier * (baseline_time_pct / (atr_pct + 1e-12))))
+                )
+                if time_in_trade >= threshold_time:
+                    exit_score += 1
+
+            if exit_score >= exit_score_threshold:
                 # close order
                 updates = trade_manager.close_long(
                     i,
@@ -431,7 +521,6 @@ def ma_strategy():
                     profit_percent_per_month,
                     save_money,
                     trade_power)
-                
 
                 balance = updates['balance']
                 balance_without_fee = updates['balance_without_fee']
@@ -448,13 +537,18 @@ def ma_strategy():
                 cooldown_until_index = updates['cooldown_until_index']
                 current_position = updates['current_position']
                 profit_percent_per_month = updates['profit_percent_per_month']
-                save_money = updates["save_money"]
+                save_money = updates['save_money']
                 trade_power = updates['trade_power']
                 updates = None
 
 
         # ===================== OPEN SHORT =====================
-        if ma_130[i] < ma_200[i] and ema_14[i] < ma_50[i] and current_position is None:
+        # Require that EMA/MA50 have crossed and the last cross was bearish,
+        # and avoid opening multiple trades for the same cross.
+        if (
+            cross_seen and last_cross_dir == 'bear' and last_trade_cross_index != last_cross_index
+            and ma_130[i] < ma_200[i] and ema_14[i] < ma_50[i] and current_position is None
+        ):
             if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
                 
                 # ===== ADX FILTER =====
@@ -506,13 +600,49 @@ def ma_strategy():
                 position_size_no_fee = updates['position_size_no_fee']
                 open_time_value = updates['open_time_value']
                 current_position = updates['current_position']
+                # record which cross enabled this trade and ATR at entry
+                last_trade_cross_index = last_cross_index
+                entry_index = i
+                atr_at_entry = atr[i] if i < len(atr) else None
                 updates = None
 
 
         # ===================== CLOSE SHORT =====================
         if current_position == "short":
-            if (ema_14[i] > ma_50[i]) or (ma_130[i] >= ma_200[i]):
+            # exit scoring (mirrored logic)
+            exit_score = 0
 
+            # 1) EMA slope weakness for short (EMA trending up)
+            if i - slope_window >= 0 and ema_14[i] > ema_14[i - slope_window]:
+                exit_score += 1
+
+            # 2) EMA crossing above MA50
+            if ema_14[i] > ma_50[i]:
+                exit_score += 1
+
+            # 3) long-term trend weakening for short (MA130 >= MA200)
+            if ma_130[i] >= ma_200[i]:
+                exit_score += 1
+
+            # 4) adverse price move for short measured in ATR multiples
+            if 'entry_price' in locals() and atr_at_entry is not None and atr_at_entry > 0:
+                adverse = high_prices[i] - entry_price
+                if adverse >= atr_at_entry * atr_drawdown_mult:
+                    exit_score += 1
+
+            # 5) ATR-based dynamic time exit for short
+            if 'entry_index' in locals() and atr[i] is not None and atr[i] > 0:
+                time_in_trade = i - entry_index
+                atr_pct = atr[i] / entry_price if entry_price else 0
+                # threshold_time scales inversely to ATR percentage relative to price
+                threshold_time = max(
+                    atr_time_min,
+                    int((atr_time_multiplier * (baseline_time_pct / (atr_pct + 1e-12))))
+                )
+                if time_in_trade >= threshold_time:
+                    exit_score += 1
+
+            if exit_score >= exit_score_threshold:
                 # close order
                 updates = trade_manager.close_short(
                     i,
@@ -548,8 +678,7 @@ def ma_strategy():
                     save_money,
                     trade_power
                     )
-                    
-
+                
                 balance = updates['balance']
                 balance_without_fee = updates['balance_without_fee']
                 deducting_fee_total = updates['deducting_fee_total']
@@ -599,7 +728,7 @@ def ma_strategy():
     print("Total Profit:", round(sum(profits_lst), 2), "$")
     print("Total Profit Percent:", round(t_profit_percent, 2), "%", "or", round(total_profit_percent, 2), "%")
     print("saved Money:", round(save_money,2), "$")
-    print("profit_percent_per_month:", len(lst_profit_percent_per_month))
+    print("count_profit_more_than_8%_monthly:", len(lst_profit_percent_per_month))
 
     csv_logger.save_csv(
     first_balance=first_balance,
@@ -621,9 +750,21 @@ def ma_strategy():
         # avoid crashing the backtest if monthly summary fails
         pass
 
+    # return summary metrics for programmatic use
+    return {
+        'final_balance': balance,
+        'total_profit': round(sum(profits_lst), 6),
+        'total_profit_percent': round(t_profit_percent, 6),
+        'closed_trades': count_closed_orders,
+        'wins': total_wins,
+        'losses': total_losses,
+        "profit_more_than_8%": len(lst_profit_percent_per_month)
+    }
 
-# Run the trading logic
-ma_strategy()
+
+    # Run the trading logic when executed as a script
+if __name__ == "__main__":
+    ma_strategy()
 
 # print(open_prices[0])
 # print(open_times[0])
