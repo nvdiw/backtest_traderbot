@@ -126,10 +126,46 @@ def ma_strategy(tune: dict = None):
     cooldown_after_big_pnl = 4 * 46  # 4 * 48  # 4 * x   [x] ---> number of candles per hour
     cooldown_until_index = -1
 
+    # Apply tune overrides (explicit assignments to avoid relying on locals())
+    if tune:
+        if 'trade_amount_percent' in tune:
+            trade_amount_percent = float(tune['trade_amount_percent'])
+        if 'monthly_profit_percent_stop_trade' in tune:
+            monthly_profit_percent_stop_trade = int(tune['monthly_profit_percent_stop_trade'])
+        if 'monthly_close_filter' in tune:
+            monthly_close_filter = bool(tune['monthly_close_filter'])
+        if 'adx_filter' in tune:
+            adx_filter = bool(tune['adx_filter'])
+        if 'volume_filter' in tune:
+            volume_filter = bool(tune['volume_filter'])
+
     ma_distance_threshold = 0.00204  # 0.2٪
     candle_move_threshold = 0.0082 # 0.8٪
 
-    # fee rate
+    # Entry/exit tuning (avoid magic numbers; tweakable)
+    slope_window = 3                # candles for EMA slope check
+    exit_score_threshold = 3        # points required to trigger exit
+    atr_drawdown_mult = 1.5         # adverse move measured in ATR multiples
+    atr_time_multiplier = 2         # scales allowable time in trade based on ATR
+    atr_time_min = 1                # minimum candles before time-based exit contributes
+    baseline_time_pct = 0.02        # reference price % used to compute dynamic time window
+
+    # Apply tune overrides (explicit assignments to avoid relying on locals())
+    if tune:
+        if 'slope_window' in tune:
+            slope_window = int(tune['slope_window'])
+        if 'exit_score_threshold' in tune:
+            exit_score_threshold = int(tune['exit_score_threshold'])
+        if 'atr_drawdown_mult' in tune:
+            atr_drawdown_mult = float(tune['atr_drawdown_mult'])
+        if 'atr_time_multiplier' in tune:
+            atr_time_multiplier = int(tune['atr_time_multiplier'])
+        if 'atr_time_min' in tune:
+            atr_time_min = int(tune['atr_time_min'])
+        if 'baseline_time_pct' in tune:
+            baseline_time_pct = float(tune['baseline_time_pct'])
+
+    # ---- fee rate ----
     fee_rate = 0.0005  # 0.05% per trade (entry or exit)
 
     save_money = 0
@@ -156,6 +192,12 @@ def ma_strategy(tune: dict = None):
     balance_before_trade = None
     balance_before_trade_no_fee = None
     open_time_value = None
+
+    # ---- Cross & Exit state and parameters ----
+    cross_seen = False               # whether EMA14/MA50 have crossed at least once
+    last_cross_dir = None           # 'bull' or 'bear'
+    last_cross_index = None
+    last_trade_cross_index = None   # index of the cross used to open the last trade
 
     trade_power = True
 
@@ -195,34 +237,6 @@ def ma_strategy(tune: dict = None):
         period=14
     )
 
-    # ---- Cross & Exit state and parameters ----
-    cross_seen = False               # whether EMA14/MA50 have crossed at least once
-    last_cross_dir = None           # 'bull' or 'bear'
-    last_cross_index = None
-    last_trade_cross_index = None   # index of the cross used to open the last trade
-
-    # Entry/exit tuning (avoid magic numbers; tweakable)
-    slope_window = 4                # candles for EMA slope check
-    exit_score_threshold = 3        # points required to trigger exit
-    atr_drawdown_mult = 1.5         # adverse move measured in ATR multiples
-    atr_time_multiplier = 2         # scales allowable time in trade based on ATR
-    atr_time_min = 3                # minimum candles before time-based exit contributes
-    baseline_time_pct = 0.01        # reference price % used to compute dynamic time window
-
-    # Apply tune overrides (explicit assignments to avoid relying on locals())
-    if tune:
-        if 'slope_window' in tune:
-            slope_window = int(tune['slope_window'])
-        if 'exit_score_threshold' in tune:
-            exit_score_threshold = int(tune['exit_score_threshold'])
-        if 'atr_drawdown_mult' in tune:
-            atr_drawdown_mult = float(tune['atr_drawdown_mult'])
-        if 'atr_time_multiplier' in tune:
-            atr_time_multiplier = int(tune['atr_time_multiplier'])
-        if 'atr_time_min' in tune:
-            atr_time_min = int(tune['atr_time_min'])
-        if 'baseline_time_pct' in tune:
-            baseline_time_pct = float(tune['baseline_time_pct'])
     #   # check data loaded correctly :
     # print(len(open_prices), "candles loaded.")
     # print("len(ema_14):", len(ema_14))
