@@ -33,13 +33,16 @@ def trade_duration(open_time: str, close_time: str):
 
 # Trade manager class to encapsulate open/close logic without changing behavior
 class TradeManager:
-    def __init__(self, csv_logger, first_balance, monthly_profit_percent_stop_trade, tactical_balance, monthly_close_filter, monthly_compound) :
+    def __init__(self, csv_logger, first_balance, monthly_profit_percent_stop_trade, tactical_balance,
+                 monthly_close_filter, monthly_compound, leverage, safe_leverage) :
         self.csv_logger = csv_logger
         self.first_balance = first_balance
         self.monthly_profit_percent_stop_trade = monthly_profit_percent_stop_trade
         self.tactical_balance = tactical_balance
         self.monthly_close_filter = monthly_close_filter
         self.monthly_compound = monthly_compound
+        self.leverage = leverage
+        self.safe_leverage = safe_leverage
 
 
     # open long processes
@@ -59,10 +62,10 @@ class TradeManager:
             margin = balance * trade_amount_percent
         
         # ---------- Leverage ----------
-        if total_balance <= self.tactical_balance * 90 / 100:
-            leverage = 3
+        if balance <= self.tactical_balance * 90 / 100:
+            leverage = self.safe_leverage
         else:
-            leverage = 5
+            leverage = self.leverage
 
         position_value = margin * leverage
         position_size = position_value / entry_price
@@ -255,10 +258,10 @@ class TradeManager:
             margin = balance * trade_amount_percent
 
         # ---------- Leverage ----------
-        if total_balance <= self.tactical_balance * 90 / 100:
-            leverage = 3
+        if balance <= self.tactical_balance * 90 / 100:
+            leverage = self.safe_leverage
         else:
-            leverage = 5
+            leverage = self.leverage
 
         position_value = margin * leverage
         position_size = position_value / entry_price
