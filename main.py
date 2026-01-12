@@ -115,7 +115,8 @@ def ma_strategy(tune: dict = None):
 
     # ---- settings is here ----
     balance = 1000
-    leverage = 5
+    leverage = 10
+    safe_leverage = 3
     trade_amount_percent = 0.5  # 50% of balance per trade
     monthly_profit_percent_stop_trade = 8    # if 8% per month profit --> don't trade on that month 
     monthly_compound = 3    # after get 'monthly_profit_percent_stop_trade' per month how much money goes for next month
@@ -138,6 +139,11 @@ def ma_strategy(tune: dict = None):
             adx_filter = bool(tune['adx_filter'])
         if 'volume_filter' in tune:
             volume_filter = bool(tune['volume_filter'])
+        if 'leverage' in tune:
+            leverage = float(tune['leverage'])
+        if 'safe_leverage' in tune:
+            safe_leverage = float(tune['safe_leverage'])
+
 
     ma_distance_threshold = 0.00204  # 0.2٪
     candle_move_threshold = 0.0082 # 0.8٪
@@ -218,7 +224,7 @@ def ma_strategy(tune: dict = None):
 
     # ---- MANAGE TRADES ----
     trade_manager = TradeManager(csv_logger, first_balance, monthly_profit_percent_stop_trade, 
-                                 tactical_balance, monthly_close_filter, monthly_compound)
+                                 tactical_balance, monthly_close_filter, monthly_compound, leverage, safe_leverage)
 
     # ---- get_ADX ----
     indicator = Indicator(open_prices)
@@ -336,7 +342,8 @@ def ma_strategy(tune: dict = None):
                     days,
                     hours,
                     minutes,
-                    save_money
+                    save_money,
+                    profit_percent_per_month
                 )
 
                 current_position = None
@@ -393,7 +400,8 @@ def ma_strategy(tune: dict = None):
                     days,
                     hours,
                     minutes,
-                    save_money
+                    save_money,
+                    profit_percent_per_month
                 )
 
                 current_position = None
