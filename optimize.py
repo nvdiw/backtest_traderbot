@@ -11,11 +11,11 @@ param_grid = {
     'atr_time_multiplier': [2],
     'atr_time_min': [1],
     'baseline_time_pct': [0.02],
-    'trade_amount_percent': [0.5],
-    'monthly_profit_percent_stop_trade': [8],
-    'monthly_close_filter': [True],
-    'adx_filter': [True],
-    'volume_filter': [True],
+    'trade_amount_percent': [0.5, 0.6, 0.7, 0.8, 0.9, 1],
+    'monthly_profit_percent_stop_trade': [5, 6, 7, 8, 9, 10],
+    'monthly_close_filter': [True, False],
+    'adx_filter': [True, False],
+    'volume_filter': [True, False],
     'leverage': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     'safe_leverage': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 }
