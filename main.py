@@ -114,9 +114,9 @@ def ma_strategy(tune: dict = None):
     csv_logger = TradeCSVLogger()
 
     # ---- settings is here ----
-    balance = 1000
-    leverage = 10
-    safe_leverage = 3
+    balance = 1000     # base balance
+    leverage = 10      # leverage
+    safe_leverage = 3      # leverage safe mode
     trade_amount_percent = 0.5  # 50% of balance per trade
     monthly_profit_percent_stop_trade = 8    # if 8% per month profit --> don't trade on that month 
     monthly_compound = 3    # after get 'monthly_profit_percent_stop_trade' per month how much money goes for next month
@@ -126,24 +126,6 @@ def ma_strategy(tune: dict = None):
 
     cooldown_after_big_pnl = 4 * 46  # 4 * 48  # 4 * x   [x] ---> number of candles per hour
     cooldown_until_index = -1
-
-    # Apply tune overrides (explicit assignments to avoid relying on locals())
-    if tune:
-        if 'trade_amount_percent' in tune:
-            trade_amount_percent = float(tune['trade_amount_percent'])
-        if 'monthly_profit_percent_stop_trade' in tune:
-            monthly_profit_percent_stop_trade = int(tune['monthly_profit_percent_stop_trade'])
-        if 'monthly_close_filter' in tune:
-            monthly_close_filter = bool(tune['monthly_close_filter'])
-        if 'adx_filter' in tune:
-            adx_filter = bool(tune['adx_filter'])
-        if 'volume_filter' in tune:
-            volume_filter = bool(tune['volume_filter'])
-        if 'leverage' in tune:
-            leverage = float(tune['leverage'])
-        if 'safe_leverage' in tune:
-            safe_leverage = float(tune['safe_leverage'])
-
 
     ma_distance_threshold = 0.00204  # 0.2٪
     candle_move_threshold = 0.0082 # 0.8٪
@@ -160,16 +142,43 @@ def ma_strategy(tune: dict = None):
     if tune:
         if 'slope_window' in tune:
             slope_window = int(tune['slope_window'])
+
         if 'exit_score_threshold' in tune:
             exit_score_threshold = int(tune['exit_score_threshold'])
+
         if 'atr_drawdown_mult' in tune:
             atr_drawdown_mult = float(tune['atr_drawdown_mult'])
+
         if 'atr_time_multiplier' in tune:
             atr_time_multiplier = int(tune['atr_time_multiplier'])
+
         if 'atr_time_min' in tune:
             atr_time_min = int(tune['atr_time_min'])
+
         if 'baseline_time_pct' in tune:
             baseline_time_pct = float(tune['baseline_time_pct'])
+
+        if 'trade_amount_percent' in tune:
+            trade_amount_percent = float(tune['trade_amount_percent'])
+
+        if 'monthly_profit_percent_stop_trade' in tune:
+            monthly_profit_percent_stop_trade = int(tune['monthly_profit_percent_stop_trade'])
+
+        if 'monthly_close_filter' in tune:
+            monthly_close_filter = bool(tune['monthly_close_filter'])
+
+        if 'adx_filter' in tune:
+            adx_filter = bool(tune['adx_filter'])
+
+        if 'volume_filter' in tune:
+            volume_filter = bool(tune['volume_filter'])
+
+        if 'leverage' in tune:
+            leverage = float(tune['leverage'])
+
+        if 'safe_leverage' in tune:
+            safe_leverage = float(tune['safe_leverage'])
+
 
     # ---- fee rate ----
     fee_rate = 0.0005  # 0.05% per trade (entry or exit)
