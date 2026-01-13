@@ -1,3 +1,13 @@
+# NOTE : set setting with param_grid= {...}
+# for example : 'x': [1, 2]
+#               'y': [a, b]
+# 4 test
+#   ma_strategy(x= 1, y= a)
+#   ma_strategy(x= 1, y= b)
+#   ma_strategy(x= 2, y= a)
+#   ma_strategy(x= 2, y= b)
+# if we have more setting we have more tests
+
 import itertools
 import csv
 import time
@@ -5,12 +15,12 @@ from main import ma_strategy
 
 # Grid to search (kept reasonable to limit runtime)
 param_grid = {
-    'slope_window': [3],
-    'exit_score_threshold': [3],
-    'atr_drawdown_mult': [1.5],
-    'atr_time_multiplier': [2],
-    'atr_time_min': [1],
-    'baseline_time_pct': [0.02],
+    'slope_window': [2, 3, 4],
+    'exit_score_threshold': [2, 3, 4],
+    'atr_drawdown_mult': [1.0, 1.5],
+    'atr_time_multiplier': [2, 4],
+    'atr_time_min': [1, 3],
+    'baseline_time_pct': [0.01, 0.02],
     'trade_amount_percent': [0.5, 0.6, 0.7, 0.8, 0.9, 1],
     'monthly_profit_percent_stop_trade': [5, 6, 7, 8, 9, 10],
     'monthly_close_filter': [True, False],
