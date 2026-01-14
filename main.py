@@ -132,6 +132,7 @@ def ma_strategy(tune: dict = None):
 
     # Entry/exit tuning (avoid magic numbers; tweakable)
     slope_window = 3                # candles for EMA slope check
+    entry_score_threshold = 6       # points required to trigger entry
     exit_score_threshold = 3        # points required to trigger exit
     atr_drawdown_mult = 1.5         # adverse move measured in ATR multiples
     atr_time_multiplier = 2         # scales allowable time in trade based on ATR
@@ -420,18 +421,30 @@ def ma_strategy(tune: dict = None):
         # ===================== OPEN LONG =====================
         # Require that EMA/MA50 have crossed and the last cross was bullish,
         # and avoid opening multiple trades for the same cross.
-        if (
-            cross_seen and last_cross_dir == 'bull' and last_trade_cross_index != last_cross_index
-            and ma_130[i] >= ma_200[i] and ema_14[i] > ma_50[i] and current_position is None
-        ):
-            if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
-                
-                # ===== ADX FILTER =====
+        if current_position is None:
+            if cross_seen and last_trade_cross_index != last_cross_index:
+                entry_score = 0
+
+                # 1) if last_cross is bull
+                if last_cross_dir == 'bull':
+                    entry_score += 1
+                # 2) EMA 14 > Ma 50
+                if ema_14[i] > ma_50[i]:
+                    entry_score += 1
+                # 3) Ma 130 > Ma 200
+                if ma_130[i] >= ma_200[i]:
+                    entry_score += 1
+                # 4) ma_distance or last_candle_move is strong
+                if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
+                    entry_score += 1
+                # 5) ===== ADX FILTER =====
                 if adx_filter == True :
                     if adx[i] is None or adx[i] < 20.5:
                         continue
+                    else:
+                        entry_score += 1
 
-                # ===== Volume FILTER =====
+                # 6) ===== Volume FILTER =====
                 if volume_filter == True :
 
                     vol_now = volume_prices[i]
@@ -448,38 +461,40 @@ def ma_strategy(tune: dict = None):
 
                     if not (volume_pass and strong_candle):
                         continue
+                    else:
+                        entry_score += 1
 
+                if entry_score >= entry_score_threshold:
+                    # ----open long
+                    updates = trade_manager.open_long(
+                        i,
+                        open_prices,
+                        open_times,
+                        balance,
+                        balance_without_fee,
+                        first_balance,
+                        trade_amount_percent,
+                        total_balance,
+                        leverage)
+                    
 
-                # open order
-                updates = trade_manager.open_long(
-                    i,
-                    open_prices,
-                    open_times,
-                    balance,
-                    balance_without_fee,
-                    first_balance,
-                    trade_amount_percent,
-                    total_balance,
-                    leverage)
-                
-
-                entry_price = updates['entry_price']
-                balance = updates['balance']
-                balance_without_fee = updates['balance_without_fee']
-                balance_before_trade = updates['balance_before_trade']
-                balance_before_trade_no_fee = updates['balance_before_trade_no_fee']
-                margin = updates['margin']
-                leverage = updates['leverage']
-                position_size = updates['position_size']
-                margin_no_fee = updates['margin_no_fee']
-                position_size_no_fee = updates['position_size_no_fee']
-                open_time_value = updates['open_time_value']
-                current_position = updates['current_position']
-                # record which cross enabled this trade and ATR at entry
-                last_trade_cross_index = last_cross_index
-                entry_index = i
-                atr_at_entry = atr[i] if i < len(atr) else None
-                updates = None
+                    entry_price = updates['entry_price']
+                    balance = updates['balance']
+                    balance_without_fee = updates['balance_without_fee']
+                    balance_before_trade = updates['balance_before_trade']
+                    balance_before_trade_no_fee = updates['balance_before_trade_no_fee']
+                    margin = updates['margin']
+                    leverage = updates['leverage']
+                    position_size = updates['position_size']
+                    margin_no_fee = updates['margin_no_fee']
+                    position_size_no_fee = updates['position_size_no_fee']
+                    open_time_value = updates['open_time_value']
+                    current_position = updates['current_position']
+                    # record which cross enabled this trade and ATR at entry
+                    last_trade_cross_index = last_cross_index
+                    entry_index = i
+                    atr_at_entry = atr[i] if i < len(atr) else None
+                    updates = None
 
 
         # ===================== CLOSE LONG =====================
@@ -518,7 +533,7 @@ def ma_strategy(tune: dict = None):
                     exit_score += 1
 
             if exit_score >= exit_score_threshold:
-                # close order
+                # ----close long
                 updates = trade_manager.close_long(
                     i,
                     open_prices,
@@ -576,18 +591,30 @@ def ma_strategy(tune: dict = None):
         # ===================== OPEN SHORT =====================
         # Require that EMA/MA50 have crossed and the last cross was bearish,
         # and avoid opening multiple trades for the same cross.
-        if (
-            cross_seen and last_cross_dir == 'bear' and last_trade_cross_index != last_cross_index
-            and ma_130[i] < ma_200[i] and ema_14[i] < ma_50[i] and current_position is None
-        ):
-            if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
-                
-                # ===== ADX FILTER =====
+        if current_position is None:
+            if cross_seen and last_trade_cross_index != last_cross_index:
+                entry_score = 0
+
+                # 1) if last_cross is bear
+                if last_cross_dir == 'bear':
+                    entry_score += 1
+                # 2) EMA 14 < Ma 50
+                if ema_14[i] <= ma_50[i]:
+                    entry_score += 1
+                # 3) Ma 130 < Ma 200
+                if ma_130[i] < ma_200[i]:
+                    entry_score += 1
+                # 4) ma_distance or last_candle_move is strong
+                if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
+                    entry_score += 1
+                # 5) ===== ADX FILTER =====
                 if adx_filter == True :
                     if adx[i] is None or adx[i] < 20.5:
                         continue
- 
-                # ===== Volume FILTER =====
+                    else:
+                        entry_score += 1
+
+                # 6) ===== Volume FILTER =====
                 if volume_filter == True :
 
                     vol_now = volume_prices[i]
@@ -604,38 +631,40 @@ def ma_strategy(tune: dict = None):
 
                     if not (volume_pass and strong_candle):
                         continue
+                    else:
+                        entry_score += 1
 
+                if entry_score >= entry_score_threshold:
+                    # ----open short
+                    updates = trade_manager.open_short(
+                        i,
+                        open_prices,
+                        open_times,
+                        balance,
+                        balance_without_fee,
+                        first_balance,
+                        trade_amount_percent,
+                        total_balance,
+                        leverage)
+                    
 
-                # open order
-                updates = trade_manager.open_short(
-                    i,
-                    open_prices,
-                    open_times,
-                    balance,
-                    balance_without_fee,
-                    first_balance,
-                    trade_amount_percent,
-                    total_balance,
-                    leverage)
-                
-
-                entry_price = updates['entry_price']
-                balance = updates['balance']
-                balance_without_fee = updates['balance_without_fee']
-                balance_before_trade = updates['balance_before_trade']
-                balance_before_trade_no_fee = updates['balance_before_trade_no_fee']
-                margin = updates['margin']
-                leverage = updates['leverage']
-                position_size = updates['position_size']
-                margin_no_fee = updates['margin_no_fee']
-                position_size_no_fee = updates['position_size_no_fee']
-                open_time_value = updates['open_time_value']
-                current_position = updates['current_position']
-                # record which cross enabled this trade and ATR at entry
-                last_trade_cross_index = last_cross_index
-                entry_index = i
-                atr_at_entry = atr[i] if i < len(atr) else None
-                updates = None
+                    entry_price = updates['entry_price']
+                    balance = updates['balance']
+                    balance_without_fee = updates['balance_without_fee']
+                    balance_before_trade = updates['balance_before_trade']
+                    balance_before_trade_no_fee = updates['balance_before_trade_no_fee']
+                    margin = updates['margin']
+                    leverage = updates['leverage']
+                    position_size = updates['position_size']
+                    margin_no_fee = updates['margin_no_fee']
+                    position_size_no_fee = updates['position_size_no_fee']
+                    open_time_value = updates['open_time_value']
+                    current_position = updates['current_position']
+                    # record which cross enabled this trade and ATR at entry
+                    last_trade_cross_index = last_cross_index
+                    entry_index = i
+                    atr_at_entry = atr[i] if i < len(atr) else None
+                    updates = None
 
 
         # ===================== CLOSE SHORT =====================
@@ -674,7 +703,7 @@ def ma_strategy(tune: dict = None):
                     exit_score += 1
 
             if exit_score >= exit_score_threshold:
-                # close order
+                # ----close short
                 updates = trade_manager.close_short(
                     i,
                     open_prices,
