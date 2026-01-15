@@ -62,10 +62,14 @@ class TradeManager:
             margin = balance * trade_amount_percent
         
         # ---------- Leverage ----------
-        if balance <= self.tactical_balance * 90 / 100:
-            leverage = self.safe_leverage
+        if balance <= self.tactical_balance * 80 / 100:
+            leverage = 2
+        elif balance <= self.tactical_balance * 85 / 100:
+            leverage = 3
+        elif balance <= self.tactical_balance * 90 / 100:
+            leverage = 4
         else:
-            leverage = self.leverage
+            leverage = self.leverage    # = 10
 
         position_value = margin * leverage
         position_size = position_value / entry_price
@@ -258,10 +262,14 @@ class TradeManager:
             margin = balance * trade_amount_percent
 
         # ---------- Leverage ----------
-        if balance <= self.tactical_balance * 90 / 100:
-            leverage = self.safe_leverage
+        if balance <= self.tactical_balance * 80 / 100:
+            leverage = 2
+        elif balance <= self.tactical_balance * 85 / 100:
+            leverage = 3
+        elif balance <= self.tactical_balance * 90 / 100:
+            leverage = 4
         else:
-            leverage = self.leverage
+            leverage = self.leverage    # = 10
 
         position_value = margin * leverage
         position_size = position_value / entry_price
