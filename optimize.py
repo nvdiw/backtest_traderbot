@@ -1,13 +1,15 @@
-# NOTE : set setting with param_grid= {...}
-# for example : 'x': [1, 2]
-#               'y': [a, b]
-# 4 test
-#   ma_strategy(x= 1, y= a)
-#   ma_strategy(x= 1, y= b)
-#   ma_strategy(x= 2, y= a)
-#   ma_strategy(x= 2, y= b)
-# if we have more setting we have more tests
+''' NOTE : set setting with param_grid= {...}
+    for example : 'x': [1, 2]
+                  'y': [a, b]
+ 4 test
+   ma_strategy(x= 1, y= a)
+   ma_strategy(x= 1, y= b)
+   ma_strategy(x= 2, y= a)
+   ma_strategy(x= 2, y= b)
+ if we have more setting we have more tests
 
+    please command param_grid and write new param_grid= {...}
+'''
 import itertools
 import csv
 import time
