@@ -180,6 +180,8 @@ def ma_strategy(tune: dict = None):
         if 'safe_leverage' in tune:
             safe_leverage = float(tune['safe_leverage'])
 
+        if 'cooldown_after_big_pnl' in tune:
+            cooldown_after_big_pnl = int(tune['cooldown_after_big_pnl'])
 
     # ---- fee rate ----
     fee_rate = 0.0005  # 0.05% per trade (entry or exit)
