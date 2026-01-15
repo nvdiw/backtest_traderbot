@@ -124,8 +124,8 @@ def ma_strategy(tune: dict = None):
     adx_filter = True
     volume_filter = True
 
-    cooldown_after_big_pnl = 4 * 46  # 4 * 48  # 4 * x   [x] ---> number of candles per hour
-    cooldown_until_index = -1
+    cooldown_after_big_pnl = 4 * 12  # 4 * 10  # 4 * x   [x] ---> number of candles per hour
+    cooldown_until_index = -1        # best of cooldown_after_big_pnl: 4*12 , 4*46
 
     ma_distance_threshold = 0.00204  # 0.2٪
     candle_move_threshold = 0.0082 # 0.8٪
@@ -182,6 +182,7 @@ def ma_strategy(tune: dict = None):
 
         if 'cooldown_after_big_pnl' in tune:
             cooldown_after_big_pnl = int(tune['cooldown_after_big_pnl'])
+    # ---- setting end ----
 
     # ---- fee rate ----
     fee_rate = 0.0005  # 0.05% per trade (entry or exit)
@@ -226,6 +227,7 @@ def ma_strategy(tune: dict = None):
     first_open_time = open_times[0]
     last_close_time = open_times[-1]
 
+    # ---- Get MA, EMA ----
     indicator = Indicator(open_prices, period=None)
     ema_14 = indicator.get_EMA(14)
     ma_50 = indicator.get_MA(50)
@@ -280,6 +282,7 @@ def ma_strategy(tune: dict = None):
                 last_cross_dir = 'bear'
                 last_cross_index = i
         
+        # monthly filter if we got good profit in month, bot will stop on this month
         if monthly_close_filter == True:
             if trade_power == False:
                 if int(start+i) in lst_month_starts:
@@ -288,7 +291,8 @@ def ma_strategy(tune: dict = None):
                     trade_power = True 
                 else:
                     continue
-
+        
+        # cooldown after good profit
         if i < cooldown_until_index:
             continue
         
@@ -301,6 +305,7 @@ def ma_strategy(tune: dict = None):
         else:
             last_candle_move = 0
 
+        # Calculate total balance (if we have order we have: margin + balance)
         total_balance = balance + (margin if current_position is not None else 0)
 
         # ===================== CHECK LIQUIDATION =====================
@@ -467,7 +472,7 @@ def ma_strategy(tune: dict = None):
                         entry_score += 1
 
                 if entry_score >= entry_score_threshold:
-                    # ----open long
+                    # ---- open long ----
                     updates = trade_manager.open_long(
                         i,
                         open_prices,
@@ -535,7 +540,7 @@ def ma_strategy(tune: dict = None):
                     exit_score += 1
 
             if exit_score >= exit_score_threshold:
-                # ----close long
+                # ---- close long ----
                 updates = trade_manager.close_long(
                     i,
                     open_prices,
@@ -637,7 +642,7 @@ def ma_strategy(tune: dict = None):
                         entry_score += 1
 
                 if entry_score >= entry_score_threshold:
-                    # ----open short
+                    # ---- open short ----
                     updates = trade_manager.open_short(
                         i,
                         open_prices,
@@ -705,7 +710,7 @@ def ma_strategy(tune: dict = None):
                     exit_score += 1
 
             if exit_score >= exit_score_threshold:
-                # ----close short
+                # ---- close short ----
                 updates = trade_manager.close_short(
                     i,
                     open_prices,
