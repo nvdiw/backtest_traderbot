@@ -28,7 +28,7 @@ param_grid = {
     'volume_filter': [True, False],
     'leverage': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     'safe_leverage': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-    'cooldown_after_big_pnl': [i for i in range(4, 300, 4)]
+    'cooldown_after_big_pnl': [i for i in range(0, 300, 4)]
 }
 
 keys = list(param_grid.keys())
