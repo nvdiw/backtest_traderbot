@@ -162,3 +162,27 @@ class Indicator:
             prev_atr = atr
 
         return atr_list
+
+
+    # Calculate ATR Moving Average (for entry filter)
+    def get_ATR_MA(self, atr, period=20):
+        atr_ma = []
+
+        for i in range(len(atr)):
+            if atr[i] is None:
+                atr_ma.append(None)
+                continue
+
+            start = max(0, i - period + 1)
+            values = []
+
+            for j in range(start, i + 1):
+                if atr[j] is not None:
+                    values.append(atr[j])
+
+            if len(values) == 0:
+                atr_ma.append(None)
+            else:
+                atr_ma.append(round(sum(values) / len(values), 6))
+
+        return atr_ma
