@@ -256,15 +256,10 @@ def ma_strategy(tune: dict = None):
     )
 
     # ---- get_ATR ----
-    atr = indicator.get_ATR(
-        high_prices,
-        low_prices,
-        close_prices,
-        period=14
-    )
+    atr = indicator.get_ATR(high_prices, low_prices, close_prices, period=14)
+    # ---- get_ATR_MA ----
+    atr_ma = indicator.get_ATR_MA(atr, period=20)
 
-    # ===== ATR Moving Average (for entry filter) =====
-    atr_ma = pd.Series(atr).rolling(atr_entry_ma_period).mean().tolist()
 
     #   # check data loaded correctly :
     # print(len(open_prices), "candles loaded.")
