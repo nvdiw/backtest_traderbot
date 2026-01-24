@@ -116,8 +116,8 @@ class TradeManager:
                 count_closed_orders, equity_curve,
                 max_drawdown, total_wins, total_wins_long, total_losses,
                 total_long, cooldown_after_big_pnl, leverage,
-                cooldown_until_index, open_time_value, csv_logger, trade_amount_percent, profit_percent_per_month,
-                save_money, trade_power):
+                cooldown_until_index, open_time_value, csv_logger, trade_amount_percent, 
+                profit_percent_per_month, save_money, trade_power):
 
         close_price = open_prices[i]
 
@@ -316,8 +316,8 @@ class TradeManager:
             count_closed_orders, equity_curve,
             max_drawdown, total_wins, total_wins_short, total_losses,
             total_short, cooldown_after_big_pnl, leverage,
-            cooldown_until_index, open_time_value, csv_logger, trade_amount_percent, profit_percent_per_month,
-            save_money, trade_power):
+            cooldown_until_index, open_time_value, csv_logger, trade_amount_percent, 
+            profit_percent_per_month, save_money, trade_power):
 
         close_price = open_prices[i]
 
