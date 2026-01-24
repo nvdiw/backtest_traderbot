@@ -123,12 +123,17 @@ def ma_strategy(tune: dict = None):
     monthly_close_filter = True
     adx_filter = True
     volume_filter = True
-
+    atr_filter = True
+    
     cooldown_after_big_pnl = 4 * 12  # 4 * 10  # 4 * x   [x] ---> number of candles per hour
     cooldown_until_index = -1        # best of cooldown_after_big_pnl: 4*12 , 4*46
 
     ma_distance_threshold = 0.00204  # 0.2٪
     candle_move_threshold = 0.0082 # 0.8٪
+
+    # ===== ATR ENTRY FILTER =====
+    atr_entry_ma_period = 20
+    entry_atr_threshold = 1   # 1, 1.1, 1.2, 1.3 should be test
 
     # Entry/exit tuning (avoid magic numbers; tweakable)
     slope_window = 3                # candles for EMA slope check
@@ -211,6 +216,7 @@ def ma_strategy(tune: dict = None):
     balance_before_trade = None
     balance_before_trade_no_fee = None
     open_time_value = None
+    atr_ratio = None
 
     # ---- Cross & Exit state and parameters ----
     cross_seen = False               # whether EMA14/MA50 have crossed at least once
@@ -256,6 +262,9 @@ def ma_strategy(tune: dict = None):
         close_prices,
         period=14
     )
+
+    # ===== ATR Moving Average (for entry filter) =====
+    atr_ma = pd.Series(atr).rolling(atr_entry_ma_period).mean().tolist()
 
     #   # check data loaded correctly :
     # print(len(open_prices), "candles loaded.")
@@ -432,6 +441,16 @@ def ma_strategy(tune: dict = None):
             if cross_seen and last_trade_cross_index != last_cross_index:
                 entry_score = 0
 
+                # ===== ATR ENTRY FILTER =====
+                if atr_filter == True:
+                    if atr[i] is None or atr_ma[i] is None:
+                        continue
+
+                    atr_ratio = atr[i] / atr_ma[i]
+
+                    if atr_ratio < entry_atr_threshold:
+                        continue
+
                 # 1) if last_cross is bull
                 if last_cross_dir == 'bull':
                     entry_score += 1
@@ -500,7 +519,9 @@ def ma_strategy(tune: dict = None):
                     # record which cross enabled this trade and ATR at entry
                     last_trade_cross_index = last_cross_index
                     entry_index = i
-                    atr_at_entry = atr[i] if i < len(atr) else None
+                    atr_at_entry = atr[i]
+                    atr_ratio_at_entry = atr_ratio if atr_ratio is not None else None
+
                     updates = None
 
 
@@ -601,6 +622,16 @@ def ma_strategy(tune: dict = None):
         if current_position is None:
             if cross_seen and last_trade_cross_index != last_cross_index:
                 entry_score = 0
+                
+                # ===== ATR ENTRY FILTER =====
+                if atr_filter == True:
+                    if atr[i] is None or atr_ma[i] is None:
+                        continue
+
+                    atr_ratio = atr[i] / atr_ma[i]
+
+                    if atr_ratio < entry_atr_threshold:
+                        continue
 
                 # 1) if last_cross is bear
                 if last_cross_dir == 'bear':
@@ -670,7 +701,9 @@ def ma_strategy(tune: dict = None):
                     # record which cross enabled this trade and ATR at entry
                     last_trade_cross_index = last_cross_index
                     entry_index = i
-                    atr_at_entry = atr[i] if i < len(atr) else None
+                    atr_at_entry = atr[i]
+                    atr_ratio_at_entry = atr_ratio if atr_ratio is not None else None
+
                     updates = None
 
 
