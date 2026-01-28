@@ -448,9 +448,15 @@ def ma_strategy(tune: dict = None):
                     if atr_ratio < entry_atr_threshold:
                         continue
 
-                # 1) if last_cross is bull
-                if last_cross_dir == 'bull':
-                    entry_score += 1
+                # 1) CONFIRMED BULL CROSS
+                if last_cross_dir == 'bull' and last_cross_index is not None:
+
+                    # wait at least 1 candle after cross
+                    if i > last_cross_index:
+
+                        # price acceptance above EMA after cross
+                        if close_prices[i] > ema_14[i]:
+                            entry_score += 1
                 # 2) EMA 14 > Ma 50
                 if ema_14[i] > ma_50[i]:
                     entry_score += 1
@@ -466,7 +472,6 @@ def ma_strategy(tune: dict = None):
                         continue
                     else:
                         entry_score += 1
-
                 # 6) ===== VOLUME FILTER =====
                 if volume_filter:
 
@@ -620,9 +625,15 @@ def ma_strategy(tune: dict = None):
                     if atr_ratio < entry_atr_threshold:
                         continue
 
-                # 1) if last_cross is bear
-                if last_cross_dir == 'bear':
-                    entry_score += 1
+                # 1) CONFIRMED BEAR CROSS
+                if last_cross_dir == 'bear' and last_cross_index is not None:
+
+                    # wait at least 1 candle after cross
+                    if i > last_cross_index:
+
+                        # price acceptance below EMA after cross
+                        if close_prices[i] < ema_14[i]:
+                            entry_score += 1
                 # 2) EMA 14 < Ma 50
                 if ema_14[i] <= ma_50[i]:
                     entry_score += 1
@@ -638,7 +649,6 @@ def ma_strategy(tune: dict = None):
                         continue
                     else:
                         entry_score += 1
-
                 # 6) ===== VOLUME FILTER =====
                 if volume_filter:
 
