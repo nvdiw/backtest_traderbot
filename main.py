@@ -1,4 +1,4 @@
-# NOTE: Strategy executes ONLY on candle Open prices
+# NOTE: Strategy executes With candle Open prices, High prices, Low prices, Close prices
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -233,10 +233,10 @@ def ma_strategy(tune: dict = None):
     tactical_balance = first_balance
 
     first_open_time = open_times[0]
-    last_close_time = open_times[-1]
+    last_close_time = close_times[-1]
 
     # ---- Get MA, EMA ----
-    indicator = Indicator(open_prices, period=None)
+    indicator = Indicator(close_prices, period=None)
     ema_14 = indicator.get_EMA(14)
     ma_50 = indicator.get_MA(50)
     ma_130 = indicator.get_MA(130)
@@ -249,7 +249,7 @@ def ma_strategy(tune: dict = None):
                                  tactical_balance, monthly_close_filter, monthly_compound, leverage, safe_leverage)
 
     # ---- get_ADX ----
-    indicator = Indicator(open_prices)
+    indicator = Indicator(close_prices)
     adx = indicator.get_ADX(
         high_prices,
         low_prices,
@@ -270,7 +270,7 @@ def ma_strategy(tune: dict = None):
     # print("len adx:", len(adx))
 
     # ---- MAIN ----
-    for i in range(len(open_prices)):
+    for i in range(len(close_prices)):
         # print(start+i)
         if ema_14[i] is None or ma_50[i] is None or ma_130[i] is None or ma_200[i] is None:
             continue
@@ -307,7 +307,7 @@ def ma_strategy(tune: dict = None):
 
         # Calculate Distance New Candle Move and Last Candle Move
         if i > 0:
-            last_candle_move = abs(open_prices[i] - open_prices[i-1]) / open_prices[i-1]
+            last_candle_move = abs(close_prices[i] - open_prices[i]) / open_prices[i]
         else:
             last_candle_move = 0
 
@@ -321,7 +321,7 @@ def ma_strategy(tune: dict = None):
             if low_prices[i] <= liquid_price_long:
 
                 close_price = liquid_price_long
-                close_time_value = open_times[i]
+                close_time_value = close_times[i]
 
                 profit = -margin
                 profit_percent = -100
@@ -379,7 +379,7 @@ def ma_strategy(tune: dict = None):
             if high_prices[i] >= liquid_price_short:
 
                 close_price = liquid_price_short
-                close_time_value = open_times[i]
+                close_time_value = close_times[i]
 
                 profit = -margin
                 profit_percent = -100
@@ -467,32 +467,22 @@ def ma_strategy(tune: dict = None):
                     else:
                         entry_score += 1
 
-                # 6) ===== Volume FILTER =====
-                if volume_filter == True :
+                # 6) ===== VOLUME FILTER =====
+                if volume_filter:
 
                     vol_now = volume_prices[i]
                     vol_avg15 = get_avg_volume(i, window=15)
 
-                    # ---- Strong Candle ----
-                    body = abs(close_prices[i] - open_prices[i])
-                    range_ = high_prices[i] - low_prices[i]
-
-                    strong_candle = range_ > 0 and body >= 0.6 * range_
-
-                    # ---- Volume Condition ----
-                    volume_pass = vol_now >= 1.2 * vol_avg15
-
-                    if not (volume_pass and strong_candle):
-                        continue
-                    else:
+                    if vol_now >= 1.2 * vol_avg15:
                         entry_score += 1
+
 
                 if entry_score >= entry_score_threshold:
                     # ---- open long ----
                     updates = trade_manager.open_long(
                         i,
-                        open_prices,
-                        open_times,
+                        close_prices,
+                        close_times,
                         balance,
                         balance_without_fee,
                         first_balance,
@@ -561,8 +551,8 @@ def ma_strategy(tune: dict = None):
                 # ---- close long ----
                 updates = trade_manager.close_long(
                     i,
-                    open_prices,
-                    open_times,
+                    close_prices,
+                    close_times,
                     entry_price,
                     position_size,
                     position_size_no_fee,
@@ -649,32 +639,22 @@ def ma_strategy(tune: dict = None):
                     else:
                         entry_score += 1
 
-                # 6) ===== Volume FILTER =====
-                if volume_filter == True :
+                # 6) ===== VOLUME FILTER =====
+                if volume_filter:
 
                     vol_now = volume_prices[i]
                     vol_avg15 = get_avg_volume(i, window=15)
 
-                    # ---- Strong Candle ----
-                    body = abs(close_prices[i] - open_prices[i])
-                    range_ = high_prices[i] - low_prices[i]
-
-                    strong_candle = range_ > 0 and body >= 0.6 * range_
-
-                    # ---- Volume Condition ----
-                    volume_pass = vol_now >= 1.2 * vol_avg15
-
-                    if not (volume_pass and strong_candle):
-                        continue
-                    else:
+                    if vol_now >= 1.2 * vol_avg15:
                         entry_score += 1
+
 
                 if entry_score >= entry_score_threshold:
                     # ---- open short ----
                     updates = trade_manager.open_short(
                         i,
-                        open_prices,
-                        open_times,
+                        close_prices,
+                        close_times,
                         balance,
                         balance_without_fee,
                         first_balance,
@@ -743,8 +723,8 @@ def ma_strategy(tune: dict = None):
                 # ---- close short ----
                 updates = trade_manager.close_short(
                     i,
-                    open_prices,
-                    open_times,
+                    close_prices,
+                    close_times,
                     entry_price,
                     position_size,
                     position_size_no_fee,
