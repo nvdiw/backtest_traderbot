@@ -145,10 +145,10 @@ class TradeManager:
         total_profit_percent += profit_percent
         count_closed_orders += 1
 
-        equity_curve.append(balance)
+        equity_curve.append(balance + save_money)
         # ---- calculate max drawdown ----
         peak = max(equity_curve)
-        drawdown = (balance - peak) / peak * 100
+        drawdown = (balance + save_money - peak) / peak * 100
         max_drawdown = min(max_drawdown, drawdown)
 
         # ---- count wins and losses ----
@@ -345,10 +345,10 @@ class TradeManager:
         total_profit_percent += profit_percent
         count_closed_orders += 1
 
-        equity_curve.append(balance)
+        equity_curve.append(balance + save_money)
         # ---- calculate max drawdown ----
         peak = max(equity_curve)
-        drawdown = (balance - peak) / peak * 100
+        drawdown = (balance + save_money - peak) / peak * 100
         max_drawdown = min(max_drawdown, drawdown)
 
         # ---- count wins and losses ----
