@@ -43,6 +43,7 @@ class TradeManager:
         self.monthly_compound = monthly_compound
         self.leverage = leverage
         self.safe_leverage = safe_leverage
+        # self.just_one_time = True
 
 
     # open long processes
@@ -209,7 +210,7 @@ class TradeManager:
                 balance += self.tactical_balance * 25 / 100
                 save_money -= self.tactical_balance * 25 / 100
 
-        # stop trade if we got 7% for this month
+        # stop trade if we got 8% for this month
         if self.monthly_close_filter == True :
             if profit_percent_per_month >= self.monthly_profit_percent_stop_trade:
                 self.tactical_balance = self.tactical_balance + (self.tactical_balance * self.monthly_compound / 100)
@@ -218,6 +219,12 @@ class TradeManager:
                 cooldown_until_index = i
                 trade_power = False    # off
 
+            #     self.just_one_time = True
+            # if you want to make cooldown for a time
+            # elif profit_percent_per_month < -10:
+            #     if self.just_one_time == True:
+            #         cooldown_until_index = i + 4 * 24 * 10
+            #         self.just_one_time = False
         else :
             if balance * 1.08 >= self.tactical_balance:
                 self.tactical_balance = balance
@@ -409,7 +416,7 @@ class TradeManager:
                 balance += self.tactical_balance * 25 / 100
                 save_money -= self.tactical_balance * 25 / 100
 
-        # stop trade if we got 7% for this month
+        # stop trade if we got 8% for this month
         if self.monthly_close_filter == True :
             if profit_percent_per_month >= self.monthly_profit_percent_stop_trade:
                 self.tactical_balance = self.tactical_balance + (self.tactical_balance * self.monthly_compound / 100)
@@ -417,6 +424,13 @@ class TradeManager:
                 balance = self.tactical_balance
                 cooldown_until_index = i
                 trade_power = False    # off
+
+            #     self.just_one_time = True
+            # if you want to make cooldown for a time
+            # elif profit_percent_per_month < -10:
+            #     if self.just_one_time == True:
+            #         cooldown_until_index = i + 4 * 24 * 10
+            #         self.just_one_time = False
 
         else :
             if balance * 1.08 >= self.tactical_balance:
