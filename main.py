@@ -1,6 +1,8 @@
 # NOTE: Strategy executes ONLY on candle Open prices
 
 import pandas as pd
+import matplotlib.pyplot as plt
+import csv
 
 # My Codes :
 from trade_csv_logger import TradeCSVLogger
@@ -334,9 +336,9 @@ def ma_strategy(tune: dict = None):
                 total_losses += 1
                 total_long += 1
 
-                equity_curve.append(balance)
+                equity_curve.append(balance + save_money)
                 peak = max(equity_curve)
-                drawdown = (balance - peak) / peak * 100
+                drawdown = (balance + save_money - peak) / peak * 100
                 max_drawdown = min(max_drawdown, drawdown)
 
                 days, hours, minutes = trade_duration(open_time_value, close_time_value)
@@ -392,9 +394,9 @@ def ma_strategy(tune: dict = None):
                 total_losses += 1
                 total_short += 1
 
-                equity_curve.append(balance)
+                equity_curve.append(balance + save_money)
                 peak = max(equity_curve)
-                drawdown = (balance - peak) / peak * 100
+                drawdown = (balance + save_money - peak) / peak * 100
                 max_drawdown = min(max_drawdown, drawdown)
 
                 days, hours, minutes = trade_duration(open_time_value, close_time_value)
@@ -837,6 +839,20 @@ def ma_strategy(tune: dict = None):
     hours=hours,
     minutes=minutes
     )
+
+    # save CSV equity
+    with open('equity_curve.csv','w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["Balance"])
+        for b in equity_curve:
+            writer.writerow([b])
+
+    # Draw a diagram
+    plt.plot(equity_curve)
+    plt.title("Equity Curve")
+    plt.xlabel("Candles")
+    plt.ylabel("Balance ($)")
+    plt.show()
 
     # generate monthly summary CSV silently (no terminal output)
     try:
