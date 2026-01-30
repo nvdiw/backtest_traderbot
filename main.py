@@ -3,6 +3,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import csv
+import numpy as np
 
 # My Codes :
 from trade_csv_logger import TradeCSVLogger
@@ -210,6 +211,7 @@ def ma_strategy(tune: dict = None):
     max_drawdown = 0
     equity_curve = []
     profits_lst = []
+    chart_data = []
 
     current_position = None
     entry_price = None
@@ -289,6 +291,9 @@ def ma_strategy(tune: dict = None):
     # ---- MAIN ----
     for i in range(len(close_prices)):
         # print(start+i)
+
+        chart_data.append([i, balance + (margin if current_position is not None else 0) + save_money])
+
         if ema_14[i] is None or ma_50[i] is None or ma_130[i] is None or ma_200[i] is None:
             continue
 
@@ -853,19 +858,41 @@ def ma_strategy(tune: dict = None):
     else:
         optimize = False
 
-    if optimize is False:  
-            # save CSV equity
-            with open('equity_curve.csv','w', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow(["Balance"])
-                for b in equity_curve:
-                    writer.writerow([b])
+    # Draw a diagram
+    if optimize is False:
+            #plot 1 balance:
+            xpoints_candles = []
+            ypoints_total_balance = []
 
-            # Draw a diagram
-            plt.plot(equity_curve)
-            plt.title("Equity Curve")
+            for i in chart_data:
+                xpoints_candles.append(i[0])
+                ypoints_total_balance.append(i[1])
+
+            xpoints = np.array(xpoints_candles)
+            ypoints = np.array(ypoints_total_balance)
+            plt.subplot(2, 1, 1)
+            plt.plot(xpoints, ypoints)
+            plt.title("Equity Curve", loc = 'left')
             plt.xlabel("Candles")
             plt.ylabel("Balance ($)")
+
+            #plot 2 symbol_price:
+            xpoints = np.array(xpoints_candles)
+            ypoints_price = np.array(close_prices)
+            ypoints_ema14 = np.array(ema_14)
+            ypoints_ma50 = np.array(ma_50)
+            ypoints_ma130 = np.array(ma_130)
+            ypoints_ma200 = np.array(ma_200)
+
+            plt.subplot(2, 1, 2)
+            plt.plot(xpoints, ypoints_price)
+            plt.plot(xpoints, ypoints_ema14, color = '#DD8AFF')
+            plt.plot(xpoints, ypoints_ma50, color = "#70009D")
+            plt.plot(xpoints, ypoints_ma130, color = "#FFF98C")
+            plt.plot(xpoints, ypoints_ma200, color = "#A49C00")
+            plt.title("BTC - PRICE", loc = 'left')
+            plt.xlabel("Candles")
+            plt.ylabel("Prise")
             plt.show()
 
     # generate monthly summary CSV silently (no terminal output)
