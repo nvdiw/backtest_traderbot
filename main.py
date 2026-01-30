@@ -237,10 +237,27 @@ def ma_strategy(tune: dict = None):
 
     # ---- Get MA, EMA ----
     indicator = Indicator(close_prices, period=None)
-    ema_14 = indicator.get_EMA(14)
-    ma_50 = indicator.get_MA(50)
-    ma_130 = indicator.get_MA(130)
-    ma_200 = indicator.get_MA(200)
+
+    ema_14 = 14
+    ma_50 = 50
+    ma_130 = 110
+    ma_200 = 230
+
+    # Optimize: MA, EMA
+    if tune:
+        if 'ema_14' in tune:
+            ema_14 = int(tune['ema_14'])
+        if 'ma_50' in tune:
+            ma_50 = int(tune['ma_50'])
+        if 'ma_130' in tune:
+            ma_130 = int(tune['ma_130'])
+        if 'ma_200' in tune:
+            ma_200 = int(tune['ma_200'])
+
+    ema_14 = indicator.get_EMA(ema_14)
+    ma_50 = indicator.get_MA(ma_50)
+    ma_130 = indicator.get_MA(ma_130)
+    ma_200 = indicator.get_MA(ma_200)
 
 
 
@@ -830,19 +847,26 @@ def ma_strategy(tune: dict = None):
     minutes=minutes
     )
 
-    # save CSV equity
-    with open('equity_curve.csv','w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(["Balance"])
-        for b in equity_curve:
-            writer.writerow([b])
+    if tune:
+        if 'optimize' in tune:
+            optimize = bool(tune['optimize']) 
+    else:
+        optimize = False
 
-    # Draw a diagram
-    plt.plot(equity_curve)
-    plt.title("Equity Curve")
-    plt.xlabel("Candles")
-    plt.ylabel("Balance ($)")
-    plt.show()
+    if optimize is False:  
+            # save CSV equity
+            with open('equity_curve.csv','w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(["Balance"])
+                for b in equity_curve:
+                    writer.writerow([b])
+
+            # Draw a diagram
+            plt.plot(equity_curve)
+            plt.title("Equity Curve")
+            plt.xlabel("Candles")
+            plt.ylabel("Balance ($)")
+            plt.show()
 
     # generate monthly summary CSV silently (no terminal output)
     try:
