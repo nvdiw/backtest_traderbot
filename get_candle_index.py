@@ -92,3 +92,7 @@ def get_month_start_indices(start_idx: int, end_idx: int, just_index : bool):
 # print(lst_month_start_indices)  # [('2025-08', 265294), ('2025-09', 268270), ('2025-10', 271150), ('2025-11', 274126), ('2025-12', 277006)]
 # lst_month_start_indices = get_month_start_indices(start, end, just_index = True) # True
 # print(lst_month_start_indices)  # [265294, 268270, 271150, 274126, 277006]
+# calculate distance of 2 candles
+# x = get_candle_index("2025-01-01", "00:00")
+# y = get_candle_index("2025-03-03", "04:15")
+# print("y =", y, "x =", x, "| y - x = ", int(y) - int(x))
