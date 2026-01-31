@@ -9,10 +9,15 @@
  if we have more setting we have more tests
 
     please command param_grid and write new param_grid= {...}
+    if you don't we have restart PC :)
 '''
 import itertools
 import csv
 import time
+import multiprocessing
+import argparse
+import os
+from functools import partial
 from main import ma_strategy
 
 # # Grid to search (kept reasonable to limit runtime)
@@ -57,35 +62,77 @@ while True:
         if answer == "ok":
             print("thanks!")
 
-best = None
-start_time_all = time.time()
-for idx, combo in enumerate(combos, 1):
+
+def _evaluate_pair(pair):
+    """Worker: receive (idx, combo) and return a tuple parent can consume safely."""
+    idx, combo = pair
     tune = dict(zip(keys, combo))
     tune.update({'optimize': True})
     t0 = time.time()
     try:
         res = ma_strategy(tune=tune)
+        err = None
     except Exception as e:
-        print(f"Combo {idx}/{len(combos)} {tune} raised error: {e}")
-        continue
+        res = None
+        err = e
     duration = time.time() - t0
+    return idx, tune, res, duration, err
 
+
+def _write_result_row(out_file, keys, tune, res, duration):
     row = [tune[k] for k in keys] + [res.get('final_balance'), res.get('total_profit'), res.get('total_profit_percent'), res.get('closed_trades'), res.get('wins'), res.get('losses'), round(duration, 2), res.get('profit_more_than_8%')]
     with open(out_file, 'a', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(row)
 
-    print(f"[{idx}/{len(combos)}] tune={tune} profit={row[keys.__len__()]}")
 
-    if best is None or res.get('total_profit', -1) > best['total_profit']:
-        best = {'tune': tune, **res}
+def main(workers: int):
+    best = None
+    start_time_all = time.time()
 
-print('Total duration (s):', time.time() - start_time_all)
-print('Best:', best)
+    pairs = list(enumerate(combos, 1))
 
-# Save best to a small file
-with open('best_params.txt', 'w') as f:
-    f.write(str(best) + '\n')
+    # try parallel execution (parent does all file I/O)
+    if workers and workers > 1:
+        with multiprocessing.Pool(processes=workers) as pool:
+            for idx, tune, res, duration, err in pool.imap_unordered(_evaluate_pair, pairs, chunksize=1):
+                if err:
+                    print(f"Combo {idx}/{len(combos)} {tune} raised error: {err}")
+                    continue
 
-print('Results saved to', out_file)
+                _write_result_row(out_file, keys, tune, res, duration)
+                print(f"[{idx}/{len(combos)}] tune={tune} profit={res.get('final_balance')}")
+
+                if best is None or res.get('total_profit', -1) > best['total_profit']:
+                    best = {'tune': tune, **res}
+    else:
+        # fallback to sequential (original behaviour)
+        for idx, combo in pairs:
+            idx, tune, res, duration, err = _evaluate_pair((idx, combo))
+            if err:
+                print(f"Combo {idx}/{len(combos)} {tune} raised error: {err}")
+                continue
+
+            _write_result_row(out_file, keys, tune, res, duration)
+            print(f"[{idx}/{len(combos)}] tune={tune} profit={res.get('final_balance')}")
+
+            if best is None or res.get('total_profit', -1) > best['total_profit']:
+                best = {'tune': tune, **res}
+
+    print('Total duration (s):', time.time() - start_time_all)
+    print('Best:', best)
+
+    # Save best to a small file
+    with open('best_params.txt', 'w') as f:
+        f.write(str(best) + '\n')
+
+    print('Results saved to', out_file)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Optimize ma_strategy (parallel).')
+    parser.add_argument('-w', '--workers', type=int, default=min(8, (os.cpu_count() or 1)),
+                        help='number of worker processes (default: min(8, cpu_count))')
+    args = parser.parse_args()
+    main(args.workers)
 
