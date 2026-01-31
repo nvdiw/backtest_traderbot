@@ -17,7 +17,7 @@ from check_monthly_data import write_monthly_summary
 # end = get_candle_index("2025-12-18")     ----> 278640
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2025-01-01","2025-12-18"))
+start, end = get_candle_index(("2019-01-01","2025-12-18"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 current_position = None  # None | "long" | "short"
@@ -123,7 +123,7 @@ def ma_strategy(tune: dict = None):
 
     # Entry/exit tuning (avoid magic numbers; tweakable)
     slope_window = 3                # candles for EMA slope check
-    entry_score_threshold = 5       # points required to trigger entry
+    entry_score_threshold = 6       # points required to trigger entry
     exit_score_threshold = 3        # points required to trigger exit
     atr_drawdown_mult = 1.5         # adverse move measured in ATR multiples
     atr_time_multiplier = 2         # scales allowable time in trade based on ATR
@@ -192,9 +192,12 @@ def ma_strategy(tune: dict = None):
     deducting_fee_total = 0
     count_closed_orders = 0
     profit_percent_per_month = 0
+    consecutive_losses = 0
+    skip_trades_left = 0
+    max_drawdown = 0
+
     lst_profit_percent_per_month = []
 
-    max_drawdown = 0
     equity_curve = []
     profits_lst = []
     chart_data = []
@@ -445,6 +448,13 @@ def ma_strategy(tune: dict = None):
         # and avoid opening multiple trades for the same cross.
         if current_position is None:
             if cross_seen and last_trade_cross_index != last_cross_index:
+
+                # ===== SKIP LOGIC =====
+                if skip_trades_left > 0:
+                    skip_trades_left -= 1
+                    print(f"⏭️ SKIP LONG | skips left: {skip_trades_left}")
+                    continue
+
                 entry_score = 0
 
                 # ===== ATR ENTRY FILTER =====
@@ -457,15 +467,15 @@ def ma_strategy(tune: dict = None):
                     if atr_ratio < entry_atr_threshold:
                         continue
 
-                # # 1) CONFIRMED BULL CROSS
-                # if last_cross_dir == 'bull' and last_cross_index is not None:
+                # 1) CONFIRMED BULL CROSS
+                if last_cross_dir == 'bull' and last_cross_index is not None:
 
-                #     # wait at least 1 candle after cross
-                #     if i > last_cross_index:
+                    # wait at least 1 candle after cross
+                    if i > last_cross_index:
 
-                #         # price acceptance above EMA after cross
-                #         if close_prices[i] > ema_14[i]:
-                #             entry_score += 1
+                        # price acceptance above EMA after cross
+                        if close_prices[i] > ema_14[i]:
+                            entry_score += 1
                 # 2) EMA 14 > Ma 50
                 if ema_14[i] > ma_50[i]:
                     entry_score += 1
@@ -611,13 +621,29 @@ def ma_strategy(tune: dict = None):
                 save_money = updates['save_money']
                 trade_power = updates['trade_power']
                 updates = None
+                
+                # count consecutive_losses 
+                if profits_lst[-1] < 0:
+                    consecutive_losses += 1
+                else:
+                    consecutive_losses = 0
 
+                if consecutive_losses >= 2:
+                    skip_trades_left = 2
+                    consecutive_losses = 0
 
         # ===================== OPEN SHORT =====================
         # Require that EMA/MA50 have crossed and the last cross was bearish,
         # and avoid opening multiple trades for the same cross.
         if current_position is None:
             if cross_seen and last_trade_cross_index != last_cross_index:
+                
+                # ===== SKIP LOGIC =====
+                if skip_trades_left > 0:
+                    skip_trades_left -= 1
+                    print(f"⏭️ SKIP LONG | skips left: {skip_trades_left}")
+                    continue
+
                 entry_score = 0
                 
                 # ===== ATR ENTRY FILTER =====
@@ -631,14 +657,14 @@ def ma_strategy(tune: dict = None):
                         continue
 
                 # # 1) CONFIRMED BEAR CROSS
-                # if last_cross_dir == 'bear' and last_cross_index is not None:
+                if last_cross_dir == 'bear' and last_cross_index is not None:
 
-                #     # wait at least 1 candle after cross
-                #     if i > last_cross_index:
+                    # wait at least 1 candle after cross
+                    if i > last_cross_index:
 
-                #         # price acceptance below EMA after cross
-                #         if close_prices[i] < ema_14[i]:
-                #             entry_score += 1
+                        # price acceptance below EMA after cross
+                        if close_prices[i] < ema_14[i]:
+                            entry_score += 1
                 # 2) EMA 14 < Ma 50
                 if ema_14[i] <= ma_50[i]:
                     entry_score += 1
@@ -785,7 +811,16 @@ def ma_strategy(tune: dict = None):
                 save_money = updates['save_money']
                 trade_power = updates['trade_power']
                 updates = None
+                
+                # count consecutive_losses 
+                if profits_lst[-1] < 0:
+                    consecutive_losses += 1
+                else:
+                    consecutive_losses = 0
 
+                if consecutive_losses >= 2:
+                    skip_trades_left = 2
+                    consecutive_losses = 0
 
     # ===================== BACKTEST SUMMARY =====================
 
