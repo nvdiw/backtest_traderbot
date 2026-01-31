@@ -17,7 +17,7 @@ from check_monthly_data import write_monthly_summary
 # end = get_candle_index("2025-12-18")     ----> 278640
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2019-01-01","2025-12-18"))
+start, end = get_candle_index(("2025-01-01","2025-12-18"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 current_position = None  # None | "long" | "short"
@@ -97,7 +97,9 @@ def ma_strategy(tune: dict = None):
 
     global current_position
 
-    csv_logger = TradeCSVLogger()
+    # detect optimization mode early so we can disable I/O and heavy bookkeeping
+    optimize = bool(tune.get('optimize')) if tune else False
+    csv_logger = TradeCSVLogger(optimize=optimize)
 
     # ---- settings is here ----
     balance = 1000     # base balance
@@ -111,7 +113,7 @@ def ma_strategy(tune: dict = None):
     volume_filter = True
     atr_filter = True
     
-    cooldown_after_big_pnl = 4 * 12  # 4 * 10  # 4 * x   [x] ---> number of candles per hour
+    cooldown_after_big_pnl = 4 * 24  # 4 * 26  is good       # number of skip candles
     cooldown_until_index = -1        # best of cooldown_after_big_pnl: 4*12 , 4*46
 
     ma_distance_threshold = 0.00204  # 0.2٪
@@ -200,7 +202,7 @@ def ma_strategy(tune: dict = None):
 
     equity_curve = []
     profits_lst = []
-    chart_data = []
+    chart_data = [] if not optimize else None
 
     current_position = None
     entry_price = None
@@ -229,10 +231,18 @@ def ma_strategy(tune: dict = None):
     # ---- Get MA, EMA ----
     indicator = Indicator(close_prices, period=None)
 
-    ema_14 = 14
+    # # good
+    # ema_14 = 14
+    # ma_50 = 50
+    # ma_130 = 110
+    # ma_200 = 230
+
+    # best
+    ema_14 = 16
     ma_50 = 50
-    ma_130 = 110
-    ma_200 = 230
+    ma_130 = 100
+    ma_200 = 200
+    
 
     # Optimize: MA, EMA
     if tune:
@@ -282,7 +292,8 @@ def ma_strategy(tune: dict = None):
     for i in range(len(close_prices)):
         # print(start+i)
 
-        chart_data.append([i, balance + (margin if current_position is not None else 0) + save_money])
+        if chart_data is not None:
+            chart_data.append([i, balance + (margin if current_position is not None else 0) + save_money])
 
         if ema_14[i] is None or ma_50[i] is None or ma_130[i] is None or ma_200[i] is None:
             continue
@@ -866,12 +877,7 @@ def ma_strategy(tune: dict = None):
     minutes=minutes
     )
 
-    if tune:
-        if 'optimize' in tune:
-            optimize = bool(tune['optimize']) 
-    else:
-        optimize = False
-
+    # optimize already determined earlier; skip plotting when optimizing
     # Draw diagram
     if optimize is False:
             #plot 1 balance:
@@ -910,11 +916,12 @@ def ma_strategy(tune: dict = None):
             plt.show()
 
     # generate monthly summary CSV silently (no terminal output)
-    try:
-        write_monthly_summary(in_file='data_orders.csv', out_file='monthly_data_orders.csv', quiet=True)
-    except Exception:
-        # avoid crashing the backtest if monthly summary fails
-        pass
+    if not optimize:
+        try:
+            write_monthly_summary(in_file='data_orders.csv', out_file='monthly_data_orders.csv', quiet=True)
+        except Exception:
+            # avoid crashing the backtest if monthly summary fails
+            pass
 
     # return summary metrics for programmatic use
     return {
