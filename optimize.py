@@ -18,6 +18,7 @@ from main import ma_strategy
 # # Grid to search (kept reasonable to limit runtime)
 param_grid = {
     'slope_window': [2, 3, 4],
+    'entry_score_threshold': [6, 7, 8, 9, 10],
     'exit_score_threshold': [2, 3, 4],
     'atr_drawdown_mult': [1.0, 1.5],
     'atr_time_multiplier': [2, 4],
