@@ -23,40 +23,24 @@ lst_month_starts = get_month_start_indices(start, end, just_index= True)
 current_position = None  # None | "long" | "short"
 
 # Fetch data from CSV file
-def fetch_all_data(start : int, end : int):
-
+def fetch_all_data(start: int, end: int):
+    """Optimized version using pandas vector operations"""
     if start is None or end is None:
         return None
     
     df = pd.read_csv('./data_candle/btc_15m_data_2018_to_2025.csv')
-    data = df.iloc[start:end]
-
-    open_times_lst = []
-    close_times_lst = []
-    closes_prices_lst = []
-    opens_prices_lst = []
-    low_prices_lst = []
-    high_prices_lst = []
-    volume_prices_lst = []
-
-    for index, row in data.iterrows():
-        open_times_lst.append(row['Open time'])
-        close_times_lst.append(row['Close time'])
-        opens_prices_lst.append(row['Open'])
-        closes_prices_lst.append(row['Close'])
-        low_prices_lst.append(row['Low'])
-        high_prices_lst.append(row['High'])
-        volume_prices_lst.append(row['Volume'])
-
+    data = df.iloc[start:end].copy()
+    
+    # vectorized
     return {
-            "Open time": open_times_lst, 
-            "Close time": close_times_lst,
-            "Open": opens_prices_lst,
-            "Close": closes_prices_lst,
-            "Low": low_prices_lst,
-            "High": high_prices_lst,
-            "Volume" : volume_prices_lst
-            }
+        "Open time": data['Open time'].tolist(),
+        "Close time": data['Close time'].tolist(),
+        "Open": data['Open'].astype(float).to_numpy(),
+        "Close": data['Close'].astype(float).to_numpy(),
+        "Low": data['Low'].astype(float).to_numpy(),
+        "High": data['High'].astype(float).to_numpy(),
+        "Volume": data['Volume'].astype(float).to_numpy()
+    }
 
 all_data = fetch_all_data(start, end)
 open_prices = all_data["Open"]
@@ -67,13 +51,12 @@ low_prices = all_data["Low"]
 high_prices = all_data["High"]
 volume_prices = all_data["Volume"]
 
-
-# get average volume
-def get_avg_volume(i, window=20):
-    if i < window:
-        return sum(volume_prices[:i+1]) / (i+1)
-    else:
-        return sum(volume_prices[i-window+1:i+1]) / window
+# --- performance: ensure numeric arrays and precompute rolling means (O(n)) ---
+open_prices = np.asarray(open_prices, dtype=float)
+close_prices = np.asarray(close_prices, dtype=float)
+low_prices = np.asarray(low_prices, dtype=float)
+high_prices = np.asarray(high_prices, dtype=float)
+volume_prices = np.asarray(volume_prices, dtype=float)
 
 
 # Calculate Trade Duration
@@ -140,7 +123,7 @@ def ma_strategy(tune: dict = None):
 
     # Entry/exit tuning (avoid magic numbers; tweakable)
     slope_window = 3                # candles for EMA slope check
-    entry_score_threshold = 6       # points required to trigger entry
+    entry_score_threshold = 5       # points required to trigger entry
     exit_score_threshold = 3        # points required to trigger exit
     atr_drawdown_mult = 1.5         # adverse move measured in ATR multiples
     atr_time_multiplier = 2         # scales allowable time in trade based on ATR
@@ -151,6 +134,9 @@ def ma_strategy(tune: dict = None):
     if tune:
         if 'slope_window' in tune:
             slope_window = int(tune['slope_window'])
+
+        if 'entry_score_threshold' in tune:
+            entry_score_threshold = int(tune['entry_score_threshold'])
 
         if 'exit_score_threshold' in tune:
             exit_score_threshold = int(tune['exit_score_threshold'])
@@ -268,7 +254,7 @@ def ma_strategy(tune: dict = None):
                                  tactical_balance, monthly_close_filter, monthly_compound, leverage, safe_leverage)
 
     # ---- get_ADX ----
-    indicator = Indicator(close_prices)
+    # reuse existing `indicator` instance (created above) to avoid re-initialization
     adx = indicator.get_ADX(
         high_prices,
         low_prices,
@@ -280,7 +266,8 @@ def ma_strategy(tune: dict = None):
     atr = indicator.get_ATR(high_prices, low_prices, close_prices, period=14)
     # ---- get_ATR_MA ----
     atr_ma = indicator.get_ATR_MA(atr, period=20)
-
+    # ---- get volume average ----
+    vol_avg_15_list = [sum(volume_prices[max(0, i-14):i+1]) / min(i+1, 15) for i in range(len(volume_prices))]
 
     #   # check data loaded correctly :
     # print(len(open_prices), "candles loaded.")
@@ -470,15 +457,15 @@ def ma_strategy(tune: dict = None):
                     if atr_ratio < entry_atr_threshold:
                         continue
 
-                # 1) CONFIRMED BULL CROSS
-                if last_cross_dir == 'bull' and last_cross_index is not None:
+                # # 1) CONFIRMED BULL CROSS
+                # if last_cross_dir == 'bull' and last_cross_index is not None:
 
-                    # wait at least 1 candle after cross
-                    if i > last_cross_index:
+                #     # wait at least 1 candle after cross
+                #     if i > last_cross_index:
 
-                        # price acceptance above EMA after cross
-                        if close_prices[i] > ema_14[i]:
-                            entry_score += 1
+                #         # price acceptance above EMA after cross
+                #         if close_prices[i] > ema_14[i]:
+                #             entry_score += 1
                 # 2) EMA 14 > Ma 50
                 if ema_14[i] > ma_50[i]:
                     entry_score += 1
@@ -490,17 +477,13 @@ def ma_strategy(tune: dict = None):
                     entry_score += 1
                 # 5) ===== ADX FILTER =====
                 if adx_filter == True :
-                    if adx[i] is None or adx[i] < 20.5:
-                        continue
-                    else:
+                    if adx[i] != None and adx[i] >= 20.5:
                         entry_score += 1
                 # 6) ===== VOLUME FILTER =====
                 if volume_filter:
-
                     vol_now = volume_prices[i]
-                    vol_avg15 = get_avg_volume(i, window=15)
-
-                    if vol_now >= 1.2 * vol_avg15:
+                    vol_avg15 = vol_avg_15_list[i]
+                    if vol_now >= 1.25 * vol_avg15:
                         entry_score += 1
 
 
@@ -647,15 +630,15 @@ def ma_strategy(tune: dict = None):
                     if atr_ratio < entry_atr_threshold:
                         continue
 
-                # 1) CONFIRMED BEAR CROSS
-                if last_cross_dir == 'bear' and last_cross_index is not None:
+                # # 1) CONFIRMED BEAR CROSS
+                # if last_cross_dir == 'bear' and last_cross_index is not None:
 
-                    # wait at least 1 candle after cross
-                    if i > last_cross_index:
+                #     # wait at least 1 candle after cross
+                #     if i > last_cross_index:
 
-                        # price acceptance below EMA after cross
-                        if close_prices[i] < ema_14[i]:
-                            entry_score += 1
+                #         # price acceptance below EMA after cross
+                #         if close_prices[i] < ema_14[i]:
+                #             entry_score += 1
                 # 2) EMA 14 < Ma 50
                 if ema_14[i] <= ma_50[i]:
                     entry_score += 1
@@ -667,17 +650,13 @@ def ma_strategy(tune: dict = None):
                     entry_score += 1
                 # 5) ===== ADX FILTER =====
                 if adx_filter == True :
-                    if adx[i] is None or adx[i] < 20.5:
-                        continue
-                    else:
+                    if adx[i] != None and adx[i] >= 20.5:
                         entry_score += 1
                 # 6) ===== VOLUME FILTER =====
                 if volume_filter:
-
                     vol_now = volume_prices[i]
-                    vol_avg15 = get_avg_volume(i, window=15)
-
-                    if vol_now >= 1.2 * vol_avg15:
+                    vol_avg15 = vol_avg_15_list[i]
+                    if vol_now >= 1.25 * vol_avg15:
                         entry_score += 1
 
 
@@ -858,7 +837,7 @@ def ma_strategy(tune: dict = None):
     else:
         optimize = False
 
-    # Draw a diagram
+    # Draw diagram
     if optimize is False:
             #plot 1 balance:
             xpoints_candles = []
