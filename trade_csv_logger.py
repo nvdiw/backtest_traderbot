@@ -2,8 +2,18 @@ import pandas as pd
 
 
 class TradeCSVLogger:
-    def __init__(self):
-        self.rows = []
+    """Lightweight CSV logger.
+    - In normal mode it collects rows and writes a CSV on save_csv().
+    - In optimize mode (optimize=True) it becomes a no-op to avoid disk I/O
+      and reduce per-trade overhead (much faster for grid search).
+    """
+    def __init__(self, optimize: bool = False):
+        self.optimize = bool(optimize)
+        if self.optimize:
+            # keep only a tiny counter to preserve minimal bookkeeping
+            self._count = 0
+        else:
+            self.rows = []
 
     def log_trade(
         self,
@@ -27,6 +37,11 @@ class TradeCSVLogger:
         save_money,
         profit_percent_per_month
     ):
+        if self.optimize:
+            # no per-trade allocations during optimization
+            self._count += 1
+            return
+
         self.rows.append({
             "type": trade_type,
             "open_time": open_time,
@@ -46,8 +61,8 @@ class TradeCSVLogger:
             "duration_days": days,
             "duration_hours": hours,
             "duration_minutes": minutes,
-            "save_money" : save_money,
-            "profit_percent_per_month" : profit_percent_per_month
+            "save_money": save_money,
+            "profit_percent_per_month": profit_percent_per_month
         })
 
     def save_csv(
@@ -62,8 +77,12 @@ class TradeCSVLogger:
         days,
         hours,
         minutes,
-        file_name="data_orders.csv"
+        file_name: str = "data_orders.csv"
     ):
+        if self.optimize:
+            # do not write any files during optimization
+            return {"rows_logged": getattr(self, "_count", 0)}
+
         df = pd.DataFrame(self.rows)
 
         summary_row = {
