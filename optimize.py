@@ -20,7 +20,7 @@ import os
 from functools import partial
 from main import ma_strategy
 
-# # Grid to search (kept reasonable to limit runtime)
+# Grid to search (kept reasonable to limit runtime)
 param_grid = {
     'slope_window': [2, 3, 4],
     'entry_score_threshold': [6, 7, 8, 9, 10],
@@ -35,7 +35,9 @@ param_grid = {
     'adx_filter': [True, False],
     'volume_filter': [True, False],
     'leverage': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-    'safe_leverage': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    'safe_leverage_low': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    'safe_leverage_med': [2, 3, 4, 5, 6, 7, 8, 9, 10],
+    'safe_leverage_high': [3, 4, 5, 6, 7, 8, 9, 10],
     'cooldown_after_big_pnl': [i for i in range(0, 300, 4)],
     'ema_14': [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
     'ma_50': [45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55],
