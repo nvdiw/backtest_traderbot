@@ -104,7 +104,9 @@ def ma_strategy(tune: dict = None):
     # ---- settings is here ----
     balance = 1000     # base balance
     leverage = 10      # leverage
-    safe_leverage = 3      # leverage safe mode
+    safe_leverage_low = 2      # leverage safe mode low
+    safe_leverage_med = 3      # leverage safe mode medium
+    safe_leverage_high = 4      # leverage safe mode high
     trade_amount_percent = 0.5  # 50% of balance per trade
     monthly_profit_percent_stop_trade = 8    # if 8% per month profit --> don't trade on that month 
     monthly_compound = 3    # after get 'monthly_profit_percent_stop_trade' per month how much money goes for next month
@@ -173,9 +175,15 @@ def ma_strategy(tune: dict = None):
         if 'leverage' in tune:
             leverage = float(tune['leverage'])
 
-        if 'safe_leverage' in tune:
-            safe_leverage = float(tune['safe_leverage'])
+        if 'safe_leverage_low' in tune:
+            safe_leverage_low = float(tune['safe_leverage_low'])
 
+        if 'safe_leverage_med' in tune:
+            safe_leverage_med = float(tune['safe_leverage_med'])
+
+        if 'safe_leverage_high' in tune:
+            safe_leverage_high = float(tune['safe_leverage_high'])
+            
         if 'cooldown_after_big_pnl' in tune:
             cooldown_after_big_pnl = int(tune['cooldown_after_big_pnl'])
     # ---- setting end ----
@@ -264,7 +272,8 @@ def ma_strategy(tune: dict = None):
 
     # ---- MANAGE TRADES ----
     trade_manager = TradeManager(csv_logger, first_balance, monthly_profit_percent_stop_trade, 
-                                 tactical_balance, monthly_close_filter, monthly_compound, leverage, safe_leverage)
+                                 tactical_balance, monthly_close_filter, monthly_compound, leverage, safe_leverage_low,
+                                 safe_leverage_med, safe_leverage_high)
 
     # ---- get_ADX ----
     # reuse existing `indicator` instance (created above) to avoid re-initialization
@@ -335,7 +344,7 @@ def ma_strategy(tune: dict = None):
             last_candle_move = 0
 
         # Calculate total balance (if we have order we have: margin + balance)
-        total_balance = balance + (margin if current_position is not None else 0)
+        margin_balance = balance + (margin if current_position is not None else 0)
 
         # ===================== CHECK LIQUIDATION =====================
         if current_position == "long":
@@ -518,7 +527,7 @@ def ma_strategy(tune: dict = None):
                         balance_without_fee,
                         first_balance,
                         trade_amount_percent,
-                        total_balance,
+                        margin_balance,
                         leverage)
                     
 
@@ -707,7 +716,7 @@ def ma_strategy(tune: dict = None):
                         balance_without_fee,
                         first_balance,
                         trade_amount_percent,
-                        total_balance,
+                        margin_balance,
                         leverage)
                     
 
