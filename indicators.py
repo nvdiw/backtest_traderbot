@@ -1,15 +1,15 @@
 import pandas as pd
 
 class Indicator:
-    def __init__(self, open_prices, period=None):
-        self.open_prices = open_prices
+    def __init__(self, close_prices, period=None):
+        self.close_prices = close_prices
         self.period = period
 
     # Calculate Moving Average
     def get_MA(self, period):
         closes_orders_ma_lst = []
         ma_lst = []
-        for price in self.open_prices:
+        for price in self.close_prices:
             closes_orders_ma_lst.append(price)
 
             if len(closes_orders_ma_lst) < period:
@@ -30,7 +30,7 @@ class Indicator:
         k = 2 / (period + 1)
         ema_prev = None
 
-        for price in self.open_prices:
+        for price in self.close_prices:
 
             if ema_prev is None:
                 ema = None
@@ -45,7 +45,7 @@ class Indicator:
 
             # مقدار اولیه EMA بعد از پر شدن دوره
             if ema_prev is None and len(ema_lst) == period:
-                sma = sum(self.open_prices[:period]) / period
+                sma = sum(self.close_prices[:period]) / period
                 ema_prev = round(sma, 2)
                 ema_lst[-1] = ema_prev
 
