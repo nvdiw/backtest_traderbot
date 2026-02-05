@@ -83,7 +83,29 @@ class TradeCSVLogger:
             # do not write any files during optimization
             return {"rows_logged": getattr(self, "_count", 0)}
 
-        df = pd.DataFrame(self.rows)
+        columns = [
+            "type",
+            "open_time",
+            "close_time",
+            "entry_price",
+            "close_price",
+            "balance_before",
+            "balance_after",
+            "amount",
+            "leverage",
+            "trade_amount_percent",
+            "profit",
+            "profit_percent",
+            "pnl_percent",
+            "fee_paid",
+            "duration_minutes_total",
+            "duration_days",
+            "duration_hours",
+            "duration_minutes",
+            "save_money",
+            "profit_percent_per_month",
+        ]
+        df = pd.DataFrame(self.rows, columns=columns)
 
         summary_row = {
             "type": "SUMMARY",
@@ -100,8 +122,12 @@ class TradeCSVLogger:
             "duration_hours": hours,
             "duration_minutes": minutes
         }
+        summary_row_full = {col: summary_row.get(col, None) for col in columns}
 
-        df = pd.concat([df, pd.DataFrame([summary_row])], ignore_index=True)
+        if df.empty:
+            df = pd.DataFrame([summary_row_full], columns=columns)
+        else:
+            df.loc[len(df), columns] = [summary_row_full[col] for col in columns]
         while True:
             try:
                 df.to_csv(file_name, index=False, encoding="utf-8")
