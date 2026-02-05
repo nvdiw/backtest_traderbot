@@ -18,7 +18,7 @@ import multiprocessing
 import argparse
 import os
 from functools import partial
-from main import ma_strategy
+from ma_strategy import ma_strategy
 
 # Grid to search (kept reasonable to limit runtime)
 param_grid = {
