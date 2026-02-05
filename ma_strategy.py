@@ -226,6 +226,7 @@ def ma_strategy(tune: dict = None):
     last_cross_dir = None           # 'bull' or 'bear'
     last_cross_index = None
     last_trade_cross_index = None   # index of the cross used to open the last trade
+    last_skip_cross_index = None # index of the cross used to save last cross skip
 
     trade_power = True
 
@@ -470,10 +471,12 @@ def ma_strategy(tune: dict = None):
             if cross_seen and last_trade_cross_index != last_cross_index:
 
                 # ===== SKIP LOGIC =====
-                if skip_trades_left > 0:
-                    skip_trades_left -= 1
-                    print(f"⏭️ SKIP LONG | skips left: {skip_trades_left}")
-                    continue
+                if last_skip_cross_index != last_cross_index:
+                    if skip_trades_left > 0:
+                        skip_trades_left -= 1
+                        last_skip_cross_index = last_cross_index
+                        print(f"⏭️ SKIP LONG | skips left: {skip_trades_left}")
+                        continue
 
                 entry_score = 0
 
