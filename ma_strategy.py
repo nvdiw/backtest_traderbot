@@ -216,6 +216,11 @@ def ma_strategy(tune: dict = None):
     equity_curve = []
     profits_lst = []
     chart_data = [] if not optimize else None
+    # price chart trade markers
+    long_open_points = [] if not optimize else None
+    long_close_points = [] if not optimize else None
+    short_open_points = [] if not optimize else None
+    short_close_points = [] if not optimize else None
 
     current_position = None
     entry_price = None
@@ -373,6 +378,8 @@ def ma_strategy(tune: dict = None):
                 count_closed_orders += 1
                 total_losses += 1
                 total_long += 1
+                if long_close_points is not None:
+                    long_close_points.append((i, close_price))
 
                 equity_curve.append(balance + save_money)
                 peak = max(equity_curve)
@@ -431,6 +438,8 @@ def ma_strategy(tune: dict = None):
                 count_closed_orders += 1
                 total_losses += 1
                 total_short += 1
+                if short_close_points is not None:
+                    short_close_points.append((i, close_price))
 
                 equity_curve.append(balance + save_money)
                 peak = max(equity_curve)
@@ -551,6 +560,8 @@ def ma_strategy(tune: dict = None):
                     position_size_no_fee = updates['position_size_no_fee']
                     open_time_value = updates['open_time_value']
                     current_position = updates['current_position']
+                    if long_open_points is not None:
+                        long_open_points.append((i, entry_price))
                     # record which cross enabled this trade and ATR at entry
                     last_trade_cross_index = last_cross_index
                     entry_index = i
@@ -597,6 +608,7 @@ def ma_strategy(tune: dict = None):
 
             if exit_score >= exit_score_threshold:
                 # ---- close long ----
+                close_price = close_prices[i]
                 updates = trade_manager.close_long(
                     i,
                     close_prices,
@@ -649,6 +661,8 @@ def ma_strategy(tune: dict = None):
                 save_money = updates['save_money']
                 trade_power = updates['trade_power']
                 updates = None
+                if long_close_points is not None:
+                    long_close_points.append((i, close_price))
                 
                 # count consecutive_losses 
                 if profits_lst[-1] < 0:
@@ -740,6 +754,8 @@ def ma_strategy(tune: dict = None):
                     position_size_no_fee = updates['position_size_no_fee']
                     open_time_value = updates['open_time_value']
                     current_position = updates['current_position']
+                    if short_open_points is not None:
+                        short_open_points.append((i, entry_price))
                     # record which cross enabled this trade and ATR at entry
                     last_trade_cross_index = last_cross_index
                     entry_index = i
@@ -786,6 +802,7 @@ def ma_strategy(tune: dict = None):
 
             if exit_score >= exit_score_threshold:
                 # ---- close short ----
+                close_price = close_prices[i]
                 updates = trade_manager.close_short(
                     i,
                     close_prices,
@@ -839,6 +856,8 @@ def ma_strategy(tune: dict = None):
                 save_money = updates['save_money']
                 trade_power = updates['trade_power']
                 updates = None
+                if short_close_points is not None:
+                    short_close_points.append((i, close_price))
                 
                 # count consecutive_losses 
                 if profits_lst[-1] < 0:
@@ -934,6 +953,18 @@ def ma_strategy(tune: dict = None):
             plt.plot(xpoints, ypoints_ma200, color = "#A49C00")
             if len(mark_x) > 0:
                 plt.scatter(mark_x, mark_y, color="#00D4FF", s=60, zorder=6, edgecolors="black", linewidths=0.6, marker="o")
+            if long_open_points:
+                lo_x, lo_y = zip(*long_open_points)
+                plt.scatter(lo_x, lo_y, color="#8FD18F", s=55, zorder=7, edgecolors="black", linewidths=0.5, marker="s")
+            if long_close_points:
+                lc_x, lc_y = zip(*long_close_points)
+                plt.scatter(lc_x, lc_y, color="#1B7F2A", s=55, zorder=7, edgecolors="black", linewidths=0.5, marker="D")
+            if short_open_points:
+                so_x, so_y = zip(*short_open_points)
+                plt.scatter(so_x, so_y, color="#FF6060", s=55, zorder=7, edgecolors="black", linewidths=0.5, marker="s")
+            if short_close_points:
+                sc_x, sc_y = zip(*short_close_points)
+                plt.scatter(sc_x, sc_y, color="#B00020", s=55, zorder=7, edgecolors="black", linewidths=0.5, marker="D")
             plt.title("BTC - PRICE", loc = 'left')
             plt.xlabel("Candles")
             plt.ylabel("Prise")
