@@ -108,10 +108,10 @@ def ma_strategy(tune: dict = None):
 
     # ---- settings is here ----
     balance = 1000     # base balance
-    leverage = 10      # leverage
-    safe_leverage_low = 2      # leverage safe mode low
-    safe_leverage_med = 3      # leverage safe mode medium
-    safe_leverage_high = 4      # leverage safe mode high
+    leverage = 100      # leverage
+    safe_leverage_low = 100      # leverage safe mode low
+    safe_leverage_med = 100      # leverage safe mode medium
+    safe_leverage_high = 100      # leverage safe mode high
     trade_amount_percent = 0.5  # 50% of balance per trade
     monthly_profit_percent_stop_trade = 8    # if 8% per month profit --> don't trade on that month 
     monthly_compound = 3    # after get 'monthly_profit_percent_stop_trade' per month how much money goes for next month
@@ -198,6 +198,7 @@ def ma_strategy(tune: dict = None):
 
     save_money = 0
     total_wins = 0
+    total_liquids = 0
     total_wins_long = 0
     total_wins_short = 0
     total_losses = 0
@@ -382,7 +383,8 @@ def ma_strategy(tune: dict = None):
                 open_time_value,
                 csv_logger,
                 trade_amount_percent,
-                profit_percent_per_month
+                profit_percent_per_month,
+                total_liquids
             )
 
             if liq_updates['liquidated']:
@@ -394,6 +396,7 @@ def ma_strategy(tune: dict = None):
                 total_long = liq_updates['total_long']
                 equity_curve = liq_updates['equity_curve']
                 max_drawdown = liq_updates['max_drawdown']
+                total_liquids = liq_updates['total_liquids']
                 current_position = None
                 if long_close_points is not None:
                     long_close_points.append((i, liq_updates['close_price']))
@@ -423,7 +426,8 @@ def ma_strategy(tune: dict = None):
                 open_time_value,
                 csv_logger,
                 trade_amount_percent,
-                profit_percent_per_month
+                profit_percent_per_month,
+                total_liquids
             )
 
             if liq_updates['liquidated']:
@@ -435,6 +439,7 @@ def ma_strategy(tune: dict = None):
                 total_short = liq_updates['total_short']
                 equity_curve = liq_updates['equity_curve']
                 max_drawdown = liq_updates['max_drawdown']
+                total_liquids = liq_updates['total_liquids']
                 current_position = None
                 if short_close_points is not None:
                     short_close_points.append((i, liq_updates['close_price']))
@@ -861,6 +866,7 @@ def ma_strategy(tune: dict = None):
     print("Total Profit:", round(sum(profits_lst), 2), "$")
     print("Total Profit Percent:", round(t_profit_percent, 2), "%", "or", round(total_profit_percent, 2), "%")
     print("saved Money:", round(save_money,2), "$")
+    print("Count Liquids:", total_liquids)
     print("count_profit_more_than_8%_monthly:", len(lst_profit_percent_per_month))
 
     csv_logger.save_csv(

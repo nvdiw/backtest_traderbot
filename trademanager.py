@@ -470,7 +470,8 @@ class TradeManager:
         deducting_fee_total, count_closed_orders,
         total_losses, total_long, equity_curve,
         save_money, max_drawdown, open_time_value,
-        csv_logger, trade_amount_percent, profit_percent_per_month
+        csv_logger, trade_amount_percent, profit_percent_per_month,
+        total_liquids
     ):
 
         liquid_price_long = entry_price * (1 - 1 / leverage)
@@ -505,6 +506,7 @@ class TradeManager:
         count_closed_orders += 1
         total_losses += 1
         total_long += 1
+        total_liquids += 1
 
         equity_curve.append(balance + save_money)
         peak = max(equity_curve)
@@ -550,7 +552,8 @@ class TradeManager:
             'equity_curve': equity_curve,
             'max_drawdown': max_drawdown,
             'close_price': close_price,
-            'close_time_value': close_time_value
+            'close_time_value': close_time_value,
+            'total_liquids': total_liquids
         }
 
 
@@ -563,7 +566,8 @@ class TradeManager:
         deducting_fee_total, count_closed_orders,
         total_losses, total_short, equity_curve,
         save_money, max_drawdown, open_time_value,
-        csv_logger, trade_amount_percent, profit_percent_per_month
+        csv_logger, trade_amount_percent, profit_percent_per_month,
+        total_liquids
     ):
 
         liquid_price_short = entry_price * (1 + 1 / leverage)
@@ -598,6 +602,7 @@ class TradeManager:
         count_closed_orders += 1
         total_losses += 1
         total_short += 1
+        total_liquids += 1
 
         equity_curve.append(balance + save_money)
         peak = max(equity_curve)
@@ -643,6 +648,7 @@ class TradeManager:
             'equity_curve': equity_curve,
             'max_drawdown': max_drawdown,
             'close_price': close_price,
-            'close_time_value': close_time_value
+            'close_time_value': close_time_value,
+            'total_liquids': total_liquids
         }
 
