@@ -51,6 +51,11 @@ low_prices = all_data["Low"]
 high_prices = all_data["High"]
 volume_prices = all_data["Volume"]
 
+# normalize close_times by adding 0.001 seconds (1 ms) to make rounding consistent
+close_times = (
+    pd.to_datetime(close_times, utc=True) + pd.Timedelta(milliseconds=1)
+).strftime("%Y-%m-%d %H:%M:%S.%f").tolist()
+
 # --- performance: ensure numeric arrays and precompute rolling means (O(n)) ---
 open_prices = np.asarray(open_prices, dtype=float)
 close_prices = np.asarray(close_prices, dtype=float)
@@ -915,6 +920,11 @@ def ma_strategy(tune: dict = None):
             ypoints_ma50 = np.array(ma_50)
             ypoints_ma130 = np.array(ma_130)
             ypoints_ma200 = np.array(ma_200)
+            # mark 13:30 UTC close points (use close_times)
+            close_times_utc = pd.to_datetime(close_times, utc=True)
+            mark_mask = (close_times_utc.hour == 13) & (close_times_utc.minute == 30)
+            mark_x = xpoints[mark_mask]
+            mark_y = ypoints_price[mark_mask]
 
             plt.subplot(2, 1, 2)
             plt.plot(xpoints, ypoints_price)
@@ -922,6 +932,8 @@ def ma_strategy(tune: dict = None):
             plt.plot(xpoints, ypoints_ma50, color = "#70009D")
             plt.plot(xpoints, ypoints_ma130, color = "#FFF98C")
             plt.plot(xpoints, ypoints_ma200, color = "#A49C00")
+            if len(mark_x) > 0:
+                plt.scatter(mark_x, mark_y, color="#00D4FF", s=60, zorder=6, edgecolors="black", linewidths=0.6, marker="o")
             plt.title("BTC - PRICE", loc = 'left')
             plt.xlabel("Candles")
             plt.ylabel("Prise")
