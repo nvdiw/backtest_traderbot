@@ -459,3 +459,190 @@ class TradeManager:
             'profit_percent_per_month': profit_percent_per_month,
             'save_money' : save_money
         }
+
+
+    # check liquidation long
+    def check_liquidation_long(
+        self, i, low_prices, close_times,
+        entry_price, leverage, margin, margin_no_fee,
+        balance_before_trade, balance_before_trade_no_fee,
+        balance, balance_without_fee,
+        deducting_fee_total, count_closed_orders,
+        total_losses, total_long, equity_curve,
+        save_money, max_drawdown, open_time_value,
+        csv_logger, trade_amount_percent, profit_percent_per_month
+    ):
+
+        liquid_price_long = entry_price * (1 - 1 / leverage)
+
+        if low_prices[i] > liquid_price_long:
+            return {
+                'liquidated': False,
+                'balance': balance,
+                'balance_without_fee': balance_without_fee,
+                'deducting_fee_total': deducting_fee_total,
+                'count_closed_orders': count_closed_orders,
+                'total_losses': total_losses,
+                'total_long': total_long,
+                'equity_curve': equity_curve,
+                'max_drawdown': max_drawdown,
+                'close_price': None,
+                'close_time_value': None
+            }
+
+        close_price = liquid_price_long
+        close_time_value = close_times[i]
+
+        profit = -margin
+        profit_percent = -100
+        pnl_percent = -100
+        total_fee_liq = 0
+
+        balance = balance_before_trade - margin
+        balance_without_fee = balance_before_trade_no_fee - margin_no_fee
+
+        deducting_fee_total += total_fee_liq
+        count_closed_orders += 1
+        total_losses += 1
+        total_long += 1
+
+        equity_curve.append(balance + save_money)
+        peak = max(equity_curve)
+        drawdown = (balance + save_money - peak) / peak * 100
+        max_drawdown = min(max_drawdown, drawdown)
+
+        days, hours, minutes = trade_duration(open_time_value, close_time_value)
+
+        print("ðŸ”´ LONG LIQUIDATED at price:", round(close_price, 2),
+            "| Time:", close_time_value)
+
+        # -------- CSV LOG --------
+        csv_logger.log_trade(
+            "LONG_LIQUIDATED",           # Trade type
+            open_time_value,             # Open Time
+            close_time_value,            # Close Time
+            entry_price,                 # Entry Price
+            close_price,                 # Close Price
+            round(balance_before_trade, 2),  # Balance before trade
+            round(balance, 2),            # Balance after trade
+            round(margin, 2),             # Margin used
+            leverage,                    # Leverage
+            trade_amount_percent,        # Trade amount percent
+            round(profit, 2),             # Profit in $
+            round(profit_percent, 2),     # Profit %
+            round(pnl_percent, 2),        # PnL %
+            round(total_fee_liq, 4),      # Total Fee
+            days,
+            hours,
+            minutes,
+            save_money,
+            profit_percent_per_month
+        )
+
+        return {
+            'liquidated': True,
+            'balance': balance,
+            'balance_without_fee': balance_without_fee,
+            'deducting_fee_total': deducting_fee_total,
+            'count_closed_orders': count_closed_orders,
+            'total_losses': total_losses,
+            'total_long': total_long,
+            'equity_curve': equity_curve,
+            'max_drawdown': max_drawdown,
+            'close_price': close_price,
+            'close_time_value': close_time_value
+        }
+
+
+    # check liquidation short
+    def check_liquidation_short(
+        self, i, high_prices, close_times,
+        entry_price, leverage, margin, margin_no_fee,
+        balance_before_trade, balance_before_trade_no_fee,
+        balance, balance_without_fee,
+        deducting_fee_total, count_closed_orders,
+        total_losses, total_short, equity_curve,
+        save_money, max_drawdown, open_time_value,
+        csv_logger, trade_amount_percent, profit_percent_per_month
+    ):
+
+        liquid_price_short = entry_price * (1 + 1 / leverage)
+
+        if high_prices[i] < liquid_price_short:
+            return {
+                'liquidated': False,
+                'balance': balance,
+                'balance_without_fee': balance_without_fee,
+                'deducting_fee_total': deducting_fee_total,
+                'count_closed_orders': count_closed_orders,
+                'total_losses': total_losses,
+                'total_short': total_short,
+                'equity_curve': equity_curve,
+                'max_drawdown': max_drawdown,
+                'close_price': None,
+                'close_time_value': None
+            }
+
+        close_price = liquid_price_short
+        close_time_value = close_times[i]
+
+        profit = -margin
+        profit_percent = -100
+        pnl_percent = -100
+        total_fee_liq = 0
+
+        balance = balance_before_trade - margin
+        balance_without_fee = balance_before_trade_no_fee - margin_no_fee
+
+        deducting_fee_total += total_fee_liq
+        count_closed_orders += 1
+        total_losses += 1
+        total_short += 1
+
+        equity_curve.append(balance + save_money)
+        peak = max(equity_curve)
+        drawdown = (balance + save_money - peak) / peak * 100
+        max_drawdown = min(max_drawdown, drawdown)
+
+        days, hours, minutes = trade_duration(open_time_value, close_time_value)
+
+        print("ðŸ”´ SHORT LIQUIDATED at price:", round(close_price, 2),
+            "| Time:", close_time_value)
+
+        # -------- CSV LOG --------
+        csv_logger.log_trade(
+            "SHORT_LIQUIDATED",          # Trade type
+            open_time_value,             # Open Time
+            close_time_value,            # Close Time
+            entry_price,                 # Entry Price
+            close_price,                 # Close Price
+            round(balance_before_trade, 2),  # Balance before trade
+            round(balance, 2),            # Balance after trade
+            round(margin, 2),             # Margin used
+            leverage,                    # Leverage
+            trade_amount_percent,        # Trade amount percent
+            round(profit, 2),             # Profit in $
+            round(profit_percent, 2),     # Profit %
+            round(pnl_percent, 2),        # PnL %
+            round(total_fee_liq, 4),      # Total Fee
+            days,
+            hours,
+            minutes,
+            save_money,
+            profit_percent_per_month
+        )
+
+        return {
+            'liquidated': True,
+            'balance': balance,
+            'balance_without_fee': balance_without_fee,
+            'deducting_fee_total': deducting_fee_total,
+            'count_closed_orders': count_closed_orders,
+            'total_losses': total_losses,
+            'total_short': total_short,
+            'equity_curve': equity_curve,
+            'max_drawdown': max_drawdown,
+            'close_price': close_price,
+            'close_time_value': close_time_value
+        }
+
