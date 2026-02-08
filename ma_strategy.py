@@ -108,10 +108,10 @@ def ma_strategy(tune: dict = None):
 
     # ---- settings is here ----
     balance = 1000     # base balance
-    leverage = 100      # leverage
-    safe_leverage_low = 100      # leverage safe mode low
-    safe_leverage_med = 100      # leverage safe mode medium
-    safe_leverage_high = 100      # leverage safe mode high
+    leverage = 10      # leverage
+    safe_leverage_high = 4      # leverage safe mode high
+    safe_leverage_med = 3      # leverage safe mode medium
+    safe_leverage_low = 2      # leverage safe mode low
     trade_amount_percent = 0.5  # 50% of balance per trade
     monthly_profit_percent_stop_trade = 8    # if 8% per month profit --> don't trade on that month 
     monthly_compound = 3    # after get 'monthly_profit_percent_stop_trade' per month how much money goes for next month
@@ -119,26 +119,26 @@ def ma_strategy(tune: dict = None):
     adx_filter = True
     volume_filter = True
     atr_filter = True
+    skip_logic = False
     
     cooldown_after_big_pnl = 4 * 24  # 4 * 26  is good       # number of skip candles
     cooldown_until_index = -1        # best of cooldown_after_big_pnl: 4*12 , 4*46
 
-    ma_distance_threshold = 0.00204  # 0.2٪
-    candle_move_threshold = 0.0082 # 0.8٪
-
-    # ===== ATR ENTRY FILTER =====
-    atr_entry_ma_period = 20
-    entry_atr_threshold = 1   # 1, 1.1, 1.2, 1.3 should be test
+    ma_distance_threshold = 0.00159  # 0.16٪
+    candle_move_threshold = 0.008 # 0.8٪
+    candle5_threshold = 100
 
     # Entry/exit tuning (avoid magic numbers; tweakable)
     slope_window = 3                # candles for EMA slope check
     entry_score_threshold = 6       # points required to trigger entry
-    exit_score_threshold = 3        # points required to trigger exit
-    atr_drawdown_mult = 1.5         # adverse move measured in ATR multiples
-    atr_time_multiplier = 2         # scales allowable time in trade based on ATR
-    atr_time_min = 1                # minimum candles before time-based exit contributes
-    baseline_time_pct = 0.02        # reference price % used to compute dynamic time window
-
+    exit_score_threshold = 4        # points required to trigger exit
+    trail_activate_pct = 0.007      # arm trailing after +0.7% move from entry
+    trail_retrace_pct = 0.003       # exit if price retraces 0.3% from peak
+    adx_exit_threshold = 15.0       # trend strength fade threshold
+    adx_exit_lookback = 1           # confirm ADX is falling vs N candles ago
+    entry_atr_threshold = 1.2       # 1, 1.1, 1.2, 1.3 should be test
+    opposite_atr_body_mult = 0.6    # strong opposite candle body vs ATR
+    
     # Apply tune overrides (explicit assignments to avoid relying on locals())
     if tune:
         if 'slope_window' in tune:
@@ -150,17 +150,29 @@ def ma_strategy(tune: dict = None):
         if 'exit_score_threshold' in tune:
             exit_score_threshold = int(tune['exit_score_threshold'])
 
-        if 'atr_drawdown_mult' in tune:
-            atr_drawdown_mult = float(tune['atr_drawdown_mult'])
+        if 'entry_atr_threshold' in tune:
+            entry_atr_threshold = float(tune['entry_atr_threshold'])
 
-        if 'atr_time_multiplier' in tune:
-            atr_time_multiplier = int(tune['atr_time_multiplier'])
+        if 'ma_distance_threshold' in tune:
+            ma_distance_threshold = float(tune['ma_distance_threshold'])
 
-        if 'atr_time_min' in tune:
-            atr_time_min = int(tune['atr_time_min'])
+        if 'candle_move_threshold' in tune:
+            candle_move_threshold = float(tune['candle_move_threshold'])
 
-        if 'baseline_time_pct' in tune:
-            baseline_time_pct = float(tune['baseline_time_pct'])
+        if 'trail_activate_pct' in tune:
+            trail_activate_pct = float(tune['trail_activate_pct'])
+
+        if 'trail_retrace_pct' in tune:
+            trail_retrace_pct = float(tune['trail_retrace_pct'])
+
+        if 'adx_exit_threshold' in tune:
+            adx_exit_threshold = float(tune['adx_exit_threshold'])
+
+        if 'adx_exit_lookback' in tune:
+            adx_exit_lookback = int(tune['adx_exit_lookback'])
+
+        if 'opposite_atr_body_mult' in tune:
+            opposite_atr_body_mult = float(tune['opposite_atr_body_mult'])
 
         if 'trade_amount_percent' in tune:
             trade_amount_percent = float(tune['trade_amount_percent'])
@@ -176,6 +188,9 @@ def ma_strategy(tune: dict = None):
 
         if 'volume_filter' in tune:
             volume_filter = bool(tune['volume_filter'])
+
+        if 'skip_logic' in tune:
+            skip_logic = bool(tune['skip_logic'])
 
         if 'leverage' in tune:
             leverage = float(tune['leverage'])
@@ -225,6 +240,9 @@ def ma_strategy(tune: dict = None):
 
     current_position = None
     entry_price = None
+    entry_index = None
+    highest_since_entry = None
+    lowest_since_entry = None
     position_size = None
     position_size_no_fee = None
     balance_before_trade = None
@@ -237,8 +255,6 @@ def ma_strategy(tune: dict = None):
     last_cross_dir = None           # 'bull' or 'bear'
     last_cross_index = None
     last_trade_cross_index = None   # index of the cross used to open the last trade
-    last_skip_cross_index = None # index of the cross used to save last cross skip
-
     trade_power = True
 
     balance_without_fee = balance
@@ -398,6 +414,10 @@ def ma_strategy(tune: dict = None):
                 max_drawdown = liq_updates['max_drawdown']
                 total_liquids = liq_updates['total_liquids']
                 current_position = None
+                entry_price = None
+                entry_index = None
+                highest_since_entry = None
+                lowest_since_entry = None
                 if long_close_points is not None:
                     long_close_points.append((i, liq_updates['close_price']))
                 continue
@@ -441,6 +461,10 @@ def ma_strategy(tune: dict = None):
                 max_drawdown = liq_updates['max_drawdown']
                 total_liquids = liq_updates['total_liquids']
                 current_position = None
+                entry_price = None
+                entry_index = None
+                highest_since_entry = None
+                lowest_since_entry = None
                 if short_close_points is not None:
                     short_close_points.append((i, liq_updates['close_price']))
                 continue
@@ -451,14 +475,6 @@ def ma_strategy(tune: dict = None):
         # and avoid opening multiple trades for the same cross.
         if current_position is None:
             if cross_seen and last_trade_cross_index != last_cross_index:
-
-                # ===== SKIP LOGIC =====
-                if last_skip_cross_index != last_cross_index:
-                    if skip_trades_left > 0:
-                        skip_trades_left -= 1
-                        last_skip_cross_index = last_cross_index
-                        print(f"⏭️ SKIP LONG | skips left: {skip_trades_left}")
-                        continue
 
                 entry_score = 0
 
@@ -472,12 +488,11 @@ def ma_strategy(tune: dict = None):
                     if atr_ratio < entry_atr_threshold:
                         continue
 
+                # ---- positive scores
                 # 1) CONFIRMED BULL CROSS
                 if last_cross_dir == 'bull' and last_cross_index is not None:
-
                     # wait at least 1 candle after cross
                     if i > last_cross_index:
-
                         # price acceptance above EMA after cross
                         if close_prices[i] > ema_14[i]:
                             entry_score += 1
@@ -500,9 +515,19 @@ def ma_strategy(tune: dict = None):
                     vol_avg15 = vol_avg_15_list[i]
                     if vol_now >= 1.25 * vol_avg15:
                         entry_score += 1
-
+                # ---- negative scores
+                # 1) Comparing: current candle (i) with candle 5 periods earlier (i-5)
+                if ((close_prices[i] * 100 / close_prices[i-5]) - 100) > candle5_threshold:
+                    entry_score -= 1
 
                 if entry_score >= entry_score_threshold:
+                    # ===== SKIP LOGIC =====
+                    if skip_logic and skip_trades_left > 0:
+                        skip_trades_left -= 1
+                        last_trade_cross_index = last_cross_index
+                        print(f"⏭️ SKIP LONG | skips left: {skip_trades_left}")
+                        continue
+
                     # ---- open long ----
                     updates = trade_manager.open_long(
                         i,
@@ -530,11 +555,11 @@ def ma_strategy(tune: dict = None):
                     current_position = updates['current_position']
                     if long_open_points is not None:
                         long_open_points.append((i, entry_price))
-                    # record which cross enabled this trade and ATR at entry
+                    # record which cross enabled this trade and init trailing state
                     last_trade_cross_index = last_cross_index
                     entry_index = i
-                    atr_at_entry = atr[i]
-                    atr_ratio_at_entry = atr_ratio if atr_ratio is not None else None
+                    highest_since_entry = max(entry_price, high_prices[i])
+                    lowest_since_entry = min(entry_price, low_prices[i])
 
                     updates = None
 
@@ -543,6 +568,12 @@ def ma_strategy(tune: dict = None):
         if current_position == "long":
             # exit scoring system (points accumulate; mirrored for short)
             exit_score = 0
+
+            # update trailing peak
+            if highest_since_entry is None:
+                highest_since_entry = entry_price
+            if high_prices[i] > highest_since_entry:
+                highest_since_entry = high_prices[i]
 
             # 1) EMA slope weakness (look back `slope_window` candles)
             if i - slope_window >= 0 and ema_14[i] < ema_14[i - slope_window]:
@@ -556,23 +587,27 @@ def ma_strategy(tune: dict = None):
             if ma_130[i] < ma_200[i]:
                 exit_score += 1
 
-            # 4) adverse price move measured in ATR multiples
-            if 'entry_price' in locals() and atr_at_entry is not None and atr_at_entry > 0:
-                adverse = entry_price - low_prices[i]
-                if adverse >= atr_at_entry * atr_drawdown_mult:
-                    exit_score += 1
+            # 4) trailing stop based on pullback from peak (armed after min profit)
+            if entry_index is not None and i > entry_index:
+                if highest_since_entry >= entry_price * (1 + trail_activate_pct):
+                    if close_prices[i] <= highest_since_entry * (1 - trail_retrace_pct):
+                        exit_score += 1
 
-            # 5) ATR-based dynamic time exit (larger ATR -> shorter required time)
-            if 'entry_index' in locals() and atr[i] is not None and atr[i] > 0:
-                time_in_trade = i - entry_index
-                atr_pct = atr[i] / entry_price if entry_price else 0
-                # threshold_time scales inversely to ATR percentage relative to price
-                threshold_time = max(
-                    atr_time_min,
-                    int((atr_time_multiplier * (baseline_time_pct / (atr_pct + 1e-12))))
-                )
-                if time_in_trade >= threshold_time:
-                    exit_score += 1
+            # 5) ADX weakening (trend strength fading)
+            if i - adx_exit_lookback >= 0:
+                adx_now = adx[i]
+                adx_prev = adx[i - adx_exit_lookback]
+                if adx_now is not None and adx_prev is not None:
+                    if np.isfinite(adx_now) and np.isfinite(adx_prev):
+                        if adx_now < adx_exit_threshold and adx_now < adx_prev:
+                            exit_score += 1
+
+            # 6) strong opposite candle (body >= ATR * mult)
+            if atr[i] is not None and atr[i] > 0:
+                if close_prices[i] < open_prices[i]:
+                    body = open_prices[i] - close_prices[i]
+                    if body >= atr[i] * opposite_atr_body_mult:
+                        exit_score += 1
 
             if exit_score >= exit_score_threshold:
                 # ---- close long ----
@@ -629,6 +664,10 @@ def ma_strategy(tune: dict = None):
                 save_money = updates['save_money']
                 trade_power = updates['trade_power']
                 updates = None
+                entry_price = None
+                entry_index = None
+                highest_since_entry = None
+                lowest_since_entry = None
                 if long_close_points is not None:
                     long_close_points.append((i, close_price))
                 
@@ -648,12 +687,6 @@ def ma_strategy(tune: dict = None):
         if current_position is None:
             if cross_seen and last_trade_cross_index != last_cross_index:
                 
-                # ===== SKIP LOGIC =====
-                if skip_trades_left > 0:
-                    skip_trades_left -= 1
-                    print(f"⏭️ SKIP LONG | skips left: {skip_trades_left}")
-                    continue
-
                 entry_score = 0
                 
                 # ===== ATR ENTRY FILTER =====
@@ -665,13 +698,11 @@ def ma_strategy(tune: dict = None):
 
                     if atr_ratio < entry_atr_threshold:
                         continue
-
+                # ---- positive scores
                 # # 1) CONFIRMED BEAR CROSS
                 if last_cross_dir == 'bear' and last_cross_index is not None:
-
                     # wait at least 1 candle after cross
                     if i > last_cross_index:
-
                         # price acceptance below EMA after cross
                         if close_prices[i] < ema_14[i]:
                             entry_score += 1
@@ -694,9 +725,20 @@ def ma_strategy(tune: dict = None):
                     vol_avg15 = vol_avg_15_list[i]
                     if vol_now >= 1.25 * vol_avg15:
                         entry_score += 1
+                # ---- negative scores
+                # 1) Comparing: current candle (i) with candle 5 periods earlier (i-5)
+                if (100 - (close_prices[i] * 100 / close_prices[i-5])) > candle5_threshold:
+                    entry_score -= 1
 
 
                 if entry_score >= entry_score_threshold:
+                    # ===== SKIP LOGIC =====
+                    if skip_logic and skip_trades_left > 0:
+                        skip_trades_left -= 1
+                        last_trade_cross_index = last_cross_index
+                        print(f"⏭️ SKIP SHORT | skips left: {skip_trades_left}")
+                        continue
+
                     # ---- open short ----
                     updates = trade_manager.open_short(
                         i,
@@ -724,11 +766,11 @@ def ma_strategy(tune: dict = None):
                     current_position = updates['current_position']
                     if short_open_points is not None:
                         short_open_points.append((i, entry_price))
-                    # record which cross enabled this trade and ATR at entry
+                    # record which cross enabled this trade and init trailing state
                     last_trade_cross_index = last_cross_index
                     entry_index = i
-                    atr_at_entry = atr[i]
-                    atr_ratio_at_entry = atr_ratio if atr_ratio is not None else None
+                    highest_since_entry = max(entry_price, high_prices[i])
+                    lowest_since_entry = min(entry_price, low_prices[i])
 
                     updates = None
 
@@ -737,6 +779,12 @@ def ma_strategy(tune: dict = None):
         if current_position == "short":
             # exit scoring (mirrored logic)
             exit_score = 0
+
+            # update trailing trough
+            if lowest_since_entry is None:
+                lowest_since_entry = entry_price
+            if low_prices[i] < lowest_since_entry:
+                lowest_since_entry = low_prices[i]
 
             # 1) EMA slope weakness for short (EMA trending up)
             if i - slope_window >= 0 and ema_14[i] > ema_14[i - slope_window]:
@@ -750,23 +798,27 @@ def ma_strategy(tune: dict = None):
             if ma_130[i] >= ma_200[i]:
                 exit_score += 1
 
-            # 4) adverse price move for short measured in ATR multiples
-            if 'entry_price' in locals() and atr_at_entry is not None and atr_at_entry > 0:
-                adverse = high_prices[i] - entry_price
-                if adverse >= atr_at_entry * atr_drawdown_mult:
-                    exit_score += 1
+            # 4) trailing stop based on pullback from trough (armed after min profit)
+            if entry_index is not None and i > entry_index:
+                if lowest_since_entry <= entry_price * (1 - trail_activate_pct):
+                    if close_prices[i] >= lowest_since_entry * (1 + trail_retrace_pct):
+                        exit_score += 1
 
-            # 5) ATR-based dynamic time exit for short
-            if 'entry_index' in locals() and atr[i] is not None and atr[i] > 0:
-                time_in_trade = i - entry_index
-                atr_pct = atr[i] / entry_price if entry_price else 0
-                # threshold_time scales inversely to ATR percentage relative to price
-                threshold_time = max(
-                    atr_time_min,
-                    int((atr_time_multiplier * (baseline_time_pct / (atr_pct + 1e-12))))
-                )
-                if time_in_trade >= threshold_time:
-                    exit_score += 1
+            # 5) ADX weakening (trend strength fading)
+            if i - adx_exit_lookback >= 0:
+                adx_now = adx[i]
+                adx_prev = adx[i - adx_exit_lookback]
+                if adx_now is not None and adx_prev is not None:
+                    if np.isfinite(adx_now) and np.isfinite(adx_prev):
+                        if adx_now < adx_exit_threshold and adx_now < adx_prev:
+                            exit_score += 1
+
+            # 6) strong opposite candle (body >= ATR * mult)
+            if atr[i] is not None and atr[i] > 0:
+                if close_prices[i] > open_prices[i]:
+                    body = close_prices[i] - open_prices[i]
+                    if body >= atr[i] * opposite_atr_body_mult:
+                        exit_score += 1
 
             if exit_score >= exit_score_threshold:
                 # ---- close short ----
@@ -824,6 +876,10 @@ def ma_strategy(tune: dict = None):
                 save_money = updates['save_money']
                 trade_power = updates['trade_power']
                 updates = None
+                entry_price = None
+                entry_index = None
+                highest_since_entry = None
+                lowest_since_entry = None
                 if short_close_points is not None:
                     short_close_points.append((i, close_price))
                 
