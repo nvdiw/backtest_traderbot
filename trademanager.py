@@ -190,6 +190,7 @@ class TradeManager:
             close_time_value,
             entry_price,
             close_price,
+            round(self.tactical_balance, 2),
             round(balance_before_trade, 2),
             round(balance, 2),
             round(margin , 2),
@@ -228,7 +229,7 @@ class TradeManager:
             #         cooldown_until_index = i + 4 * 24 * 10
             #         self.just_one_time = False
         else :
-            if balance * 1.08 >= self.tactical_balance:
+            if balance >= self.tactical_balance * 1.08:
                 self.tactical_balance = balance
 
         current_position = None
@@ -396,6 +397,7 @@ class TradeManager:
             close_time_value,
             entry_price,
             close_price,
+            round(self.tactical_balance, 2),
             round(balance_before_trade, 2),
             round(balance, 2),
             round(margin , 2),
@@ -435,7 +437,7 @@ class TradeManager:
             #         self.just_one_time = False
 
         else :
-            if balance * 1.08 >= self.tactical_balance:
+            if balance >= self.tactical_balance * 1.08:
                 self.tactical_balance = balance
 
         current_position = None
@@ -525,6 +527,7 @@ class TradeManager:
             close_time_value,            # Close Time
             entry_price,                 # Entry Price
             close_price,                 # Close Price
+            round(self.tactical_balance, 2),
             round(balance_before_trade, 2),  # Balance before trade
             round(balance, 2),            # Balance after trade
             round(margin, 2),             # Margin used
@@ -621,6 +624,7 @@ class TradeManager:
             close_time_value,            # Close Time
             entry_price,                 # Entry Price
             close_price,                 # Close Price
+            round(self.tactical_balance, 2),
             round(balance_before_trade, 2),  # Balance before trade
             round(balance, 2),            # Balance after trade
             round(margin, 2),             # Margin used
