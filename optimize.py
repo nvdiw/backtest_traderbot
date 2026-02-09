@@ -49,7 +49,10 @@ param_grid = {
     'ma_200': [180, 190, 200, 210, 220, 230]
 }
 
-# param_grid = {  }
+param_grid = {  'leverage': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+                'safe_leverage_low': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                'safe_leverage_med': [2, 3, 4, 5, 6, 7, 8, 9, 10],
+                'safe_leverage_high': [3, 4, 5, 6, 7, 8, 9, 10], }
 
 keys = list(param_grid.keys())
 combos = list(itertools.product(*(param_grid[k] for k in keys)))
@@ -60,7 +63,7 @@ while True:
     try:
         with open(out_file, 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(keys + ['final_balance', 'total_profit', 'total_profit_percent', 'closed_trades', 'wins', 'losses', 'duration_s', 'profit_more_than_8%'])
+            writer.writerow(keys + ['final_balance', 'total_profit', 'total_profit_percent', 'closed_trades', 'wins', 'losses', 'maximum_drawdown', 'duration_s', 'profit_more_than_8%'])
         break
 
     except PermissionError:
@@ -86,7 +89,7 @@ def _evaluate_pair(pair):
 
 
 def _write_result_row(out_file, keys, tune, res, duration):
-    row = [tune[k] for k in keys] + [res.get('final_balance'), res.get('total_profit'), res.get('total_profit_percent'), res.get('closed_trades'), res.get('wins'), res.get('losses'), round(duration, 2), res.get('profit_more_than_8%')]
+    row = [tune[k] for k in keys] + [res.get('final_balance'), res.get('total_profit'), res.get('total_profit_percent'), res.get('closed_trades'), res.get('wins'), res.get('losses'), res.get('maximum_drawdown'), round(duration, 2), res.get('profit_more_than_8%')]
     with open(out_file, 'a', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(row)
