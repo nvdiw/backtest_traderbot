@@ -121,7 +121,7 @@ def ma_strategy(tune: dict = None):
     atr_filter = True
     skip_logic = False
     
-    cooldown_after_big_pnl = 4 * 24  # 4 * 26  is good       # number of skip candles
+    cooldown_after_big_pnl = 4 * 3  # [4 * 26] [4 * 3]  is good  # number of skip candles
     cooldown_until_index = -1        # best of cooldown_after_big_pnl: 4*12 , 4*46
 
     ma_distance_threshold = 0.00159  # 0.16٪
@@ -319,6 +319,10 @@ def ma_strategy(tune: dict = None):
     # ---- get volume average ----
     vol_avg_15_list = [sum(volume_prices[max(0, i-14):i+1]) / min(i+1, 15) for i in range(len(volume_prices))]
 
+    # ---- time filter mask (13:30 UTC close time) ----
+    close_times_utc = pd.to_datetime(close_times, utc=True)
+    time_1330_mask = (close_times_utc.hour == 13) & (close_times_utc.minute == 30)
+
     #   # check data loaded correctly :
     # print(len(open_prices), "candles loaded.")
     # print("len(ema_14):", len(ema_14))
@@ -501,6 +505,9 @@ def ma_strategy(tune: dict = None):
                     entry_score += 1
                 # 3) Ma 130 > Ma 200
                 if ma_130[i] >= ma_200[i]:
+                    entry_score += 1
+                # 3.5) EMA14 > MA50 and MA100 > MA200 at 13:30 UTC
+                if (ema_14[i] > ma_50[i]) and (ma_130[i] > ma_200[i]) and time_1330_mask[i]:
                     entry_score += 1
                 # 4) ma_distance or last_candle_move is strong
                 if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
@@ -711,6 +718,9 @@ def ma_strategy(tune: dict = None):
                     entry_score += 1
                 # 3) Ma 130 < Ma 200
                 if ma_130[i] < ma_200[i]:
+                    entry_score += 1
+                # 3.5) EMA14 < MA50 and MA100 < MA200 at 13:30 UTC
+                if (ema_14[i] < ma_50[i]) and (ma_130[i] < ma_200[i]) and time_1330_mask[i]:
                     entry_score += 1
                 # 4) ma_distance or last_candle_move is strong
                 if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
@@ -1011,6 +1021,7 @@ def ma_strategy(tune: dict = None):
         'closed_trades': count_closed_orders,
         'wins': total_wins,
         'losses': total_losses,
+        'maximum_drawdown': round(max_drawdown, 2),
         "profit_more_than_8%": len(lst_profit_percent_per_month)
     }
 
