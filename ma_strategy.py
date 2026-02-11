@@ -17,7 +17,7 @@ from check_monthly_data import write_monthly_summary
 # end = get_candle_index("2025-12-18")     ----> 278640
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2025-01-01","2025-12-18"))
+start, end = get_candle_index(("2023-01-01","2025-12-18"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 current_position = None  # None | "long" | "short"
@@ -112,6 +112,7 @@ def ma_strategy(tune: dict = None):
     safe_leverage_high = 4      # leverage safe mode high
     safe_leverage_med = 3      # leverage safe mode medium
     safe_leverage_low = 2      # leverage safe mode low
+    save_money = 0
     trade_amount_percent = 0.5  # 50% of balance per trade
     monthly_profit_percent_stop_trade = 8    # if 8% per month profit --> don't trade on that month 
     monthly_compound = 3    # after get 'monthly_profit_percent_stop_trade' per month how much money goes for next month
@@ -126,10 +127,14 @@ def ma_strategy(tune: dict = None):
 
     ma_distance_threshold = 0.00159  # 0.16٪
     candle_move_threshold = 0.008 # 0.8٪
-    candle5_threshold = 100
+    impulse_move_threshold_pct = 1.5
+    impulse_lookback = 5          # candles to measure sharp move
+    late_entry_atr_mult = 0.8     # overextension vs ATR
+    late_entry_body_ratio = 0.4   # current body must be <= 60% of prior body to be "cooling"
+    late_entry_ema_pct = 0.005    # fallback overextension vs EMA when ATR missing (0.5%)
 
     # Entry/exit tuning (avoid magic numbers; tweakable)
-    slope_window = 3                # candles for EMA slope check
+    slope_window = 5                # candles for EMA slope check
     entry_score_threshold = 6       # points required to trigger entry
     exit_score_threshold = 4        # points required to trigger exit
     trail_activate_pct = 0.007      # arm trailing after +0.7% move from entry
@@ -138,6 +143,10 @@ def ma_strategy(tune: dict = None):
     adx_exit_lookback = 1           # confirm ADX is falling vs N candles ago
     entry_atr_threshold = 1.2       # 1, 1.1, 1.2, 1.3 should be test
     opposite_atr_body_mult = 0.6    # strong opposite candle body vs ATR
+    period_adx = 14
+    period_atr = 14
+    period_atr_ma = 21
+    period_vol_avg = 15
     
     # Apply tune overrides (explicit assignments to avoid relying on locals())
     if tune:
@@ -153,11 +162,29 @@ def ma_strategy(tune: dict = None):
         if 'entry_atr_threshold' in tune:
             entry_atr_threshold = float(tune['entry_atr_threshold'])
 
+        if 'period_atr_ma' in tune:
+            period_atr_ma = int(tune['period_atr_ma'])
+
         if 'ma_distance_threshold' in tune:
             ma_distance_threshold = float(tune['ma_distance_threshold'])
 
         if 'candle_move_threshold' in tune:
             candle_move_threshold = float(tune['candle_move_threshold'])
+
+        if 'impulse_move_threshold_pct' in tune:
+            impulse_move_threshold_pct = float(tune['impulse_move_threshold_pct'])
+
+        if 'impulse_lookback' in tune:
+            impulse_lookback = int(tune['impulse_lookback'])
+
+        if 'late_entry_atr_mult' in tune:
+            late_entry_atr_mult = float(tune['late_entry_atr_mult'])
+
+        if 'late_entry_body_ratio' in tune:
+            late_entry_body_ratio = float(tune['late_entry_body_ratio'])
+
+        if 'late_entry_ema_pct' in tune:
+            late_entry_ema_pct = float(tune['late_entry_ema_pct'])
 
         if 'trail_activate_pct' in tune:
             trail_activate_pct = float(tune['trail_activate_pct'])
@@ -211,7 +238,6 @@ def ma_strategy(tune: dict = None):
     # ---- fee rate ----
     fee_rate = 0.0005  # 0.05% per trade (entry or exit)
 
-    save_money = 0
     total_wins = 0
     total_liquids = 0
     total_wins_long = 0
@@ -251,7 +277,7 @@ def ma_strategy(tune: dict = None):
     atr_ratio = None
 
     # ---- Cross & Exit state and parameters ----
-    cross_seen = False               # whether EMA14/MA50 have crossed at least once
+    cross_seen = False               # whether EMA16/MA50 have crossed at least once
     last_cross_dir = None           # 'bull' or 'bear'
     last_cross_index = None
     last_trade_cross_index = None   # index of the cross used to open the last trade
@@ -267,33 +293,27 @@ def ma_strategy(tune: dict = None):
     # ---- Get MA, EMA ----
     indicator = Indicator(close_prices, period=None)
 
-    # # good
-    # ema_14 = 14
-    # ma_50 = 50
-    # ma_130 = 110
-    # ma_200 = 230
-
-    # best
-    ema_14 = 16
+    # MA/EMA
+    ema_16 = 16
     ma_50 = 50
-    ma_130 = 100
+    ma_100 = 100
     ma_200 = 200
     
 
     # Optimize: MA, EMA
     if tune:
-        if 'ema_14' in tune:
-            ema_14 = int(tune['ema_14'])
+        if 'ema_16' in tune:
+            ema_16 = int(tune['ema_16'])
         if 'ma_50' in tune:
             ma_50 = int(tune['ma_50'])
-        if 'ma_130' in tune:
-            ma_130 = int(tune['ma_130'])
+        if 'ma_100' in tune:
+            ma_100 = int(tune['ma_100'])
         if 'ma_200' in tune:
             ma_200 = int(tune['ma_200'])
 
-    ema_14 = indicator.get_EMA(ema_14)
+    ema_16 = indicator.get_EMA(ema_16)
     ma_50 = indicator.get_MA(ma_50)
-    ma_130 = indicator.get_MA(ma_130)
+    ma_100 = indicator.get_MA(ma_100)
     ma_200 = indicator.get_MA(ma_200)
 
 
@@ -309,15 +329,15 @@ def ma_strategy(tune: dict = None):
         high_prices,
         low_prices,
         close_prices,
-        period=14
+        period=period_adx
     )
 
     # ---- get_ATR ----
-    atr = indicator.get_ATR(high_prices, low_prices, close_prices, period=14)
+    atr = indicator.get_ATR(high_prices, low_prices, close_prices, period=period_atr)
     # ---- get_ATR_MA ----
-    atr_ma = indicator.get_ATR_MA(atr, period=20)
+    atr_ma = indicator.get_ATR_MA(atr, period=period_atr_ma)
     # ---- get volume average ----
-    vol_avg_15_list = [sum(volume_prices[max(0, i-14):i+1]) / min(i+1, 15) for i in range(len(volume_prices))]
+    vol_avg_15_list = indicator.get_volume_avg(volume_prices, period=period_vol_avg)
 
     # ---- time filter mask (13:30 UTC close time) ----
     close_times_utc = pd.to_datetime(close_times, utc=True)
@@ -325,7 +345,7 @@ def ma_strategy(tune: dict = None):
 
     #   # check data loaded correctly :
     # print(len(open_prices), "candles loaded.")
-    # print("len(ema_14):", len(ema_14))
+    # print("len(ema_16):", len(ema_16))
     # print("len(ma_50):", len(ma_50))
     # print("len adx:", len(adx))
 
@@ -336,18 +356,18 @@ def ma_strategy(tune: dict = None):
         if chart_data is not None:
             chart_data.append([i, balance + (margin if current_position is not None else 0) + save_money])
 
-        if ema_14[i] is None or ma_50[i] is None or ma_130[i] is None or ma_200[i] is None:
+        if ema_16[i] is None or ma_50[i] is None or ma_100[i] is None or ma_200[i] is None:
             continue
 
-        # ----- Detect EMA14 / MA50 crosses (update cross state) -----
-        if i > 0 and ema_14[i-1] is not None and ma_50[i-1] is not None:
+        # ----- Detect EMA16 / MA50 crosses (update cross state) -----
+        if i > 0 and ema_16[i-1] is not None and ma_50[i-1] is not None:
             # bullish cross: EMA crosses above MA
-            if ema_14[i-1] <= ma_50[i-1] and ema_14[i] > ma_50[i]:
+            if ema_16[i-1] <= ma_50[i-1] and ema_16[i] > ma_50[i]:
                 cross_seen = True
                 last_cross_dir = 'bull'
                 last_cross_index = i
             # bearish cross: EMA crosses below MA
-            elif ema_14[i-1] >= ma_50[i-1] and ema_14[i] < ma_50[i]:
+            elif ema_16[i-1] >= ma_50[i-1] and ema_16[i] < ma_50[i]:
                 cross_seen = True
                 last_cross_dir = 'bear'
                 last_cross_index = i
@@ -367,7 +387,7 @@ def ma_strategy(tune: dict = None):
             continue
         
         # Calculate MA Distance
-        ma_distance = abs(ema_14[i] - ma_50[i]) / ma_50[i]
+        ma_distance = abs(ema_16[i] - ma_50[i]) / ma_50[i]
 
         # Calculate Distance New Candle Move and Last Candle Move
         if i > 0:
@@ -498,16 +518,16 @@ def ma_strategy(tune: dict = None):
                     # wait at least 1 candle after cross
                     if i > last_cross_index:
                         # price acceptance above EMA after cross
-                        if close_prices[i] > ema_14[i]:
+                        if close_prices[i] > ema_16[i]:
                             entry_score += 1
                 # 2) EMA 14 > Ma 50
-                if ema_14[i] > ma_50[i]:
+                if ema_16[i] > ma_50[i]:
                     entry_score += 1
                 # 3) Ma 130 > Ma 200
-                if ma_130[i] >= ma_200[i]:
+                if ma_100[i] >= ma_200[i]:
                     entry_score += 1
-                # 3.5) EMA14 > MA50 and MA100 > MA200 at 13:30 UTC
-                if (ema_14[i] > ma_50[i]) and (ma_130[i] > ma_200[i]) and time_1330_mask[i]:
+                # 3.5) EMA16 > MA50 and MA100 > MA200 at 13:30 UTC
+                if (ema_16[i] > ma_50[i]) and (ma_100[i] > ma_200[i]) and time_1330_mask[i]:
                     entry_score += 1
                 # 4) ma_distance or last_candle_move is strong
                 if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
@@ -522,10 +542,24 @@ def ma_strategy(tune: dict = None):
                     vol_avg15 = vol_avg_15_list[i]
                     if vol_now >= 1.25 * vol_avg15:
                         entry_score += 1
-                # ---- negative scores
-                # 1) Comparing: current candle (i) with candle 5 periods earlier (i-5)
-                if ((close_prices[i] * 100 / close_prices[i-5]) - 100) > candle5_threshold:
-                    entry_score -= 1
+                # ---- negative scores (late-entry guard)
+                # only penalize when a sharp move already happened AND price is overextended AND momentum is cooling
+                if i >= impulse_lookback:
+                    impulse_pct = (close_prices[i] / close_prices[i - impulse_lookback] - 1.0) * 100
+                    if impulse_pct > impulse_move_threshold_pct:
+                        if atr[i] is not None and atr[i] > 0:
+                            extension = (close_prices[i] - ema_16[i]) / atr[i]
+                            overextended = extension > late_entry_atr_mult
+                        else:
+                            extension = (close_prices[i] - ema_16[i]) / ema_16[i]
+                            overextended = extension > late_entry_ema_pct
+
+                        body_now = close_prices[i] - open_prices[i]
+                        body_prev = close_prices[i - 1] - open_prices[i - 1]
+                        cooling = (body_now <= 0) or (body_prev > 0 and body_now < body_prev * late_entry_body_ratio)
+
+                        if overextended and cooling:
+                            entry_score -= 1
 
                 if entry_score >= entry_score_threshold:
                     # ===== SKIP LOGIC =====
@@ -583,15 +617,15 @@ def ma_strategy(tune: dict = None):
                 highest_since_entry = high_prices[i]
 
             # 1) EMA slope weakness (look back `slope_window` candles)
-            if i - slope_window >= 0 and ema_14[i] < ema_14[i - slope_window]:
+            if i - slope_window >= 0 and ema_16[i] < ema_16[i - slope_window]:
                 exit_score += 1
 
             # 2) EMA crossing below MA50
-            if ema_14[i] < ma_50[i]:
+            if ema_16[i] < ma_50[i]:
                 exit_score += 1
 
-            # 3) long-term trend weakening (MA130 < MA200)
-            if ma_130[i] < ma_200[i]:
+            # 3) long-term trend weakening (MA100 < MA200)
+            if ma_100[i] < ma_200[i]:
                 exit_score += 1
 
             # 4) trailing stop based on pullback from peak (armed after min profit)
@@ -711,16 +745,16 @@ def ma_strategy(tune: dict = None):
                     # wait at least 1 candle after cross
                     if i > last_cross_index:
                         # price acceptance below EMA after cross
-                        if close_prices[i] < ema_14[i]:
+                        if close_prices[i] < ema_16[i]:
                             entry_score += 1
                 # 2) EMA 14 < Ma 50
-                if ema_14[i] <= ma_50[i]:
+                if ema_16[i] <= ma_50[i]:
                     entry_score += 1
                 # 3) Ma 130 < Ma 200
-                if ma_130[i] < ma_200[i]:
+                if ma_100[i] < ma_200[i]:
                     entry_score += 1
-                # 3.5) EMA14 < MA50 and MA100 < MA200 at 13:30 UTC
-                if (ema_14[i] < ma_50[i]) and (ma_130[i] < ma_200[i]) and time_1330_mask[i]:
+                # 3.5) EMA16 < MA50 and MA100 < MA200 at 13:30 UTC
+                if (ema_16[i] < ma_50[i]) and (ma_100[i] < ma_200[i]) and time_1330_mask[i]:
                     entry_score += 1
                 # 4) ma_distance or last_candle_move is strong
                 if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
@@ -735,10 +769,24 @@ def ma_strategy(tune: dict = None):
                     vol_avg15 = vol_avg_15_list[i]
                     if vol_now >= 1.25 * vol_avg15:
                         entry_score += 1
-                # ---- negative scores
-                # 1) Comparing: current candle (i) with candle 5 periods earlier (i-5)
-                if (100 - (close_prices[i] * 100 / close_prices[i-5])) > candle5_threshold:
-                    entry_score -= 1
+                # ---- negative scores (late-entry guard)
+                # only penalize when a sharp move already happened AND price is overextended AND momentum is cooling
+                if i >= impulse_lookback:
+                    impulse_pct = (close_prices[i - impulse_lookback] / close_prices[i] - 1.0) * 100
+                    if impulse_pct > impulse_move_threshold_pct:
+                        if atr[i] is not None and atr[i] > 0:
+                            extension = (ema_16[i] - close_prices[i]) / atr[i]
+                            overextended = extension > late_entry_atr_mult
+                        else:
+                            extension = (ema_16[i] - close_prices[i]) / ema_16[i]
+                            overextended = extension > late_entry_ema_pct
+
+                        body_now = close_prices[i] - open_prices[i]
+                        body_prev = close_prices[i - 1] - open_prices[i - 1]
+                        cooling = (body_now >= 0) or (body_prev < 0 and abs(body_now) < abs(body_prev) * late_entry_body_ratio)
+
+                        if overextended and cooling:
+                            entry_score -= 1
 
 
                 if entry_score >= entry_score_threshold:
@@ -797,15 +845,15 @@ def ma_strategy(tune: dict = None):
                 lowest_since_entry = low_prices[i]
 
             # 1) EMA slope weakness for short (EMA trending up)
-            if i - slope_window >= 0 and ema_14[i] > ema_14[i - slope_window]:
+            if i - slope_window >= 0 and ema_16[i] > ema_16[i - slope_window]:
                 exit_score += 1
 
             # 2) EMA crossing above MA50
-            if ema_14[i] > ma_50[i]:
+            if ema_16[i] > ma_50[i]:
                 exit_score += 1
 
-            # 3) long-term trend weakening for short (MA130 >= MA200)
-            if ma_130[i] >= ma_200[i]:
+            # 3) long-term trend weakening for short (MA100 >= MA200)
+            if ma_100[i] >= ma_200[i]:
                 exit_score += 1
 
             # 4) trailing stop based on pullback from trough (armed after min profit)
@@ -970,9 +1018,9 @@ def ma_strategy(tune: dict = None):
             #plot 2 symbol_price:
             xpoints = np.array(xpoints_candles)
             ypoints_price = np.array(close_prices)
-            ypoints_ema14 = np.array(ema_14)
+            ypoints_ema16 = np.array(ema_16)
             ypoints_ma50 = np.array(ma_50)
-            ypoints_ma130 = np.array(ma_130)
+            ypoints_ma100 = np.array(ma_100)
             ypoints_ma200 = np.array(ma_200)
             # mark 13:30 UTC close points (use close_times)
             close_times_utc = pd.to_datetime(close_times, utc=True)
@@ -982,9 +1030,9 @@ def ma_strategy(tune: dict = None):
 
             plt.subplot(2, 1, 2)
             plt.plot(xpoints, ypoints_price)
-            plt.plot(xpoints, ypoints_ema14, color = '#DD8AFF')
+            plt.plot(xpoints, ypoints_ema16, color = '#DD8AFF')
             plt.plot(xpoints, ypoints_ma50, color = "#70009D")
-            plt.plot(xpoints, ypoints_ma130, color = "#FFF98C")
+            plt.plot(xpoints, ypoints_ma100, color = "#FFF98C")
             plt.plot(xpoints, ypoints_ma200, color = "#A49C00")
             if len(mark_x) > 0:
                 plt.scatter(mark_x, mark_y, color="#00D4FF", s=60, zorder=6, edgecolors="black", linewidths=0.6, marker="o")
