@@ -22,16 +22,22 @@ from ma_strategy import ma_strategy
 
 # Grid to search (kept reasonable to limit runtime)
 param_grid = {
-    'slope_window': [2, 3, 4],
+    'slope_window': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     'entry_score_threshold': [2, 3, 4, 5, 6],
     'exit_score_threshold': [2, 3, 4, 5],
     'ma_distance_threshold': [0.0015, 0.0020, 0.0025],
     'candle_move_threshold': [0.006, 0.008, 0.010],
+    'impulse_move_threshold_pct': [1.0, 1.5, 2.0, 2.5, 3.0],
+    'impulse_lookback': [3, 4, 5, 6, 7],
+    'late_entry_atr_mult': [0.8, 1.0, 1.2, 1.4, 1.6],
+    'late_entry_body_ratio': [0.4, 0.5, 0.6, 0.7, 0.8],
+    'late_entry_ema_pct': [0.002, 0.003, 0.004, 0.005, 0.006],
     'trail_activate_pct': [0.006, 0.007, 0.008],
     'trail_retrace_pct': [0.003, 0.004, 0.005],
     'adx_exit_threshold': [14, 15, 16, 17, 18.0, 19, 20],
     'adx_exit_lookback': [1, 2, 3, 4, 5],
     'entry_atr_threshold': [0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3],
+    'period_atr_ma': [i for i in range(1, 31)],
     'opposite_atr_body_mult': [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5],
     'trade_amount_percent': [0.5, 0.6, 0.7, 0.8, 0.9, 1],
     'monthly_profit_percent_stop_trade': [5, 6, 7, 8, 9, 10],
@@ -43,16 +49,13 @@ param_grid = {
     'safe_leverage_med': [2, 3, 4, 5, 6, 7, 8, 9, 10],
     'safe_leverage_high': [3, 4, 5, 6, 7, 8, 9, 10],
     'cooldown_after_big_pnl': [i for i in range(0, 300, 4)],
-    'ema_14': [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+    'ema_16': [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
     'ma_50': [45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55],
-    'ma_130': [100, 110, 120, 130, 140, 150],
+    'ma_100': [100, 110, 120, 130, 140, 150],
     'ma_200': [180, 190, 200, 210, 220, 230]
 }
 
-param_grid = {  'leverage': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-                'safe_leverage_low': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-                'safe_leverage_med': [2, 3, 4, 5, 6, 7, 8, 9, 10],
-                'safe_leverage_high': [3, 4, 5, 6, 7, 8, 9, 10], }
+# param_grid = {  }
 
 keys = list(param_grid.keys())
 combos = list(itertools.product(*(param_grid[k] for k in keys)))
