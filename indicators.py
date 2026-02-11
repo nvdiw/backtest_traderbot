@@ -186,3 +186,14 @@ class Indicator:
                 atr_ma.append(round(sum(values) / len(values), 6))
 
         return atr_ma
+
+
+    # Calculate rolling average volume
+    def get_volume_avg(self, volumes, period=15):
+        vol_avg = []
+        for i in range(len(volumes)):
+            start = max(0, i - period + 1)
+            window = volumes[start:i + 1]
+            vol_avg.append(sum(window) / len(window))
+
+        return vol_avg
