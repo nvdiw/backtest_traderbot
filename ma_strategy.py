@@ -17,7 +17,7 @@ from check_monthly_data import write_monthly_summary
 # end = get_candle_index("2025-12-18")     ----> 278640
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2023-01-01","2025-12-18"))
+start, end = get_candle_index(("2025-01-01","2025-12-18"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 current_position = None  # None | "long" | "short"
@@ -127,10 +127,11 @@ def ma_strategy(tune: dict = None):
 
     ma_distance_threshold = 0.00159  # 0.16٪
     candle_move_threshold = 0.008 # 0.8٪
+
     impulse_move_threshold_pct = 1.5
     impulse_lookback = 5          # candles to measure sharp move
     late_entry_atr_mult = 0.8     # overextension vs ATR
-    late_entry_body_ratio = 0.4   # current body must be <= 60% of prior body to be "cooling"
+    late_entry_body_ratio = 0.6   # current body must be <= 60% of prior body to be "cooling"
     late_entry_ema_pct = 0.005    # fallback overextension vs EMA when ATR missing (0.5%)
 
     # Entry/exit tuning (avoid magic numbers; tweakable)
@@ -139,6 +140,7 @@ def ma_strategy(tune: dict = None):
     exit_score_threshold = 4        # points required to trigger exit
     trail_activate_pct = 0.007      # arm trailing after +0.7% move from entry
     trail_retrace_pct = 0.003       # exit if price retraces 0.3% from peak
+    loss_exit_pct = 0.06            # add 1 exit point if loss reaches 6% (no leverage)
     adx_exit_threshold = 15.0       # trend strength fade threshold
     adx_exit_lookback = 1           # confirm ADX is falling vs N candles ago
     entry_atr_threshold = 1.2       # 1, 1.1, 1.2, 1.3 should be test
@@ -146,7 +148,7 @@ def ma_strategy(tune: dict = None):
     period_adx = 14
     period_atr = 14
     period_atr_ma = 21
-    period_vol_avg = 15
+    period_vol_avg = 12
     
     # Apply tune overrides (explicit assignments to avoid relying on locals())
     if tune:
@@ -164,6 +166,15 @@ def ma_strategy(tune: dict = None):
 
         if 'period_atr_ma' in tune:
             period_atr_ma = int(tune['period_atr_ma'])
+
+        if 'period_adx' in tune:
+            period_adx = int(tune['period_adx'])
+
+        if 'period_atr' in tune:
+            period_atr = int(tune['period_atr'])
+
+        if 'period_vol_avg' in tune:
+            period_vol_avg = int(tune['period_vol_avg'])
 
         if 'ma_distance_threshold' in tune:
             ma_distance_threshold = float(tune['ma_distance_threshold'])
@@ -191,6 +202,9 @@ def ma_strategy(tune: dict = None):
 
         if 'trail_retrace_pct' in tune:
             trail_retrace_pct = float(tune['trail_retrace_pct'])
+
+        if 'loss_exit_pct' in tune:
+            loss_exit_pct = float(tune['loss_exit_pct'])
 
         if 'adx_exit_threshold' in tune:
             adx_exit_threshold = float(tune['adx_exit_threshold'])
@@ -339,9 +353,10 @@ def ma_strategy(tune: dict = None):
     # ---- get volume average ----
     vol_avg_15_list = indicator.get_volume_avg(volume_prices, period=period_vol_avg)
 
-    # ---- time filter mask (13:30 UTC close time) ----
-    close_times_utc = pd.to_datetime(close_times, utc=True)
-    time_1330_mask = (close_times_utc.hour == 13) & (close_times_utc.minute == 30)
+    # you can use times for open/close orders
+    # # ---- time filter mask (13:30 UTC close time) ----
+    # close_times_utc = pd.to_datetime(close_times, utc=True)
+    # time_1330_mask = (close_times_utc.hour == 13) & (close_times_utc.minute == 30)
 
     #   # check data loaded correctly :
     # print(len(open_prices), "candles loaded.")
@@ -526,9 +541,6 @@ def ma_strategy(tune: dict = None):
                 # 3) Ma 130 > Ma 200
                 if ma_100[i] >= ma_200[i]:
                     entry_score += 1
-                # 3.5) EMA16 > MA50 and MA100 > MA200 at 13:30 UTC
-                if (ema_16[i] > ma_50[i]) and (ma_100[i] > ma_200[i]) and time_1330_mask[i]:
-                    entry_score += 1
                 # 4) ma_distance or last_candle_move is strong
                 if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
                     entry_score += 1
@@ -615,6 +627,11 @@ def ma_strategy(tune: dict = None):
                 highest_since_entry = entry_price
             if high_prices[i] > highest_since_entry:
                 highest_since_entry = high_prices[i]
+
+            # 0) loss guard (no leverage): if price drops >= loss_exit_pct from entry
+            if entry_price is not None:
+                if close_prices[i] <= entry_price * (1 - loss_exit_pct):
+                    exit_score += 2
 
             # 1) EMA slope weakness (look back `slope_window` candles)
             if i - slope_window >= 0 and ema_16[i] < ema_16[i - slope_window]:
@@ -753,9 +770,6 @@ def ma_strategy(tune: dict = None):
                 # 3) Ma 130 < Ma 200
                 if ma_100[i] < ma_200[i]:
                     entry_score += 1
-                # 3.5) EMA16 < MA50 and MA100 < MA200 at 13:30 UTC
-                if (ema_16[i] < ma_50[i]) and (ma_100[i] < ma_200[i]) and time_1330_mask[i]:
-                    entry_score += 1
                 # 4) ma_distance or last_candle_move is strong
                 if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
                     entry_score += 1
@@ -843,6 +857,11 @@ def ma_strategy(tune: dict = None):
                 lowest_since_entry = entry_price
             if low_prices[i] < lowest_since_entry:
                 lowest_since_entry = low_prices[i]
+
+            # 0) loss guard (no leverage): if price rises >= loss_exit_pct from entry
+            if entry_price is not None:
+                if close_prices[i] >= entry_price * (1 + loss_exit_pct):
+                    exit_score += 2
 
             # 1) EMA slope weakness for short (EMA trending up)
             if i - slope_window >= 0 and ema_16[i] > ema_16[i - slope_window]:
