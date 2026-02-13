@@ -23,8 +23,8 @@ from ma_strategy import ma_strategy
 # Grid to search (kept reasonable to limit runtime)
 param_grid = {
     'slope_window': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-    'entry_score_threshold': [2, 3, 4, 5, 6],
-    'exit_score_threshold': [2, 3, 4, 5],
+    'entry_score_threshold': [i for i in range(1, 19)],
+    'exit_score_threshold': [i for i in range(1, 22)],
     'ma_distance_threshold': [0.0015, 0.0020, 0.0025],
     'candle_move_threshold': [0.006, 0.008, 0.010],
     'impulse_move_threshold_pct': [1.0, 1.5, 2.0, 2.5, 3.0],
@@ -43,6 +43,20 @@ param_grid = {
     'period_atr_ma': [i for i in range(1, 31)],
     'period_vol_avg': [10, 12, 15, 18, 21],
     'opposite_atr_body_mult': [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5],
+    'entry_score_cross': [1, 2, 3],
+    'entry_score_ema_vs_ma50': [1, 2, 3],
+    'entry_score_ma_trend': [1, 2, 3],
+    'entry_score_ma_distance_or_candle': [1, 2, 3],
+    'entry_score_adx': [1, 2, 3],
+    'entry_score_volume': [1, 2, 3],
+    'entry_late_penalty': [1, 2, 3],
+    'exit_score_loss_guard': [1, 2, 3],
+    'exit_score_ema_slope': [1, 2, 3],
+    'exit_score_ema_cross': [1, 2, 3],
+    'exit_score_ma_trend': [1, 2, 3],
+    'exit_score_trailing': [1, 2, 3],
+    'exit_score_adx': [1, 2, 3],
+    'exit_score_opposite_candle': [1, 2, 3],
     'trade_amount_percent': [0.5, 0.6, 0.7, 0.8, 0.9, 1],
     'monthly_profit_percent_stop_trade': [5, 6, 7, 8, 9, 10],
     'monthly_close_filter': [True, False],
@@ -59,7 +73,11 @@ param_grid = {
     'ma_200': [180, 190, 200, 210, 220, 230]
 }
 
-# param_grid = {  }
+param_grid = {      'entry_score_threshold': [9],
+                    'entry_score_ema_vs_ma50': [1, 2, 3],
+                    'entry_score_ma_distance_or_candle': [1, 2, 3],
+                    'entry_score_volume': [1, 2, 3],
+}
 
 keys = list(param_grid.keys())
 combos = list(itertools.product(*(param_grid[k] for k in keys)))
