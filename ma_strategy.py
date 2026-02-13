@@ -136,8 +136,8 @@ def ma_strategy(tune: dict = None):
 
     # Entry/exit tuning (avoid magic numbers; tweakable)
     slope_window = 5                # candles for EMA slope check
-    entry_score_threshold = 6       # points required to trigger entry
-    exit_score_threshold = 4        # points required to trigger exit
+    entry_score_threshold = 9       # points required to trigger entry
+    exit_score_threshold = 6        # points required to trigger exit
     trail_activate_pct = 0.007      # arm trailing after +0.7% move from entry
     trail_retrace_pct = 0.003       # exit if price retraces 0.3% from peak
     loss_exit_pct = 0.06            # add 1 exit point if loss reaches 6% (no leverage)
@@ -149,6 +149,26 @@ def ma_strategy(tune: dict = None):
     period_atr = 14
     period_atr_ma = 21
     period_vol_avg = 12
+    
+    # ---- score weights (entry/exit) ----
+    # entry positive
+    entry_score_cross = 1
+    entry_score_ema_vs_ma50 = 3
+    entry_score_ma_trend = 1
+    entry_score_ma_distance_or_candle = 1
+    entry_score_adx = 1
+    entry_score_volume = 2
+    # entry negative
+    entry_late_penalty = 1  # applied as a subtraction
+
+    # exit positive
+    exit_score_loss_guard = 3
+    exit_score_ema_slope = 1
+    exit_score_ema_cross = 3
+    exit_score_ma_trend = 1
+    exit_score_trailing = 1
+    exit_score_adx = 1
+    exit_score_opposite_candle = 1
     
     # Apply tune overrides (explicit assignments to avoid relying on locals())
     if tune:
@@ -214,6 +234,48 @@ def ma_strategy(tune: dict = None):
 
         if 'opposite_atr_body_mult' in tune:
             opposite_atr_body_mult = float(tune['opposite_atr_body_mult'])
+
+        if 'entry_score_cross' in tune:
+            entry_score_cross = int(tune['entry_score_cross'])
+
+        if 'entry_score_ema_vs_ma50' in tune:
+            entry_score_ema_vs_ma50 = int(tune['entry_score_ema_vs_ma50'])
+
+        if 'entry_score_ma_trend' in tune:
+            entry_score_ma_trend = int(tune['entry_score_ma_trend'])
+
+        if 'entry_score_ma_distance_or_candle' in tune:
+            entry_score_ma_distance_or_candle = int(tune['entry_score_ma_distance_or_candle'])
+
+        if 'entry_score_adx' in tune:
+            entry_score_adx = int(tune['entry_score_adx'])
+
+        if 'entry_score_volume' in tune:
+            entry_score_volume = int(tune['entry_score_volume'])
+
+        if 'entry_late_penalty' in tune:
+            entry_late_penalty = int(tune['entry_late_penalty'])
+
+        if 'exit_score_loss_guard' in tune:
+            exit_score_loss_guard = int(tune['exit_score_loss_guard'])
+
+        if 'exit_score_ema_slope' in tune:
+            exit_score_ema_slope = int(tune['exit_score_ema_slope'])
+
+        if 'exit_score_ema_cross' in tune:
+            exit_score_ema_cross = int(tune['exit_score_ema_cross'])
+
+        if 'exit_score_ma_trend' in tune:
+            exit_score_ma_trend = int(tune['exit_score_ma_trend'])
+
+        if 'exit_score_trailing' in tune:
+            exit_score_trailing = int(tune['exit_score_trailing'])
+
+        if 'exit_score_adx' in tune:
+            exit_score_adx = int(tune['exit_score_adx'])
+
+        if 'exit_score_opposite_candle' in tune:
+            exit_score_opposite_candle = int(tune['exit_score_opposite_candle'])
 
         if 'trade_amount_percent' in tune:
             trade_amount_percent = float(tune['trade_amount_percent'])
@@ -534,26 +596,26 @@ def ma_strategy(tune: dict = None):
                     if i > last_cross_index:
                         # price acceptance above EMA after cross
                         if close_prices[i] > ema_16[i]:
-                            entry_score += 1
+                            entry_score += entry_score_cross
                 # 2) EMA 14 > Ma 50
                 if ema_16[i] > ma_50[i]:
-                    entry_score += 1
+                    entry_score += entry_score_ema_vs_ma50
                 # 3) Ma 130 > Ma 200
                 if ma_100[i] >= ma_200[i]:
-                    entry_score += 1
+                    entry_score += entry_score_ma_trend
                 # 4) ma_distance or last_candle_move is strong
                 if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
-                    entry_score += 1
+                    entry_score += entry_score_ma_distance_or_candle
                 # 5) ===== ADX FILTER =====
                 if adx_filter == True :
                     if adx[i] != None and adx[i] >= 20.5:
-                        entry_score += 1
+                        entry_score += entry_score_adx
                 # 6) ===== VOLUME FILTER =====
                 if volume_filter:
                     vol_now = volume_prices[i]
                     vol_avg15 = vol_avg_15_list[i]
                     if vol_now >= 1.25 * vol_avg15:
-                        entry_score += 1
+                        entry_score += entry_score_volume
                 # ---- negative scores (late-entry guard)
                 # only penalize when a sharp move already happened AND price is overextended AND momentum is cooling
                 if i >= impulse_lookback:
@@ -571,7 +633,7 @@ def ma_strategy(tune: dict = None):
                         cooling = (body_now <= 0) or (body_prev > 0 and body_now < body_prev * late_entry_body_ratio)
 
                         if overextended and cooling:
-                            entry_score -= 1
+                            entry_score -= entry_late_penalty
 
                 if entry_score >= entry_score_threshold:
                     # ===== SKIP LOGIC =====
@@ -631,25 +693,25 @@ def ma_strategy(tune: dict = None):
             # 0) loss guard (no leverage): if price drops >= loss_exit_pct from entry
             if entry_price is not None:
                 if close_prices[i] <= entry_price * (1 - loss_exit_pct):
-                    exit_score += 2
+                    exit_score += exit_score_loss_guard
 
             # 1) EMA slope weakness (look back `slope_window` candles)
             if i - slope_window >= 0 and ema_16[i] < ema_16[i - slope_window]:
-                exit_score += 1
+                exit_score += exit_score_ema_slope
 
             # 2) EMA crossing below MA50
             if ema_16[i] < ma_50[i]:
-                exit_score += 1
+                exit_score += exit_score_ema_cross
 
             # 3) long-term trend weakening (MA100 < MA200)
             if ma_100[i] < ma_200[i]:
-                exit_score += 1
+                exit_score += exit_score_ma_trend
 
             # 4) trailing stop based on pullback from peak (armed after min profit)
             if entry_index is not None and i > entry_index:
                 if highest_since_entry >= entry_price * (1 + trail_activate_pct):
                     if close_prices[i] <= highest_since_entry * (1 - trail_retrace_pct):
-                        exit_score += 1
+                        exit_score += exit_score_trailing
 
             # 5) ADX weakening (trend strength fading)
             if i - adx_exit_lookback >= 0:
@@ -658,14 +720,14 @@ def ma_strategy(tune: dict = None):
                 if adx_now is not None and adx_prev is not None:
                     if np.isfinite(adx_now) and np.isfinite(adx_prev):
                         if adx_now < adx_exit_threshold and adx_now < adx_prev:
-                            exit_score += 1
+                            exit_score += exit_score_adx
 
             # 6) strong opposite candle (body >= ATR * mult)
             if atr[i] is not None and atr[i] > 0:
                 if close_prices[i] < open_prices[i]:
                     body = open_prices[i] - close_prices[i]
                     if body >= atr[i] * opposite_atr_body_mult:
-                        exit_score += 1
+                        exit_score += exit_score_opposite_candle
 
             if exit_score >= exit_score_threshold:
                 # ---- close long ----
@@ -763,26 +825,26 @@ def ma_strategy(tune: dict = None):
                     if i > last_cross_index:
                         # price acceptance below EMA after cross
                         if close_prices[i] < ema_16[i]:
-                            entry_score += 1
+                            entry_score += entry_score_cross
                 # 2) EMA 14 < Ma 50
                 if ema_16[i] <= ma_50[i]:
-                    entry_score += 1
+                    entry_score += entry_score_ema_vs_ma50
                 # 3) Ma 130 < Ma 200
                 if ma_100[i] < ma_200[i]:
-                    entry_score += 1
+                    entry_score += entry_score_ma_trend
                 # 4) ma_distance or last_candle_move is strong
                 if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
-                    entry_score += 1
+                    entry_score += entry_score_ma_distance_or_candle
                 # 5) ===== ADX FILTER =====
                 if adx_filter == True :
                     if adx[i] != None and adx[i] >= 20.5:
-                        entry_score += 1
+                        entry_score += entry_score_adx
                 # 6) ===== VOLUME FILTER =====
                 if volume_filter:
                     vol_now = volume_prices[i]
                     vol_avg15 = vol_avg_15_list[i]
                     if vol_now >= 1.25 * vol_avg15:
-                        entry_score += 1
+                        entry_score += entry_score_volume
                 # ---- negative scores (late-entry guard)
                 # only penalize when a sharp move already happened AND price is overextended AND momentum is cooling
                 if i >= impulse_lookback:
@@ -800,7 +862,7 @@ def ma_strategy(tune: dict = None):
                         cooling = (body_now >= 0) or (body_prev < 0 and abs(body_now) < abs(body_prev) * late_entry_body_ratio)
 
                         if overextended and cooling:
-                            entry_score -= 1
+                            entry_score -= entry_late_penalty
 
 
                 if entry_score >= entry_score_threshold:
@@ -861,25 +923,25 @@ def ma_strategy(tune: dict = None):
             # 0) loss guard (no leverage): if price rises >= loss_exit_pct from entry
             if entry_price is not None:
                 if close_prices[i] >= entry_price * (1 + loss_exit_pct):
-                    exit_score += 2
+                    exit_score += exit_score_loss_guard
 
             # 1) EMA slope weakness for short (EMA trending up)
             if i - slope_window >= 0 and ema_16[i] > ema_16[i - slope_window]:
-                exit_score += 1
+                exit_score += exit_score_ema_slope
 
             # 2) EMA crossing above MA50
             if ema_16[i] > ma_50[i]:
-                exit_score += 1
+                exit_score += exit_score_ema_cross
 
             # 3) long-term trend weakening for short (MA100 >= MA200)
             if ma_100[i] >= ma_200[i]:
-                exit_score += 1
+                exit_score += exit_score_ma_trend
 
             # 4) trailing stop based on pullback from trough (armed after min profit)
             if entry_index is not None and i > entry_index:
                 if lowest_since_entry <= entry_price * (1 - trail_activate_pct):
                     if close_prices[i] >= lowest_since_entry * (1 + trail_retrace_pct):
-                        exit_score += 1
+                        exit_score += exit_score_trailing
 
             # 5) ADX weakening (trend strength fading)
             if i - adx_exit_lookback >= 0:
@@ -888,14 +950,14 @@ def ma_strategy(tune: dict = None):
                 if adx_now is not None and adx_prev is not None:
                     if np.isfinite(adx_now) and np.isfinite(adx_prev):
                         if adx_now < adx_exit_threshold and adx_now < adx_prev:
-                            exit_score += 1
+                            exit_score += exit_score_adx
 
             # 6) strong opposite candle (body >= ATR * mult)
             if atr[i] is not None and atr[i] > 0:
                 if close_prices[i] > open_prices[i]:
                     body = close_prices[i] - open_prices[i]
                     if body >= atr[i] * opposite_atr_body_mult:
-                        exit_score += 1
+                        exit_score += exit_score_opposite_candle
 
             if exit_score >= exit_score_threshold:
                 # ---- close short ----
