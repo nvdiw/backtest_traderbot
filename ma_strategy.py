@@ -1,7 +1,9 @@
 # NOTE: Strategy executes With candle Open prices, High prices, Low prices, Close prices
 
 import pandas as pd
+import mplfinance as mpf
 import matplotlib.pyplot as plt
+from matplotlib import transforms as mtransforms
 import csv
 import numpy as np
 
@@ -24,22 +26,26 @@ current_position = None  # None | "long" | "short"
 
 # Fetch data from CSV file
 def fetch_all_data(start: int, end: int):
-    """Optimized version using pandas vector operations"""
-    if start is None or end is None:
+    """Load only the required candle window from CSV (start:end)."""
+    if start is None or end is None or end <= start:
         return None
-    
-    df = pd.read_csv('./data_candle/btc_15m_data_2018_to_2025.csv')
-    data = df.iloc[start:end].copy()
-    
-    # vectorized
+
+    rows_to_read = end - start
+    data = pd.read_csv(
+        './data_candle/btc_15m_data_2018_to_2025.csv',
+        skiprows=range(1, start + 1),
+        nrows=rows_to_read,
+        usecols=['Open time', 'Close time', 'Open', 'Close', 'Low', 'High', 'Volume'],
+    )
+
     return {
         "Open time": data['Open time'].tolist(),
         "Close time": data['Close time'].tolist(),
-        "Open": data['Open'].astype(float).to_numpy(),
-        "Close": data['Close'].astype(float).to_numpy(),
-        "Low": data['Low'].astype(float).to_numpy(),
-        "High": data['High'].astype(float).to_numpy(),
-        "Volume": data['Volume'].astype(float).to_numpy()
+        "Open": data['Open'].to_numpy(dtype=float),
+        "Close": data['Close'].to_numpy(dtype=float),
+        "Low": data['Low'].to_numpy(dtype=float),
+        "High": data['High'].to_numpy(dtype=float),
+        "Volume": data['Volume'].to_numpy(dtype=float)
     }
 
 all_data = fetch_all_data(start, end)
@@ -136,7 +142,7 @@ def ma_strategy(tune: dict = None):
 
     # Entry/exit tuning (avoid magic numbers; tweakable)
     slope_window = 5                # candles for EMA slope check
-    entry_score_threshold = 9       # points required to trigger entry
+    entry_score_threshold = 10       # points required to trigger entry
     exit_score_threshold = 6        # points required to trigger exit
     trail_activate_pct = 0.007      # arm trailing after +0.7% move from entry
     trail_retrace_pct = 0.003       # exit if price retraces 0.3% from peak
@@ -149,11 +155,21 @@ def ma_strategy(tune: dict = None):
     period_atr = 14
     period_atr_ma = 21
     period_vol_avg = 12
+    plot_max_candles = 1200   # chart render limit to keep plotting fast (set <=0 for full range)
+    plot_end_offset = 0       # drop latest N candles from chart to inspect older windows
+    plot_step_candles = 300   # navigation step for loading older/newer windows
+    plot_min_zoom_candles = 80       # minimum window size for zoom-in
+    plot_max_render_candles = 1600   # when zoomed out, aggregate to this many candles for smoother rendering
+    plot_zoom_in_factor = 0.8        # wheel zoom-in multiplier
+    plot_zoom_out_factor = 1.6       # wheel zoom-out multiplier (higher = faster reach to full history)
+    plot_window_width_scale = 0.94   # near-fullscreen width without forcing true fullscreen
+    plot_window_height_scale = 0.90  # near-fullscreen height without forcing true fullscreen
     
     # ---- score weights (entry/exit) ----
     # entry positive
     entry_score_cross = 1
     entry_score_ema_vs_ma50 = 3
+    entry_score_close_vs_ema16 = 1
     entry_score_ma_trend = 1
     entry_score_ma_distance_or_candle = 1
     entry_score_adx = 1
@@ -241,6 +257,9 @@ def ma_strategy(tune: dict = None):
         if 'entry_score_ema_vs_ma50' in tune:
             entry_score_ema_vs_ma50 = int(tune['entry_score_ema_vs_ma50'])
 
+        if 'entry_score_close_vs_ema16' in tune:
+            entry_score_close_vs_ema16 = int(tune['entry_score_close_vs_ema16'])
+
         if 'entry_score_ma_trend' in tune:
             entry_score_ma_trend = int(tune['entry_score_ma_trend'])
 
@@ -309,6 +328,7 @@ def ma_strategy(tune: dict = None):
             
         if 'cooldown_after_big_pnl' in tune:
             cooldown_after_big_pnl = int(tune['cooldown_after_big_pnl'])
+
     # ---- setting end ----
 
     # ---- fee rate ----
@@ -372,8 +392,8 @@ def ma_strategy(tune: dict = None):
     # MA/EMA
     ema_16 = 16
     ma_50 = 50
-    ma_100 = 100
-    ma_200 = 200
+    ma_100 = 102
+    ma_200 = 198
     
 
     # Optimize: MA, EMA
@@ -600,17 +620,20 @@ def ma_strategy(tune: dict = None):
                 # 2) EMA 14 > Ma 50
                 if ema_16[i] > ma_50[i]:
                     entry_score += entry_score_ema_vs_ma50
-                # 3) Ma 130 > Ma 200
+                # 3) close above EMA16
+                if close_prices[i] > ema_16[i]:
+                    entry_score += entry_score_close_vs_ema16
+                # 4) Ma 130 > Ma 200
                 if ma_100[i] >= ma_200[i]:
                     entry_score += entry_score_ma_trend
-                # 4) ma_distance or last_candle_move is strong
+                # 5) ma_distance or last_candle_move is strong
                 if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
                     entry_score += entry_score_ma_distance_or_candle
-                # 5) ===== ADX FILTER =====
+                # 6) ===== ADX FILTER =====
                 if adx_filter == True :
                     if adx[i] != None and adx[i] >= 20.5:
                         entry_score += entry_score_adx
-                # 6) ===== VOLUME FILTER =====
+                # 7) ===== VOLUME FILTER =====
                 if volume_filter:
                     vol_now = volume_prices[i]
                     vol_avg15 = vol_avg_15_list[i]
@@ -819,7 +842,7 @@ def ma_strategy(tune: dict = None):
                     if atr_ratio < entry_atr_threshold:
                         continue
                 # ---- positive scores
-                # # 1) CONFIRMED BEAR CROSS
+                # 1) CONFIRMED BEAR CROSS
                 if last_cross_dir == 'bear' and last_cross_index is not None:
                     # wait at least 1 candle after cross
                     if i > last_cross_index:
@@ -829,17 +852,20 @@ def ma_strategy(tune: dict = None):
                 # 2) EMA 14 < Ma 50
                 if ema_16[i] <= ma_50[i]:
                     entry_score += entry_score_ema_vs_ma50
-                # 3) Ma 130 < Ma 200
+                # 3) close below EMA16
+                if close_prices[i] < ema_16[i]:
+                    entry_score += entry_score_close_vs_ema16
+                # 4) Ma 130 < Ma 200
                 if ma_100[i] < ma_200[i]:
                     entry_score += entry_score_ma_trend
-                # 4) ma_distance or last_candle_move is strong
+                # 5) ma_distance or last_candle_move is strong
                 if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
                     entry_score += entry_score_ma_distance_or_candle
-                # 5) ===== ADX FILTER =====
+                # 6) ===== ADX FILTER =====
                 if adx_filter == True :
                     if adx[i] != None and adx[i] >= 20.5:
                         entry_score += entry_score_adx
-                # 6) ===== VOLUME FILTER =====
+                # 7) ===== VOLUME FILTER =====
                 if volume_filter:
                     vol_now = volume_prices[i]
                     vol_avg15 = vol_avg_15_list[i]
@@ -1078,61 +1104,815 @@ def ma_strategy(tune: dict = None):
     )
 
     # optimize already determined earlier; skip plotting when optimizing
-    # Draw diagram
+    # Draw diagram with OHLC candles (Open/High/Low/Close)
     if optimize is False:
-            #plot 1 balance:
-            xpoints_candles = []
-            ypoints_total_balance = []
+            ypoints_total_balance = [row[1] for row in chart_data]
+            total_candles = len(close_prices)
+            if total_candles == 0:
+                return {
+                    'final_balance': balance,
+                    'total_profit': round(sum(profits_lst), 6),
+                    'total_profit_percent': round(t_profit_percent, 6),
+                    'closed_trades': count_closed_orders,
+                    'wins': total_wins,
+                    'losses': total_losses,
+                    'maximum_drawdown': round(max_drawdown, 2),
+                    "profit_more_than_8%": len(lst_profit_percent_per_month)
+                }
 
-            for i in chart_data:
-                xpoints_candles.append(i[0])
-                ypoints_total_balance.append(i[1])
+            nav_offset = max(0, int(plot_end_offset))
 
-            xpoints = np.array(xpoints_candles)
-            ypoints = np.array(ypoints_total_balance)
-            plt.subplot(2, 1, 1)
-            plt.plot(xpoints, ypoints)
-            plt.title("Equity Curve", loc = 'left')
-            plt.xlabel("Candles")
-            plt.ylabel("Balance ($)")
+            chart_palette = {
+                "bg": "#070B12",
+                "panel_bg": "#101722",
+                "grid": "#2A3443",
+                "text": "#DCE4F0",
+                "muted": "#A7B4C8",
+                "up": "#4CD47A",
+                "down": "#FF6B7A",
+                "ema16": "#57C7FF",
+                "ma50": "#FFB86B",
+                "ma100": "#8FA7FF",
+                "ma200": "#E4C66D",
+                "mark": "#5FA2D9",
+                "long_open": "#7FE0B0",
+                "long_close": "#2FCF82",
+                "short_open": "#FF98A8",
+                "short_close": "#E96A7E",
+                "equity": "#5CC8F2",
+                "divider": "#44586E",
+                "crosshair": "#9AABC1",
+                "label_fg": "#0C1420",
+                "label_bg": "#D7E0EC",
+                "label_edge": "#8EA2B8",
+            }
+            dark_mc = mpf.make_marketcolors(
+                up=chart_palette["up"],
+                down=chart_palette["down"],
+                edge="inherit",
+                wick="inherit",
+                volume="inherit",
+            )
+            chart_style = mpf.make_mpf_style(
+                base_mpf_style="nightclouds",
+                marketcolors=dark_mc,
+                y_on_right=False,
+                facecolor=chart_palette["panel_bg"],
+                figcolor=chart_palette["bg"],
+                gridcolor=chart_palette["grid"],
+                gridstyle="-.",
+                rc={
+                    "axes.facecolor": chart_palette["panel_bg"],
+                    "axes.labelcolor": chart_palette["text"],
+                    "xtick.color": chart_palette["muted"],
+                    "ytick.color": chart_palette["muted"],
+                    "text.color": chart_palette["text"],
+                    "axes.edgecolor": chart_palette["divider"],
+                },
+            )
 
-            #plot 2 symbol_price:
-            xpoints = np.array(xpoints_candles)
-            ypoints_price = np.array(close_prices)
-            ypoints_ema16 = np.array(ema_16)
-            ypoints_ma50 = np.array(ma_50)
-            ypoints_ma100 = np.array(ma_100)
-            ypoints_ma200 = np.array(ma_200)
-            # mark 13:30 UTC close points (use close_times)
-            close_times_utc = pd.to_datetime(close_times, utc=True)
-            mark_mask = (close_times_utc.hour == 13) & (close_times_utc.minute == 30)
-            mark_x = xpoints[mark_mask]
-            mark_y = ypoints_price[mark_mask]
+            if plot_max_candles > 0:
+                window_size_base = min(int(plot_max_candles), total_candles)
+            else:
+                window_size_base = total_candles
+            window_size_base = max(1, window_size_base)
+            step_candles = max(1, int(plot_step_candles))
 
-            plt.subplot(2, 1, 2)
-            plt.plot(xpoints, ypoints_price)
-            plt.plot(xpoints, ypoints_ema16, color = '#DD8AFF')
-            plt.plot(xpoints, ypoints_ma50, color = "#70009D")
-            plt.plot(xpoints, ypoints_ma100, color = "#FFF98C")
-            plt.plot(xpoints, ypoints_ma200, color = "#A49C00")
-            if len(mark_x) > 0:
-                plt.scatter(mark_x, mark_y, color="#00D4FF", s=60, zorder=6, edgecolors="black", linewidths=0.6, marker="o")
-            if long_open_points:
-                lo_x, lo_y = zip(*long_open_points)
-                plt.scatter(lo_x, lo_y, color="#8FD18F", s=55, zorder=7, edgecolors="black", linewidths=0.5, marker="s")
-            if long_close_points:
-                lc_x, lc_y = zip(*long_close_points)
-                plt.scatter(lc_x, lc_y, color="#1B7F2A", s=55, zorder=7, edgecolors="black", linewidths=0.5, marker="D")
-            if short_open_points:
-                so_x, so_y = zip(*short_open_points)
-                plt.scatter(so_x, so_y, color="#FF6060", s=55, zorder=7, edgecolors="black", linewidths=0.5, marker="s")
-            if short_close_points:
-                sc_x, sc_y = zip(*short_close_points)
-                plt.scatter(sc_x, sc_y, color="#B00020", s=55, zorder=7, edgecolors="black", linewidths=0.5, marker="D")
-            plt.title("BTC - PRICE", loc = 'left')
-            plt.xlabel("Candles")
-            plt.ylabel("Prise")
+            fig = plt.figure(figsize=(14.5, 8.2), facecolor=chart_palette["bg"])
+            grid = fig.add_gridspec(2, 1, height_ratios=[3, 1], hspace=0.04)
+            ax_price = fig.add_subplot(grid[0])
+            ax_equity = fig.add_subplot(grid[1], sharex=ax_price)
+
+            def set_figure_fullscreen():
+                """Resize to a near-fullscreen window without forcing true fullscreen."""
+                try:
+                    manager = getattr(fig.canvas, "manager", None)
+                    if manager is None:
+                        return
+
+                    window = getattr(manager, "window", None)
+                    width_ratio = float(np.clip(plot_window_width_scale, 0.50, 1.0))
+                    height_ratio = float(np.clip(plot_window_height_scale, 0.50, 1.0))
+
+                    # TkAgg
+                    if (
+                        window is not None
+                        and hasattr(window, "winfo_screenwidth")
+                        and hasattr(window, "winfo_screenheight")
+                        and hasattr(window, "geometry")
+                    ):
+                        screen_w = int(window.winfo_screenwidth())
+                        screen_h = int(window.winfo_screenheight())
+                        target_w = max(900, min(screen_w, int(screen_w * width_ratio)))
+                        target_h = max(620, min(screen_h, int(screen_h * height_ratio)))
+                        x_pos = max(0, (screen_w - target_w) // 2)
+                        y_pos = max(0, (screen_h - target_h) // 2)
+                        if hasattr(window, "state"):
+                            try:
+                                window.state("normal")
+                            except Exception:
+                                pass
+                        window.geometry(f"{target_w}x{target_h}+{x_pos}+{y_pos}")
+                        return
+
+                    # Qt backends
+                    if window is not None and hasattr(window, "screen") and hasattr(window, "setGeometry"):
+                        try:
+                            screen_obj = window.screen()
+                            available = screen_obj.availableGeometry() if screen_obj is not None else None
+                            if available is not None:
+                                avail_w = int(available.width())
+                                avail_h = int(available.height())
+                                target_w = max(900, min(avail_w, int(avail_w * width_ratio)))
+                                target_h = max(620, min(avail_h, int(avail_h * height_ratio)))
+                                x_pos = int(available.x() + ((avail_w - target_w) / 2))
+                                y_pos = int(available.y() + ((avail_h - target_h) / 2))
+                                if hasattr(window, "showNormal"):
+                                    window.showNormal()
+                                window.setGeometry(x_pos, y_pos, target_w, target_h)
+                                return
+                        except Exception:
+                            pass
+                        if hasattr(window, "showMaximized"):
+                            try:
+                                window.showMaximized()
+                                return
+                            except Exception:
+                                pass
+
+                    # Generic fallback
+                    resize = getattr(manager, "resize", None)
+                    if callable(resize):
+                        dpi = float(fig.dpi) if fig.dpi else 100.0
+                        base_w = int(fig.get_figwidth() * dpi)
+                        base_h = int(fig.get_figheight() * dpi)
+                        resize(max(900, base_w), max(620, base_h))
+                except Exception:
+                    pass
+
+            nav_state = {
+                "window_size": window_size_base,
+                "offset": min(max(0, int(nav_offset)), max(0, total_candles - window_size_base)),
+                "max_offset": max(0, total_candles - window_size_base),
+                "press_px": None,
+                "press_axis_id": None,
+                "initial_xlim": None,
+                "initial_xlim_by_axis": {},
+                "vline_price": None,
+                "vline_equity": None,
+                "hline_price": None,
+                "hline_equity": None,
+                "price_label": None,
+                "balance_label": None,
+                "rendering": False,
+            }
+
+            def has_finite(series_obj):
+                vals = series_obj.to_numpy(dtype=float)
+                return np.isfinite(vals).any()
+
+            def downsample_ohlc(open_arr, high_arr, low_arr, close_arr, time_arr, step):
+                if step <= 1:
+                    return open_arr, high_arr, low_arr, close_arr, time_arr
+                n = len(close_arr)
+                o_out, h_out, l_out, c_out, t_out = [], [], [], [], []
+                for s in range(0, n, step):
+                    e = min(s + step, n)
+                    seg_h = high_arr[s:e]
+                    seg_l = low_arr[s:e]
+                    o_out.append(open_arr[s])
+                    h_out.append(np.nanmax(seg_h) if np.isfinite(seg_h).any() else np.nan)
+                    l_out.append(np.nanmin(seg_l) if np.isfinite(seg_l).any() else np.nan)
+                    c_out.append(close_arr[e - 1])
+                    t_out.append(time_arr[e - 1])
+                return (
+                    np.asarray(o_out, dtype=float),
+                    np.asarray(h_out, dtype=float),
+                    np.asarray(l_out, dtype=float),
+                    np.asarray(c_out, dtype=float),
+                    np.asarray(t_out, dtype=object),
+                )
+
+            def downsample_last(arr, step):
+                if step <= 1:
+                    return np.asarray(arr, dtype=float)
+                n = len(arr)
+                out = [arr[min(s + step, n) - 1] for s in range(0, n, step)]
+                return np.asarray(out, dtype=float)
+
+            def downsample_last_valid(arr, step):
+                if step <= 1:
+                    return np.asarray(arr, dtype=float)
+                n = len(arr)
+                out = []
+                for s in range(0, n, step):
+                    e = min(s + step, n)
+                    seg = arr[s:e]
+                    valid = seg[np.isfinite(seg)]
+                    out.append(valid[-1] if valid.size > 0 else np.nan)
+                return np.asarray(out, dtype=float)
+
+            def render_current():
+                if nav_state["rendering"]:
+                    return
+                nav_state["rendering"] = True
+                try:
+                    window_size = int(nav_state["window_size"])
+                    window_size = min(max(1, window_size), total_candles)
+                    nav_state["window_size"] = window_size
+                    window_size = max(1, window_size)
+
+                    max_offset = max(0, total_candles - window_size)
+                    offset_clamped = min(max(int(nav_state["offset"]), 0), max_offset)
+                    nav_state["offset"] = offset_clamped
+                    nav_state["max_offset"] = max_offset
+
+                    plot_end = total_candles - offset_clamped
+                    plot_start = max(0, plot_end - window_size)
+                    if plot_end <= plot_start:
+                        return
+
+                    full_open = np.asarray(open_prices[plot_start:plot_end], dtype=float)
+                    full_high = np.asarray(high_prices[plot_start:plot_end], dtype=float)
+                    full_low = np.asarray(low_prices[plot_start:plot_end], dtype=float)
+                    full_close = np.asarray(close_prices[plot_start:plot_end], dtype=float)
+                    full_close_times = np.asarray(close_times[plot_start:plot_end], dtype=object)
+                    full_ema16 = np.asarray(ema_16[plot_start:plot_end], dtype=float)
+                    full_ma50 = np.asarray(ma_50[plot_start:plot_end], dtype=float)
+                    full_ma100 = np.asarray(ma_100[plot_start:plot_end], dtype=float)
+                    full_ma200 = np.asarray(ma_200[plot_start:plot_end], dtype=float)
+                    full_equity = np.asarray(ypoints_total_balance[plot_start:plot_end], dtype=float)
+                    n_full = len(full_close)
+                    if n_full == 0:
+                        return
+
+                    time_index_full = pd.to_datetime(full_close_times, utc=True)
+
+                    # mark 13:30 UTC close points (use close_times)
+                    mark_arr = np.full(n_full, np.nan, dtype=float)
+                    mark_mask = (time_index_full.hour == 13) & (time_index_full.minute == 30)
+                    mark_arr[mark_mask] = full_close[mark_mask]
+
+                    long_open_arr = np.full(n_full, np.nan, dtype=float)
+                    long_close_arr = np.full(n_full, np.nan, dtype=float)
+                    short_open_arr = np.full(n_full, np.nan, dtype=float)
+                    short_close_arr = np.full(n_full, np.nan, dtype=float)
+
+                    def place_trade_markers(points, arr):
+                        if not points:
+                            return
+                        for idx, price in points:
+                            local_idx = idx - plot_start
+                            if 0 <= local_idx < len(arr) and idx < plot_end:
+                                arr[local_idx] = price
+
+                    place_trade_markers(long_open_points, long_open_arr)
+                    place_trade_markers(long_close_points, long_close_arr)
+                    place_trade_markers(short_open_points, short_open_arr)
+                    place_trade_markers(short_close_points, short_close_arr)
+
+                    # Adaptive render density:
+                    # - Zoom in  => full detail (no downsample)
+                    # - Zoom out => render fewer candles for smoother performance
+                    max_render = int(plot_max_render_candles)
+                    if n_full <= max_render:
+                        target_render = n_full
+                    elif n_full <= (max_render * 3):
+                        # medium zoom-out: keep more detail
+                        target_render = min(max_render, max(200, int(n_full * 0.5)))
+                    else:
+                        # far zoom-out (including full-history): prioritize smooth rendering
+                        target_render = min(max_render, max(200, int(n_full * 0.33)))
+                    render_step = max(1, int(np.ceil(n_full / max(1, target_render))))
+
+                    ds_open, ds_high, ds_low, ds_close, ds_times = downsample_ohlc(
+                        full_open, full_high, full_low, full_close, full_close_times, render_step
+                    )
+                    ds_ema16 = downsample_last(full_ema16, render_step)
+                    ds_ma50 = downsample_last(full_ma50, render_step)
+                    ds_ma100 = downsample_last(full_ma100, render_step)
+                    ds_ma200 = downsample_last(full_ma200, render_step)
+                    ds_equity = downsample_last(full_equity, render_step)
+                    ds_mark = downsample_last_valid(mark_arr, render_step)
+                    ds_long_open = downsample_last_valid(long_open_arr, render_step)
+                    ds_long_close = downsample_last_valid(long_close_arr, render_step)
+                    ds_short_open = downsample_last_valid(short_open_arr, render_step)
+                    ds_short_close = downsample_last_valid(short_close_arr, render_step)
+
+                    time_index = pd.to_datetime(ds_times, utc=True)
+                    price_df = pd.DataFrame(
+                        {
+                            "Open": ds_open,
+                            "High": ds_high,
+                            "Low": ds_low,
+                            "Close": ds_close,
+                        },
+                        index=time_index,
+                    )
+                    if price_df.empty:
+                        return
+
+                    ema16_series = pd.Series(ds_ema16, index=time_index)
+                    ma50_series = pd.Series(ds_ma50, index=time_index)
+                    ma100_series = pd.Series(ds_ma100, index=time_index)
+                    ma200_series = pd.Series(ds_ma200, index=time_index)
+                    equity_series = pd.Series(ds_equity, index=time_index)
+                    mark_series = pd.Series(ds_mark, index=time_index)
+                    long_open_series = pd.Series(ds_long_open, index=time_index)
+                    long_close_series = pd.Series(ds_long_close, index=time_index)
+                    short_open_series = pd.Series(ds_short_open, index=time_index)
+                    short_close_series = pd.Series(ds_short_close, index=time_index)
+
+                    ax_price.cla()
+                    ax_equity.cla()
+
+                    add_plots = []
+                    if has_finite(ema16_series):
+                        add_plots.append(
+                            mpf.make_addplot(ema16_series, ax=ax_price, color=chart_palette["ema16"], width=1.0)
+                        )
+                    if has_finite(ma50_series):
+                        add_plots.append(
+                            mpf.make_addplot(ma50_series, ax=ax_price, color=chart_palette["ma50"], width=1.0)
+                        )
+                    if has_finite(ma100_series):
+                        add_plots.append(
+                            mpf.make_addplot(ma100_series, ax=ax_price, color=chart_palette["ma100"], width=1.0)
+                        )
+                    if has_finite(ma200_series):
+                        add_plots.append(
+                            mpf.make_addplot(ma200_series, ax=ax_price, color=chart_palette["ma200"], width=1.0)
+                        )
+                    if has_finite(mark_series):
+                        add_plots.append(
+                            mpf.make_addplot(
+                                mark_series,
+                                ax=ax_price,
+                                type="scatter",
+                                marker="o",
+                                markersize=46,
+                                color=chart_palette["mark"],
+                                alpha=0.9,
+                            )
+                        )
+                    if has_finite(long_open_series):
+                        add_plots.append(
+                            mpf.make_addplot(
+                                long_open_series,
+                                ax=ax_price,
+                                type="scatter",
+                                marker="s",
+                                markersize=46,
+                                color=chart_palette["long_open"],
+                                alpha=0.9,
+                            )
+                        )
+                    if has_finite(long_close_series):
+                        add_plots.append(
+                            mpf.make_addplot(
+                                long_close_series,
+                                ax=ax_price,
+                                type="scatter",
+                                marker="D",
+                                markersize=46,
+                                color=chart_palette["long_close"],
+                                alpha=0.9,
+                            )
+                        )
+                    if has_finite(short_open_series):
+                        add_plots.append(
+                            mpf.make_addplot(
+                                short_open_series,
+                                ax=ax_price,
+                                type="scatter",
+                                marker="s",
+                                markersize=46,
+                                color=chart_palette["short_open"],
+                                alpha=0.9,
+                            )
+                        )
+                    if has_finite(short_close_series):
+                        add_plots.append(
+                            mpf.make_addplot(
+                                short_close_series,
+                                ax=ax_price,
+                                type="scatter",
+                                marker="D",
+                                markersize=46,
+                                color=chart_palette["short_close"],
+                                alpha=0.9,
+                            )
+                        )
+                    if has_finite(equity_series):
+                        add_plots.append(
+                            mpf.make_addplot(equity_series, ax=ax_equity, color=chart_palette["equity"], width=1.2)
+                        )
+
+                    last_close_price = float(ds_close[-1])
+                    plot_kwargs = {}
+                    if len(time_index) > 1:
+                        plot_kwargs["xlim"] = (time_index[0], time_index[-1])
+
+                    mpf.plot(
+                        price_df,
+                        type="candle",
+                        style=chart_style,
+                        ax=ax_price,
+                        addplot=add_plots if add_plots else None,
+                        datetime_format="%Y-%m-%d %H:%M",
+                        xrotation=15,
+                        tight_layout=False,
+                        warn_too_much_data=int(len(price_df) + 10),
+                        **plot_kwargs,
+                    )
+
+                    ax_price.set_facecolor(chart_palette["panel_bg"])
+                    ax_equity.set_facecolor(chart_palette["panel_bg"])
+                    ax_price.yaxis.label.set_color(chart_palette["text"])
+                    ax_equity.yaxis.label.set_color(chart_palette["text"])
+                    ax_price.tick_params(axis="x", colors=chart_palette["muted"])
+                    ax_price.tick_params(axis="y", colors=chart_palette["muted"])
+                    ax_equity.tick_params(axis="x", colors=chart_palette["muted"])
+                    ax_equity.tick_params(axis="y", colors=chart_palette["muted"])
+                    ax_price.set_axisbelow(True)
+                    ax_equity.set_axisbelow(True)
+                    ax_price.grid(
+                        True,
+                        which="major",
+                        axis="both",
+                        linestyle="--",
+                        linewidth=0.55,
+                        color=chart_palette["grid"],
+                        alpha=0.30,
+                    )
+                    ax_equity.grid(
+                        True,
+                        which="major",
+                        axis="both",
+                        linestyle="--",
+                        linewidth=0.55,
+                        color=chart_palette["grid"],
+                        alpha=0.30,
+                    )
+
+                    ax_price.set_title(
+                        f"BTC - OHLC + MAs | Last: ${last_close_price:,.2f} | Candles: {len(price_df)} (x{render_step}) | Offset: {offset_clamped} | Drag/Wheel/\u2190/\u2192 | \u2191 oldest | \u2193 latest",
+                        color=chart_palette["text"],
+                    )
+                    ax_price.set_ylabel("BTC Price")
+                    ax_equity.set_ylabel("Balance ($)")
+                    ax_price.tick_params(labelbottom=False)
+
+                    # visual separator between price panel and equity panel
+                    ax_price.spines["bottom"].set_visible(True)
+                    ax_price.spines["bottom"].set_color(chart_palette["divider"])
+                    ax_price.spines["bottom"].set_linewidth(1.4)
+                    ax_equity.spines["top"].set_visible(True)
+                    ax_equity.spines["top"].set_color(chart_palette["divider"])
+                    ax_equity.spines["top"].set_linewidth(1.4)
+
+                    # Crosshair (TradingView-like): vertical + horizontal + end labels on both panels.
+                    x_left, x_right = ax_price.get_xlim()
+                    y_bottom, y_top = ax_price.get_ylim()
+                    x_mid = (x_left + x_right) / 2.0
+                    y_mid = (y_bottom + y_top) / 2.0
+                    y_eq_bottom, y_eq_top = ax_equity.get_ylim()
+                    y_eq_mid = (y_eq_bottom + y_eq_top) / 2.0
+                    cross_color = chart_palette["crosshair"]
+                    nav_state["vline_price"] = ax_price.axvline(
+                        x_mid, color=cross_color, linewidth=0.8, linestyle="--", alpha=0.9, visible=False, zorder=30
+                    )
+                    nav_state["vline_equity"] = ax_equity.axvline(
+                        x_mid, color=cross_color, linewidth=0.8, linestyle="--", alpha=0.75, visible=False, zorder=30
+                    )
+                    nav_state["hline_price"] = ax_price.axhline(
+                        y_mid, color=cross_color, linewidth=0.8, linestyle="--", alpha=0.9, visible=False, zorder=30
+                    )
+                    nav_state["hline_equity"] = ax_equity.axhline(
+                        y_eq_mid, color=cross_color, linewidth=0.8, linestyle="--", alpha=0.85, visible=False, zorder=30
+                    )
+                    label_transform = mtransforms.blended_transform_factory(ax_price.transAxes, ax_price.transData)
+                    nav_state["price_label"] = ax_price.text(
+                        0.002,
+                        y_mid,
+                        "",
+                        transform=label_transform,
+                        ha="left",
+                        va="center",
+                        fontsize=8,
+                        color=chart_palette["label_fg"],
+                        bbox=dict(
+                            boxstyle="round,pad=0.18",
+                            facecolor=chart_palette["label_bg"],
+                            edgecolor=chart_palette["label_edge"],
+                            linewidth=0.8,
+                        ),
+                        visible=False,
+                        zorder=31,
+                    )
+                    balance_transform = mtransforms.blended_transform_factory(ax_equity.transAxes, ax_equity.transData)
+                    nav_state["balance_label"] = ax_equity.text(
+                        0.002,
+                        y_eq_mid,
+                        "",
+                        transform=balance_transform,
+                        ha="left",
+                        va="center",
+                        fontsize=8,
+                        color=chart_palette["label_fg"],
+                        bbox=dict(
+                            boxstyle="round,pad=0.18",
+                            facecolor=chart_palette["label_bg"],
+                            edgecolor=chart_palette["label_edge"],
+                            linewidth=0.8,
+                        ),
+                        visible=False,
+                        zorder=31,
+                    )
+
+                    fig.subplots_adjust(left=0.06, right=0.99, top=0.92, bottom=0.09, hspace=0.04)
+                    nav_state["initial_xlim"] = ax_price.get_xlim()
+                    nav_state["initial_xlim_by_axis"] = {id(ax): ax.get_xlim() for ax in fig.axes}
+                    fig.canvas.draw_idle()
+                finally:
+                    nav_state["rendering"] = False
+
+            def request_nav(cmd, shift_candles=None):
+                if shift_candles is None:
+                    shift_candles = max(1, min(int(step_candles), int(nav_state["window_size"])))
+                shift_candles = max(1, int(shift_candles))
+                if cmd == "older":
+                    nav_state["offset"] = min(nav_state["max_offset"], nav_state["offset"] + shift_candles)
+                    render_current()
+                elif cmd == "newer":
+                    nav_state["offset"] = max(0, nav_state["offset"] - shift_candles)
+                    render_current()
+
+            def hide_crosshair(redraw=False):
+                changed = False
+                for key in ("vline_price", "vline_equity", "hline_price", "hline_equity", "price_label", "balance_label"):
+                    artist = nav_state.get(key)
+                    if artist is not None and artist.get_visible():
+                        artist.set_visible(False)
+                        changed = True
+                if redraw and changed:
+                    fig.canvas.draw_idle()
+
+            def get_toolbar_mode():
+                toolbar = getattr(getattr(fig.canvas, "manager", None), "toolbar", None)
+                mode = str(getattr(toolbar, "mode", "")).lower() if toolbar is not None else ""
+                return mode
+
+            def sync_from_axis_xlim(active_ax):
+                initial_map = nav_state.get("initial_xlim_by_axis", {})
+                initial_xlim = initial_map.get(id(active_ax), nav_state.get("initial_xlim"))
+                if initial_xlim is None:
+                    return False
+
+                cur_left, cur_right = active_ax.get_xlim()
+                init_left, init_right = initial_xlim
+                if not np.isfinite([cur_left, cur_right, init_left, init_right]).all():
+                    return False
+
+                init_min, init_max = (min(init_left, init_right), max(init_left, init_right))
+                cur_min, cur_max = (min(cur_left, cur_right), max(cur_left, cur_right))
+                init_span = init_max - init_min
+                cur_span = cur_max - cur_min
+                if init_span <= 0 or cur_span <= 0:
+                    return False
+
+                old_size = int(nav_state["window_size"])
+                old_size = max(1, min(total_candles, old_size))
+                old_offset = min(max(int(nav_state["offset"]), 0), max(0, total_candles - old_size))
+                old_start = total_candles - old_offset - old_size
+
+                # Map the exact visible x-range on toolbar interaction to data indices.
+                left_frac = (cur_min - init_min) / init_span
+                right_frac = (cur_max - init_min) / init_span
+
+                raw_start = old_start + (left_frac * old_size)
+                raw_end = old_start + (right_frac * old_size)
+
+                new_start = int(np.floor(raw_start))
+                new_end = int(np.ceil(raw_end))
+
+                min_size = max(1, int(plot_min_zoom_candles))
+                if (new_end - new_start) < min_size:
+                    center = (raw_start + raw_end) / 2.0
+                    new_start = int(round(center - (min_size / 2.0)))
+                    new_end = new_start + min_size
+
+                if new_start < 0:
+                    new_end -= new_start
+                    new_start = 0
+                if new_end > total_candles:
+                    new_start -= (new_end - total_candles)
+                    new_end = total_candles
+
+                new_start = max(0, min(total_candles - 1, new_start))
+                new_end = max(new_start + 1, min(total_candles, new_end))
+                new_size = max(1, min(total_candles, new_end - new_start))
+                new_offset = total_candles - (new_start + new_size)
+                new_offset = max(0, min(max(0, total_candles - new_size), new_offset))
+
+                changed = (new_size != old_size) or (new_offset != old_offset)
+                if changed:
+                    nav_state["window_size"] = new_size
+                    nav_state["offset"] = new_offset
+                    render_current()
+                    return True
+                return False
+
+            def on_key(event):
+                key = (event.key or "").lower()
+                if key in ("left", "a"):
+                    request_nav("older")
+                elif key in ("right", "d"):
+                    request_nav("newer")
+                elif key in ("up", "w", "pageup"):
+                    nav_state["offset"] = nav_state["max_offset"]
+                    render_current()
+                elif key in ("down", "s", "pagedown"):
+                    nav_state["offset"] = 0
+                    render_current()
+                elif key in ("0", "home"):
+                    # quick full-history view
+                    nav_state["window_size"] = total_candles
+                    nav_state["offset"] = 0
+                    render_current()
+                elif key in ("1", "end"):
+                    # quick return to default recent window
+                    nav_state["window_size"] = window_size_base
+                    nav_state["offset"] = 0
+                    render_current()
+
+            def on_move(event):
+                if nav_state["rendering"]:
+                    return
+                if event.x is None or event.y is None:
+                    hide_crosshair(redraw=True)
+                    return
+                if event.inaxes is None or event.inaxes not in fig.axes:
+                    hide_crosshair(redraw=True)
+                    return
+
+                vline_price = nav_state.get("vline_price")
+                vline_equity = nav_state.get("vline_equity")
+                hline_price = nav_state.get("hline_price")
+                hline_equity = nav_state.get("hline_equity")
+                price_label = nav_state.get("price_label")
+                balance_label = nav_state.get("balance_label")
+                if None in (vline_price, vline_equity, hline_price, hline_equity, price_label, balance_label):
+                    return
+
+                cursor_x = ax_price.transData.inverted().transform((event.x, event.y))[0]
+                cursor_y_on_price = ax_price.transData.inverted().transform((event.x, event.y))[1]
+                cursor_y_on_equity = ax_equity.transData.inverted().transform((event.x, event.y))[1]
+
+                vline_price.set_xdata([cursor_x, cursor_x])
+                vline_equity.set_xdata([cursor_x, cursor_x])
+                vline_price.set_visible(True)
+                vline_equity.set_visible(True)
+
+                # show price horizontal/label only when cursor is inside price panel
+                if ax_price.bbox.contains(event.x, event.y):
+                    hline_price.set_ydata([cursor_y_on_price, cursor_y_on_price])
+                    hline_price.set_visible(True)
+                    price_label.set_y(cursor_y_on_price)
+                    price_label.set_text(f"{cursor_y_on_price:,.2f}")
+                    price_label.set_visible(True)
+                else:
+                    hline_price.set_visible(False)
+                    price_label.set_visible(False)
+
+                # show balance horizontal/label only when cursor is inside equity panel
+                if ax_equity.bbox.contains(event.x, event.y):
+                    hline_equity.set_ydata([cursor_y_on_equity, cursor_y_on_equity])
+                    hline_equity.set_visible(True)
+                    balance_label.set_y(cursor_y_on_equity)
+                    balance_label.set_text(f"${cursor_y_on_equity:,.2f}")
+                    balance_label.set_visible(True)
+                else:
+                    hline_equity.set_visible(False)
+                    balance_label.set_visible(False)
+
+                fig.canvas.draw_idle()
+
+            def on_leave(_event):
+                hide_crosshair(redraw=True)
+
+            def on_press(event):
+                if event.inaxes is None:
+                    return
+                if event.inaxes not in fig.axes:
+                    return
+                if event.x is None or event.y is None:
+                    return
+                nav_state["press_px"] = float(event.x)
+                nav_state["press_axis_id"] = id(event.inaxes)
+
+            def on_release(event):
+                if nav_state["rendering"]:
+                    return
+
+                active_ax = event.inaxes if (event.inaxes in fig.axes) else ax_price
+                toolbar_mode = get_toolbar_mode()
+
+                # If toolbar pan/zoom tools are active, sync from x-limits directly.
+                if ("pan" in toolbar_mode) or ("zoom" in toolbar_mode):
+                    nav_state["press_px"] = None
+                    nav_state["press_axis_id"] = None
+                    sync_from_axis_xlim(active_ax)
+                    return
+
+                # direct drag gesture in pixels
+                press_px = nav_state.get("press_px")
+                release_px = float(event.x) if event.x is not None else None
+                if press_px is not None and release_px is not None:
+                    axis = active_ax
+                    axis_width = float(axis.bbox.width) if axis is not None else 0.0
+                    if axis_width > 0:
+                        delta_px = release_px - press_px
+                        drag_threshold_px = max(8.0, axis_width * 0.01)
+                        if abs(delta_px) > drag_threshold_px:
+                            move_ratio = min(1.0, abs(delta_px) / axis_width)
+                            shift = max(1, int(round(move_ratio * int(nav_state["window_size"]))))
+                            nav_state["press_px"] = None
+                            nav_state["press_axis_id"] = None
+                            request_nav("older" if delta_px > 0 else "newer", shift_candles=shift)
+                            return
+
+                nav_state["press_px"] = None
+                nav_state["press_axis_id"] = None
+
+                # fallback: if x-limits changed for any reason, sync
+                sync_from_axis_xlim(active_ax)
+
+            def on_scroll(event):
+                if event.inaxes is None:
+                    return
+                if event.inaxes not in fig.axes:
+                    return
+                if nav_state["rendering"]:
+                    return
+
+                active_ax = event.inaxes
+                current_size = int(nav_state["window_size"])
+                step = getattr(event, "step", 0)
+                button = str(getattr(event, "button", "")).lower()
+                if step > 0 or button == "up":
+                    new_size = max(int(plot_min_zoom_candles), int(round(current_size * float(plot_zoom_in_factor))))
+                elif step < 0 or button == "down":
+                    new_size = min(total_candles, int(round(current_size * float(plot_zoom_out_factor))))
+                else:
+                    return
+
+                new_size = max(1, min(total_candles, new_size))
+                if new_size == current_size:
+                    return
+
+                old_size = current_size
+                old_offset = min(max(int(nav_state["offset"]), 0), max(0, total_candles - old_size))
+                old_start = total_candles - old_offset - old_size
+
+                # Cursor-centered zoom: keep the candle under mouse anchored.
+                focus = 0.5
+                try:
+                    if event.x is not None and event.y is not None:
+                        x_left, x_right = active_ax.get_xlim()
+                        x_span = x_right - x_left
+                        if x_span != 0:
+                            cursor_x = float(active_ax.transData.inverted().transform((event.x, event.y))[0])
+                            focus = float(np.clip((cursor_x - x_left) / x_span, 0.0, 1.0))
+                except Exception:
+                    focus = 0.5
+
+                anchor_index = old_start + (focus * old_size)
+                new_start = int(round(anchor_index - (focus * new_size)))
+                new_start = max(0, min(total_candles - new_size, new_start))
+                new_offset = total_candles - (new_start + new_size)
+
+                nav_state["window_size"] = new_size
+                nav_state["offset"] = new_offset
+                render_current()
+
+            cid_key = fig.canvas.mpl_connect("key_press_event", on_key)
+            cid_press = fig.canvas.mpl_connect("button_press_event", on_press)
+            cid_release = fig.canvas.mpl_connect("button_release_event", on_release)
+            cid_scroll = fig.canvas.mpl_connect("scroll_event", on_scroll)
+            cid_move = fig.canvas.mpl_connect("motion_notify_event", on_move)
+            cid_leave = fig.canvas.mpl_connect("figure_leave_event", on_leave)
+
+            set_figure_fullscreen()
+            render_current()
             plt.show()
+
+            fig.canvas.mpl_disconnect(cid_key)
+            fig.canvas.mpl_disconnect(cid_press)
+            fig.canvas.mpl_disconnect(cid_release)
+            fig.canvas.mpl_disconnect(cid_scroll)
+            fig.canvas.mpl_disconnect(cid_move)
+            fig.canvas.mpl_disconnect(cid_leave)
 
     # generate monthly summary CSV silently (no terminal output)
     if not optimize:
