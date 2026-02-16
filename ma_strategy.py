@@ -4,7 +4,7 @@ import pandas as pd
 import mplfinance as mpf
 import matplotlib.pyplot as plt
 from matplotlib import transforms as mtransforms
-import csv
+import time
 import numpy as np
 
 # My Codes :
@@ -19,7 +19,7 @@ from check_monthly_data import write_monthly_summary
 # end = get_candle_index("2025-12-18")     ----> 278640
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2025-01-01","2025-12-18"))
+start, end = get_candle_index(("2025-12-28","2026-02-14"), ("00:00", "14:00"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 current_position = None  # None | "long" | "short"
@@ -149,12 +149,14 @@ def ma_strategy(tune: dict = None):
     loss_exit_pct = 0.06            # add 1 exit point if loss reaches 6% (no leverage)
     adx_exit_threshold = 15.0       # trend strength fade threshold
     adx_exit_lookback = 1           # confirm ADX is falling vs N candles ago
+    entry_adx_threshold = 20.5      # ADX threshold for entry score confirmation
     entry_atr_threshold = 1.2       # 1, 1.1, 1.2, 1.3 should be test
     opposite_atr_body_mult = 0.6    # strong opposite candle body vs ATR
     period_adx = 14
     period_atr = 14
     period_atr_ma = 21
     period_vol_avg = 12
+    volume_spike_multiplier = 1.24  # volume confirmation threshold: vol_now >= multiplier * vol_avg
     plot_max_candles = 1200   # chart render limit to keep plotting fast (set <=0 for full range)
     plot_end_offset = 0       # drop latest N candles from chart to inspect older windows
     plot_step_candles = 300   # navigation step for loading older/newer windows
@@ -164,6 +166,9 @@ def ma_strategy(tune: dict = None):
     plot_zoom_out_factor = 1.6       # wheel zoom-out multiplier (higher = faster reach to full history)
     plot_window_width_scale = 0.94   # near-fullscreen width without forcing true fullscreen
     plot_window_height_scale = 0.90  # near-fullscreen height without forcing true fullscreen
+    plot_drag_preview_factor = 0.42  # render fewer candles while dragging for smoother live updates
+    plot_drag_update_interval_ms = 16  # target drag refresh cadence (~60Hz upper bound)
+    plot_yscale_drag_sensitivity = 0.0030  # right-drag vertical zoom sensitivity
     
     # ---- score weights (entry/exit) ----
     # entry positive
@@ -212,6 +217,9 @@ def ma_strategy(tune: dict = None):
         if 'period_vol_avg' in tune:
             period_vol_avg = int(tune['period_vol_avg'])
 
+        if 'volume_spike_multiplier' in tune:
+            volume_spike_multiplier = float(tune['volume_spike_multiplier'])
+
         if 'ma_distance_threshold' in tune:
             ma_distance_threshold = float(tune['ma_distance_threshold'])
 
@@ -247,6 +255,9 @@ def ma_strategy(tune: dict = None):
 
         if 'adx_exit_lookback' in tune:
             adx_exit_lookback = int(tune['adx_exit_lookback'])
+
+        if 'entry_adx_threshold' in tune:
+            entry_adx_threshold = float(tune['entry_adx_threshold'])
 
         if 'opposite_atr_body_mult' in tune:
             opposite_atr_body_mult = float(tune['opposite_atr_body_mult'])
@@ -631,13 +642,13 @@ def ma_strategy(tune: dict = None):
                     entry_score += entry_score_ma_distance_or_candle
                 # 6) ===== ADX FILTER =====
                 if adx_filter == True :
-                    if adx[i] != None and adx[i] >= 20.5:
+                    if adx[i] != None and adx[i] >= entry_adx_threshold:
                         entry_score += entry_score_adx
                 # 7) ===== VOLUME FILTER =====
                 if volume_filter:
                     vol_now = volume_prices[i]
                     vol_avg15 = vol_avg_15_list[i]
-                    if vol_now >= 1.25 * vol_avg15:
+                    if vol_now >= volume_spike_multiplier * vol_avg15:
                         entry_score += entry_score_volume
                 # ---- negative scores (late-entry guard)
                 # only penalize when a sharp move already happened AND price is overextended AND momentum is cooling
@@ -863,13 +874,13 @@ def ma_strategy(tune: dict = None):
                     entry_score += entry_score_ma_distance_or_candle
                 # 6) ===== ADX FILTER =====
                 if adx_filter == True :
-                    if adx[i] != None and adx[i] >= 20.5:
+                    if adx[i] != None and adx[i] >= entry_adx_threshold:
                         entry_score += entry_score_adx
                 # 7) ===== VOLUME FILTER =====
                 if volume_filter:
                     vol_now = volume_prices[i]
                     vol_avg15 = vol_avg_15_list[i]
-                    if vol_now >= 1.25 * vol_avg15:
+                    if vol_now >= volume_spike_multiplier * vol_avg15:
                         entry_score += entry_score_volume
                 # ---- negative scores (late-entry guard)
                 # only penalize when a sharp move already happened AND price is overextended AND momentum is cooling
@@ -1130,10 +1141,10 @@ def ma_strategy(tune: dict = None):
                 "muted": "#A7B4C8",
                 "up": "#4CD47A",
                 "down": "#FF6B7A",
-                "ema16": "#57C7FF",
-                "ma50": "#FFB86B",
-                "ma100": "#8FA7FF",
-                "ma200": "#E4C66D",
+                "ema16": "#66C7FF",
+                "ma50": "#66C7FF",
+                "ma100": "#FFC774",
+                "ma200": "#FFC774",
                 "mark": "#5FA2D9",
                 "long_open": "#7FE0B0",
                 "long_close": "#2FCF82",
@@ -1256,8 +1267,17 @@ def ma_strategy(tune: dict = None):
                 "max_offset": max(0, total_candles - window_size_base),
                 "press_px": None,
                 "press_axis_id": None,
+                "drag_mode": None,  # None | "nav" | "yscale"
+                "did_live_drag": False,
+                "last_drag_update_ts": 0.0,
+                "drag_update_interval_s": max(0.005, float(plot_drag_update_interval_ms) / 1000.0),
+                "preview_mode": False,
                 "initial_xlim": None,
                 "initial_xlim_by_axis": {},
+                "fixed_ylim_price": None,
+                "fixed_ylim_equity": None,
+                "yscale_press_y_px": None,
+                "yscale_start_ylim": None,
                 "vline_price": None,
                 "vline_equity": None,
                 "hline_price": None,
@@ -1311,6 +1331,30 @@ def ma_strategy(tune: dict = None):
                     valid = seg[np.isfinite(seg)]
                     out.append(valid[-1] if valid.size > 0 else np.nan)
                 return np.asarray(out, dtype=float)
+
+            def valid_ylim(ylim_vals):
+                if ylim_vals is None:
+                    return False
+                try:
+                    y0, y1 = float(ylim_vals[0]), float(ylim_vals[1])
+                except Exception:
+                    return False
+                return np.isfinite([y0, y1]).all() and (y1 != y0)
+
+            def set_fixed_ylim_for_axis(axis_obj, ylim_vals):
+                if axis_obj is None or not valid_ylim(ylim_vals):
+                    return
+                y0, y1 = float(ylim_vals[0]), float(ylim_vals[1])
+                if id(axis_obj) == id(ax_price):
+                    nav_state["fixed_ylim_price"] = (y0, y1)
+                elif id(axis_obj) == id(ax_equity):
+                    nav_state["fixed_ylim_equity"] = (y0, y1)
+
+            def get_axis_by_id(axis_id):
+                for axis_obj in fig.axes:
+                    if id(axis_obj) == axis_id:
+                        return axis_obj
+                return None
 
             def render_current():
                 if nav_state["rendering"]:
@@ -1375,6 +1419,9 @@ def ma_strategy(tune: dict = None):
                     # - Zoom in  => full detail (no downsample)
                     # - Zoom out => render fewer candles for smoother performance
                     max_render = int(plot_max_render_candles)
+                    if nav_state.get("preview_mode"):
+                        preview_factor = float(np.clip(plot_drag_preview_factor, 0.15, 1.0))
+                        max_render = max(180, int(max_render * preview_factor))
                     if n_full <= max_render:
                         target_render = n_full
                     elif n_full <= (max_render * 3):
@@ -1426,6 +1473,7 @@ def ma_strategy(tune: dict = None):
                     ax_price.cla()
                     ax_equity.cla()
 
+                    preview_mode = bool(nav_state.get("preview_mode"))
                     add_plots = []
                     if has_finite(ema16_series):
                         add_plots.append(
@@ -1433,7 +1481,13 @@ def ma_strategy(tune: dict = None):
                         )
                     if has_finite(ma50_series):
                         add_plots.append(
-                            mpf.make_addplot(ma50_series, ax=ax_price, color=chart_palette["ma50"], width=1.0)
+                            mpf.make_addplot(
+                                ma50_series,
+                                ax=ax_price,
+                                color=chart_palette["ma50"],
+                                width=1.0,
+                                linestyle="--",
+                            )
                         )
                     if has_finite(ma100_series):
                         add_plots.append(
@@ -1441,9 +1495,15 @@ def ma_strategy(tune: dict = None):
                         )
                     if has_finite(ma200_series):
                         add_plots.append(
-                            mpf.make_addplot(ma200_series, ax=ax_price, color=chart_palette["ma200"], width=1.0)
+                            mpf.make_addplot(
+                                ma200_series,
+                                ax=ax_price,
+                                color=chart_palette["ma200"],
+                                width=1.0,
+                                linestyle="--",
+                            )
                         )
-                    if has_finite(mark_series):
+                    if (not preview_mode) and has_finite(mark_series):
                         add_plots.append(
                             mpf.make_addplot(
                                 mark_series,
@@ -1455,7 +1515,7 @@ def ma_strategy(tune: dict = None):
                                 alpha=0.9,
                             )
                         )
-                    if has_finite(long_open_series):
+                    if (not preview_mode) and has_finite(long_open_series):
                         add_plots.append(
                             mpf.make_addplot(
                                 long_open_series,
@@ -1467,7 +1527,7 @@ def ma_strategy(tune: dict = None):
                                 alpha=0.9,
                             )
                         )
-                    if has_finite(long_close_series):
+                    if (not preview_mode) and has_finite(long_close_series):
                         add_plots.append(
                             mpf.make_addplot(
                                 long_close_series,
@@ -1479,7 +1539,7 @@ def ma_strategy(tune: dict = None):
                                 alpha=0.9,
                             )
                         )
-                    if has_finite(short_open_series):
+                    if (not preview_mode) and has_finite(short_open_series):
                         add_plots.append(
                             mpf.make_addplot(
                                 short_open_series,
@@ -1491,7 +1551,7 @@ def ma_strategy(tune: dict = None):
                                 alpha=0.9,
                             )
                         )
-                    if has_finite(short_close_series):
+                    if (not preview_mode) and has_finite(short_close_series):
                         add_plots.append(
                             mpf.make_addplot(
                                 short_close_series,
@@ -1554,6 +1614,13 @@ def ma_strategy(tune: dict = None):
                         color=chart_palette["grid"],
                         alpha=0.30,
                     )
+
+                    fixed_price_ylim = nav_state.get("fixed_ylim_price")
+                    if valid_ylim(fixed_price_ylim):
+                        ax_price.set_ylim(fixed_price_ylim)
+                    fixed_equity_ylim = nav_state.get("fixed_ylim_equity")
+                    if valid_ylim(fixed_equity_ylim):
+                        ax_equity.set_ylim(fixed_equity_ylim)
 
                     ax_price.set_title(
                         f"BTC - OHLC + MAs | Last: ${last_close_price:,.2f} | Candles: {len(price_df)} (x{render_step}) | Offset: {offset_clamped} | Drag/Wheel/\u2190/\u2192 | \u2191 oldest | \u2193 latest",
@@ -1749,6 +1816,64 @@ def ma_strategy(tune: dict = None):
             def on_move(event):
                 if nav_state["rendering"]:
                     return
+
+                drag_mode = nav_state.get("drag_mode")
+                toolbar_mode = get_toolbar_mode()
+
+                # Right-drag vertical scaling (persistent y-range).
+                if drag_mode == "yscale":
+                    active_axis = get_axis_by_id(nav_state.get("press_axis_id"))
+                    if active_axis is None or event.y is None:
+                        return
+                    start_y = nav_state.get("yscale_press_y_px")
+                    start_ylim = nav_state.get("yscale_start_ylim")
+                    if start_y is None or not valid_ylim(start_ylim):
+                        return
+
+                    dy = float(event.y) - float(start_y)
+                    base_y0, base_y1 = float(start_ylim[0]), float(start_ylim[1])
+                    center_y = (base_y0 + base_y1) / 2.0
+                    base_span = abs(base_y1 - base_y0)
+                    sensitivity = max(0.0002, float(plot_yscale_drag_sensitivity))
+                    scale = float(np.exp(-dy * sensitivity))
+                    scale = float(np.clip(scale, 0.08, 12.0))
+                    new_span = max(1e-9, base_span * scale)
+                    new_ylim = (center_y - (new_span / 2.0), center_y + (new_span / 2.0))
+                    active_axis.set_ylim(new_ylim)
+                    set_fixed_ylim_for_axis(active_axis, new_ylim)
+                    fig.canvas.draw_idle()
+                    return
+
+                # Left-drag horizontal navigation with live updates.
+                # Keep this active for normal mode and toolbar pan mode; skip only zoom-rect mode.
+                if drag_mode == "nav" and ("zoom" not in toolbar_mode):
+                    if event.x is None:
+                        return
+                    active_axis = get_axis_by_id(nav_state.get("press_axis_id"))
+                    if active_axis is None:
+                        active_axis = event.inaxes if (event.inaxes in fig.axes) else ax_price
+
+                    axis_width = float(active_axis.bbox.width) if active_axis is not None else 0.0
+                    press_px = nav_state.get("press_px")
+                    if axis_width <= 0 or press_px is None:
+                        return
+
+                    delta_px = float(event.x) - float(press_px)
+                    drag_threshold_px = max(1.2, axis_width * 0.0018)
+                    now_ts = time.perf_counter()
+                    if (
+                        abs(delta_px) >= drag_threshold_px
+                        and (now_ts - float(nav_state.get("last_drag_update_ts", 0.0))) >= float(nav_state["drag_update_interval_s"])
+                    ):
+                        move_ratio = min(1.0, abs(delta_px) / axis_width)
+                        shift = max(1, int(round(move_ratio * int(nav_state["window_size"]))))
+                        nav_state["preview_mode"] = True
+                        nav_state["did_live_drag"] = True
+                        nav_state["last_drag_update_ts"] = now_ts
+                        request_nav("older" if delta_px > 0 else "newer", shift_candles=shift)
+                        nav_state["press_px"] = float(event.x)
+                    return
+
                 if event.x is None or event.y is None:
                     hide_crosshair(redraw=True)
                     return
@@ -1808,20 +1933,62 @@ def ma_strategy(tune: dict = None):
                     return
                 if event.x is None or event.y is None:
                     return
-                nav_state["press_px"] = float(event.x)
+
+                button = getattr(event, "button", None)
+                button_text = str(button).lower()
+                is_right_click = (button == 3) or ("right" in button_text)
+
                 nav_state["press_axis_id"] = id(event.inaxes)
+                if is_right_click:
+                    nav_state["drag_mode"] = "yscale"
+                    nav_state["yscale_press_y_px"] = float(event.y)
+                    nav_state["yscale_start_ylim"] = event.inaxes.get_ylim()
+                    nav_state["press_px"] = None
+                    nav_state["did_live_drag"] = False
+                    return
+
+                nav_state["drag_mode"] = "nav"
+                nav_state["press_px"] = float(event.x)
+                nav_state["yscale_press_y_px"] = None
+                nav_state["yscale_start_ylim"] = None
+                nav_state["did_live_drag"] = False
+                nav_state["last_drag_update_ts"] = 0.0
 
             def on_release(event):
                 if nav_state["rendering"]:
                     return
 
-                active_ax = event.inaxes if (event.inaxes in fig.axes) else ax_price
+                active_ax = event.inaxes if (event.inaxes in fig.axes) else get_axis_by_id(nav_state.get("press_axis_id"))
+                if active_ax is None:
+                    active_ax = ax_price
                 toolbar_mode = get_toolbar_mode()
+                drag_mode = nav_state.get("drag_mode")
 
-                # If toolbar pan/zoom tools are active, sync from x-limits directly.
-                if ("pan" in toolbar_mode) or ("zoom" in toolbar_mode):
+                if drag_mode == "yscale":
+                    nav_state["drag_mode"] = None
+                    nav_state["press_axis_id"] = None
+                    nav_state["yscale_press_y_px"] = None
+                    nav_state["yscale_start_ylim"] = None
+                    return
+
+                if drag_mode == "nav" and nav_state.get("did_live_drag"):
                     nav_state["press_px"] = None
                     nav_state["press_axis_id"] = None
+                    nav_state["drag_mode"] = None
+                    nav_state["preview_mode"] = False
+                    nav_state["did_live_drag"] = False
+                    render_current()
+                    return
+
+                # If toolbar pan/zoom tools are active and we did not handle live-drag ourselves, sync from x-limits.
+                if ("pan" in toolbar_mode) or ("zoom" in toolbar_mode):
+                    set_fixed_ylim_for_axis(ax_price, ax_price.get_ylim())
+                    set_fixed_ylim_for_axis(ax_equity, ax_equity.get_ylim())
+                    nav_state["press_px"] = None
+                    nav_state["press_axis_id"] = None
+                    nav_state["drag_mode"] = None
+                    nav_state["preview_mode"] = False
+                    nav_state["did_live_drag"] = False
                     sync_from_axis_xlim(active_ax)
                     return
 
@@ -1839,11 +2006,17 @@ def ma_strategy(tune: dict = None):
                             shift = max(1, int(round(move_ratio * int(nav_state["window_size"]))))
                             nav_state["press_px"] = None
                             nav_state["press_axis_id"] = None
+                            nav_state["drag_mode"] = None
+                            nav_state["preview_mode"] = False
+                            nav_state["did_live_drag"] = False
                             request_nav("older" if delta_px > 0 else "newer", shift_candles=shift)
                             return
 
                 nav_state["press_px"] = None
                 nav_state["press_axis_id"] = None
+                nav_state["drag_mode"] = None
+                nav_state["preview_mode"] = False
+                nav_state["did_live_drag"] = False
 
                 # fallback: if x-limits changed for any reason, sync
                 sync_from_axis_xlim(active_ax)
