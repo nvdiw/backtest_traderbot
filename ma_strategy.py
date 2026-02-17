@@ -3,7 +3,9 @@
 import pandas as pd
 import mplfinance as mpf
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 from matplotlib import transforms as mtransforms
+from matplotlib.backend_bases import MouseButton
 import time
 import numpy as np
 
@@ -19,7 +21,7 @@ from check_monthly_data import write_monthly_summary
 # end = get_candle_index("2025-12-18")     ----> 278640
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2025-12-28","2026-02-14"), ("00:00", "14:00"))
+start, end = get_candle_index(("2025-01-01","2026-02-14"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 current_position = None  # None | "long" | "short"
@@ -190,6 +192,19 @@ def ma_strategy(tune: dict = None):
     exit_score_trailing = 1
     exit_score_adx = 1
     exit_score_opposite_candle = 1
+
+    def build_score_reason_text(title, reasons, total_score, threshold):
+        lines = [title]
+        if reasons:
+            for reason_label, pts in reasons:
+                sign = "+" if pts >= 0 else ""
+                lines.append(f"{sign}{pts} | {reason_label}")
+        else:
+            lines.append("No score components recorded.")
+        lines.append("-" * 20)
+        lines.append(f"Total Score: {total_score}")
+        lines.append(f"Threshold: {threshold}")
+        return "\n".join(lines)
     
     # Apply tune overrides (explicit assignments to avoid relying on locals())
     if tune:
@@ -370,6 +385,10 @@ def ma_strategy(tune: dict = None):
     long_close_points = [] if not optimize else None
     short_open_points = [] if not optimize else None
     short_close_points = [] if not optimize else None
+    long_open_reasons = {} if not optimize else None
+    long_close_reasons = {} if not optimize else None
+    short_open_reasons = {} if not optimize else None
+    short_close_reasons = {} if not optimize else None
 
     current_position = None
     entry_price = None
@@ -536,6 +555,7 @@ def ma_strategy(tune: dict = None):
             )
 
             if liq_updates['liquidated']:
+                liq_reason_text = "LONG EXIT (Liquidation)\nForced close by liquidation rule."
                 balance = liq_updates['balance']
                 balance_without_fee = liq_updates['balance_without_fee']
                 deducting_fee_total = liq_updates['deducting_fee_total']
@@ -552,6 +572,8 @@ def ma_strategy(tune: dict = None):
                 lowest_since_entry = None
                 if long_close_points is not None:
                     long_close_points.append((i, liq_updates['close_price']))
+                    if long_close_reasons is not None:
+                        long_close_reasons[i] = liq_reason_text
                 continue
         
         # ---- check short
@@ -583,6 +605,7 @@ def ma_strategy(tune: dict = None):
             )
 
             if liq_updates['liquidated']:
+                liq_reason_text = "SHORT EXIT (Liquidation)\nForced close by liquidation rule."
                 balance = liq_updates['balance']
                 balance_without_fee = liq_updates['balance_without_fee']
                 deducting_fee_total = liq_updates['deducting_fee_total']
@@ -599,6 +622,8 @@ def ma_strategy(tune: dict = None):
                 lowest_since_entry = None
                 if short_close_points is not None:
                     short_close_points.append((i, liq_updates['close_price']))
+                    if short_close_reasons is not None:
+                        short_close_reasons[i] = liq_reason_text
                 continue
 
 
@@ -609,6 +634,7 @@ def ma_strategy(tune: dict = None):
             if cross_seen and last_trade_cross_index != last_cross_index:
 
                 entry_score = 0
+                entry_reasons = []
 
                 # ===== ATR ENTRY FILTER =====
                 if atr_filter == True:
@@ -628,28 +654,35 @@ def ma_strategy(tune: dict = None):
                         # price acceptance above EMA after cross
                         if close_prices[i] > ema_16[i]:
                             entry_score += entry_score_cross
+                            entry_reasons.append(("Bull cross confirmed above EMA16", entry_score_cross))
                 # 2) EMA 14 > Ma 50
                 if ema_16[i] > ma_50[i]:
                     entry_score += entry_score_ema_vs_ma50
+                    entry_reasons.append(("EMA16 above MA50", entry_score_ema_vs_ma50))
                 # 3) close above EMA16
                 if close_prices[i] > ema_16[i]:
                     entry_score += entry_score_close_vs_ema16
+                    entry_reasons.append(("Close above EMA16", entry_score_close_vs_ema16))
                 # 4) Ma 130 > Ma 200
                 if ma_100[i] >= ma_200[i]:
                     entry_score += entry_score_ma_trend
+                    entry_reasons.append(("MA100 above/equal MA200", entry_score_ma_trend))
                 # 5) ma_distance or last_candle_move is strong
                 if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
                     entry_score += entry_score_ma_distance_or_candle
+                    entry_reasons.append(("Momentum strength (MA distance or candle move)", entry_score_ma_distance_or_candle))
                 # 6) ===== ADX FILTER =====
                 if adx_filter == True :
                     if adx[i] != None and adx[i] >= entry_adx_threshold:
                         entry_score += entry_score_adx
+                        entry_reasons.append(("ADX strength confirmation", entry_score_adx))
                 # 7) ===== VOLUME FILTER =====
                 if volume_filter:
                     vol_now = volume_prices[i]
                     vol_avg15 = vol_avg_15_list[i]
                     if vol_now >= volume_spike_multiplier * vol_avg15:
                         entry_score += entry_score_volume
+                        entry_reasons.append(("Volume spike confirmation", entry_score_volume))
                 # ---- negative scores (late-entry guard)
                 # only penalize when a sharp move already happened AND price is overextended AND momentum is cooling
                 if i >= impulse_lookback:
@@ -668,8 +701,15 @@ def ma_strategy(tune: dict = None):
 
                         if overextended and cooling:
                             entry_score -= entry_late_penalty
+                            entry_reasons.append(("Late-entry penalty: overextended + cooling", -entry_late_penalty))
 
                 if entry_score >= entry_score_threshold:
+                    entry_reason_text = build_score_reason_text(
+                        "LONG ENTRY SCORE REASONS",
+                        entry_reasons,
+                        entry_score,
+                        entry_score_threshold,
+                    )
                     # ===== SKIP LOGIC =====
                     if skip_logic and skip_trades_left > 0:
                         skip_trades_left -= 1
@@ -704,6 +744,8 @@ def ma_strategy(tune: dict = None):
                     current_position = updates['current_position']
                     if long_open_points is not None:
                         long_open_points.append((i, entry_price))
+                        if long_open_reasons is not None:
+                            long_open_reasons[i] = entry_reason_text
                     # record which cross enabled this trade and init trailing state
                     last_trade_cross_index = last_cross_index
                     entry_index = i
@@ -717,6 +759,7 @@ def ma_strategy(tune: dict = None):
         if current_position == "long":
             # exit scoring system (points accumulate; mirrored for short)
             exit_score = 0
+            exit_reasons = []
 
             # update trailing peak
             if highest_since_entry is None:
@@ -728,24 +771,29 @@ def ma_strategy(tune: dict = None):
             if entry_price is not None:
                 if close_prices[i] <= entry_price * (1 - loss_exit_pct):
                     exit_score += exit_score_loss_guard
+                    exit_reasons.append(("Loss guard triggered", exit_score_loss_guard))
 
             # 1) EMA slope weakness (look back `slope_window` candles)
             if i - slope_window >= 0 and ema_16[i] < ema_16[i - slope_window]:
                 exit_score += exit_score_ema_slope
+                exit_reasons.append(("EMA16 slope weakness", exit_score_ema_slope))
 
             # 2) EMA crossing below MA50
             if ema_16[i] < ma_50[i]:
                 exit_score += exit_score_ema_cross
+                exit_reasons.append(("EMA16 crossed below MA50", exit_score_ema_cross))
 
             # 3) long-term trend weakening (MA100 < MA200)
             if ma_100[i] < ma_200[i]:
                 exit_score += exit_score_ma_trend
+                exit_reasons.append(("MA100 below MA200", exit_score_ma_trend))
 
             # 4) trailing stop based on pullback from peak (armed after min profit)
             if entry_index is not None and i > entry_index:
                 if highest_since_entry >= entry_price * (1 + trail_activate_pct):
                     if close_prices[i] <= highest_since_entry * (1 - trail_retrace_pct):
                         exit_score += exit_score_trailing
+                        exit_reasons.append(("Trailing retrace exit", exit_score_trailing))
 
             # 5) ADX weakening (trend strength fading)
             if i - adx_exit_lookback >= 0:
@@ -755,6 +803,7 @@ def ma_strategy(tune: dict = None):
                     if np.isfinite(adx_now) and np.isfinite(adx_prev):
                         if adx_now < adx_exit_threshold and adx_now < adx_prev:
                             exit_score += exit_score_adx
+                            exit_reasons.append(("ADX weakening", exit_score_adx))
 
             # 6) strong opposite candle (body >= ATR * mult)
             if atr[i] is not None and atr[i] > 0:
@@ -762,8 +811,15 @@ def ma_strategy(tune: dict = None):
                     body = open_prices[i] - close_prices[i]
                     if body >= atr[i] * opposite_atr_body_mult:
                         exit_score += exit_score_opposite_candle
+                        exit_reasons.append(("Strong opposite bearish candle", exit_score_opposite_candle))
 
             if exit_score >= exit_score_threshold:
+                exit_reason_text = build_score_reason_text(
+                    "LONG EXIT SCORE REASONS",
+                    exit_reasons,
+                    exit_score,
+                    exit_score_threshold,
+                )
                 # ---- close long ----
                 close_price = close_prices[i]
                 updates = trade_manager.close_long(
@@ -824,6 +880,8 @@ def ma_strategy(tune: dict = None):
                 lowest_since_entry = None
                 if long_close_points is not None:
                     long_close_points.append((i, close_price))
+                    if long_close_reasons is not None:
+                        long_close_reasons[i] = exit_reason_text
                 
                 # count consecutive_losses 
                 if profits_lst[-1] < 0:
@@ -842,6 +900,7 @@ def ma_strategy(tune: dict = None):
             if cross_seen and last_trade_cross_index != last_cross_index:
                 
                 entry_score = 0
+                entry_reasons = []
                 
                 # ===== ATR ENTRY FILTER =====
                 if atr_filter == True:
@@ -860,28 +919,35 @@ def ma_strategy(tune: dict = None):
                         # price acceptance below EMA after cross
                         if close_prices[i] < ema_16[i]:
                             entry_score += entry_score_cross
+                            entry_reasons.append(("Bear cross confirmed below EMA16", entry_score_cross))
                 # 2) EMA 14 < Ma 50
                 if ema_16[i] <= ma_50[i]:
                     entry_score += entry_score_ema_vs_ma50
+                    entry_reasons.append(("EMA16 below/equal MA50", entry_score_ema_vs_ma50))
                 # 3) close below EMA16
                 if close_prices[i] < ema_16[i]:
                     entry_score += entry_score_close_vs_ema16
+                    entry_reasons.append(("Close below EMA16", entry_score_close_vs_ema16))
                 # 4) Ma 130 < Ma 200
                 if ma_100[i] < ma_200[i]:
                     entry_score += entry_score_ma_trend
+                    entry_reasons.append(("MA100 below MA200", entry_score_ma_trend))
                 # 5) ma_distance or last_candle_move is strong
                 if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
                     entry_score += entry_score_ma_distance_or_candle
+                    entry_reasons.append(("Momentum strength (MA distance or candle move)", entry_score_ma_distance_or_candle))
                 # 6) ===== ADX FILTER =====
                 if adx_filter == True :
                     if adx[i] != None and adx[i] >= entry_adx_threshold:
                         entry_score += entry_score_adx
+                        entry_reasons.append(("ADX strength confirmation", entry_score_adx))
                 # 7) ===== VOLUME FILTER =====
                 if volume_filter:
                     vol_now = volume_prices[i]
                     vol_avg15 = vol_avg_15_list[i]
                     if vol_now >= volume_spike_multiplier * vol_avg15:
                         entry_score += entry_score_volume
+                        entry_reasons.append(("Volume spike confirmation", entry_score_volume))
                 # ---- negative scores (late-entry guard)
                 # only penalize when a sharp move already happened AND price is overextended AND momentum is cooling
                 if i >= impulse_lookback:
@@ -900,9 +966,16 @@ def ma_strategy(tune: dict = None):
 
                         if overextended and cooling:
                             entry_score -= entry_late_penalty
+                            entry_reasons.append(("Late-entry penalty: overextended + cooling", -entry_late_penalty))
 
 
                 if entry_score >= entry_score_threshold:
+                    entry_reason_text = build_score_reason_text(
+                        "SHORT ENTRY SCORE REASONS",
+                        entry_reasons,
+                        entry_score,
+                        entry_score_threshold,
+                    )
                     # ===== SKIP LOGIC =====
                     if skip_logic and skip_trades_left > 0:
                         skip_trades_left -= 1
@@ -937,6 +1010,8 @@ def ma_strategy(tune: dict = None):
                     current_position = updates['current_position']
                     if short_open_points is not None:
                         short_open_points.append((i, entry_price))
+                        if short_open_reasons is not None:
+                            short_open_reasons[i] = entry_reason_text
                     # record which cross enabled this trade and init trailing state
                     last_trade_cross_index = last_cross_index
                     entry_index = i
@@ -950,6 +1025,7 @@ def ma_strategy(tune: dict = None):
         if current_position == "short":
             # exit scoring (mirrored logic)
             exit_score = 0
+            exit_reasons = []
 
             # update trailing trough
             if lowest_since_entry is None:
@@ -961,24 +1037,29 @@ def ma_strategy(tune: dict = None):
             if entry_price is not None:
                 if close_prices[i] >= entry_price * (1 + loss_exit_pct):
                     exit_score += exit_score_loss_guard
+                    exit_reasons.append(("Loss guard triggered", exit_score_loss_guard))
 
             # 1) EMA slope weakness for short (EMA trending up)
             if i - slope_window >= 0 and ema_16[i] > ema_16[i - slope_window]:
                 exit_score += exit_score_ema_slope
+                exit_reasons.append(("EMA16 slope weakness (short)", exit_score_ema_slope))
 
             # 2) EMA crossing above MA50
             if ema_16[i] > ma_50[i]:
                 exit_score += exit_score_ema_cross
+                exit_reasons.append(("EMA16 crossed above MA50", exit_score_ema_cross))
 
             # 3) long-term trend weakening for short (MA100 >= MA200)
             if ma_100[i] >= ma_200[i]:
                 exit_score += exit_score_ma_trend
+                exit_reasons.append(("MA100 above/equal MA200", exit_score_ma_trend))
 
             # 4) trailing stop based on pullback from trough (armed after min profit)
             if entry_index is not None and i > entry_index:
                 if lowest_since_entry <= entry_price * (1 - trail_activate_pct):
                     if close_prices[i] >= lowest_since_entry * (1 + trail_retrace_pct):
                         exit_score += exit_score_trailing
+                        exit_reasons.append(("Trailing retrace exit", exit_score_trailing))
 
             # 5) ADX weakening (trend strength fading)
             if i - adx_exit_lookback >= 0:
@@ -988,6 +1069,7 @@ def ma_strategy(tune: dict = None):
                     if np.isfinite(adx_now) and np.isfinite(adx_prev):
                         if adx_now < adx_exit_threshold and adx_now < adx_prev:
                             exit_score += exit_score_adx
+                            exit_reasons.append(("ADX weakening", exit_score_adx))
 
             # 6) strong opposite candle (body >= ATR * mult)
             if atr[i] is not None and atr[i] > 0:
@@ -995,8 +1077,15 @@ def ma_strategy(tune: dict = None):
                     body = close_prices[i] - open_prices[i]
                     if body >= atr[i] * opposite_atr_body_mult:
                         exit_score += exit_score_opposite_candle
+                        exit_reasons.append(("Strong opposite bullish candle", exit_score_opposite_candle))
 
             if exit_score >= exit_score_threshold:
+                exit_reason_text = build_score_reason_text(
+                    "SHORT EXIT SCORE REASONS",
+                    exit_reasons,
+                    exit_score,
+                    exit_score_threshold,
+                )
                 # ---- close short ----
                 close_price = close_prices[i]
                 updates = trade_manager.close_short(
@@ -1058,6 +1147,8 @@ def ma_strategy(tune: dict = None):
                 lowest_since_entry = None
                 if short_close_points is not None:
                     short_close_points.append((i, close_price))
+                    if short_close_reasons is not None:
+                        short_close_reasons[i] = exit_reason_text
                 
                 # count consecutive_losses 
                 if profits_lst[-1] < 0:
@@ -1284,6 +1375,9 @@ def ma_strategy(tune: dict = None):
                 "hline_equity": None,
                 "price_label": None,
                 "balance_label": None,
+                "marker_hover_points": [],
+                "marker_tooltip_artist": None,
+                "debug_overlay_artist": None,
                 "rendering": False,
             }
 
@@ -1331,6 +1425,29 @@ def ma_strategy(tune: dict = None):
                     valid = seg[np.isfinite(seg)]
                     out.append(valid[-1] if valid.size > 0 else np.nan)
                 return np.asarray(out, dtype=float)
+
+            def downsample_last_valid_with_index(arr, step):
+                if step <= 1:
+                    n = len(arr)
+                    idx_map = np.arange(n, dtype=int)
+                    nan_mask = ~np.isfinite(np.asarray(arr, dtype=float))
+                    idx_map[nan_mask] = -1
+                    return np.asarray(arr, dtype=float), idx_map
+                n = len(arr)
+                out_vals = []
+                out_idx = []
+                for s in range(0, n, step):
+                    e = min(s + step, n)
+                    seg = np.asarray(arr[s:e], dtype=float)
+                    valid_idx = np.where(np.isfinite(seg))[0]
+                    if valid_idx.size > 0:
+                        last_local = int(valid_idx[-1])
+                        out_vals.append(float(seg[last_local]))
+                        out_idx.append(int(s + last_local))
+                    else:
+                        out_vals.append(np.nan)
+                        out_idx.append(-1)
+                return np.asarray(out_vals, dtype=float), np.asarray(out_idx, dtype=int)
 
             def valid_ylim(ylim_vals):
                 if ylim_vals is None:
@@ -1441,10 +1558,10 @@ def ma_strategy(tune: dict = None):
                     ds_ma200 = downsample_last(full_ma200, render_step)
                     ds_equity = downsample_last(full_equity, render_step)
                     ds_mark = downsample_last_valid(mark_arr, render_step)
-                    ds_long_open = downsample_last_valid(long_open_arr, render_step)
-                    ds_long_close = downsample_last_valid(long_close_arr, render_step)
-                    ds_short_open = downsample_last_valid(short_open_arr, render_step)
-                    ds_short_close = downsample_last_valid(short_close_arr, render_step)
+                    ds_long_open, ds_long_open_marker_idx = downsample_last_valid_with_index(long_open_arr, render_step)
+                    ds_long_close, ds_long_close_marker_idx = downsample_last_valid_with_index(long_close_arr, render_step)
+                    ds_short_open, ds_short_open_marker_idx = downsample_last_valid_with_index(short_open_arr, render_step)
+                    ds_short_close, ds_short_close_marker_idx = downsample_last_valid_with_index(short_close_arr, render_step)
 
                     time_index = pd.to_datetime(ds_times, utc=True)
                     price_df = pd.DataFrame(
@@ -1472,6 +1589,7 @@ def ma_strategy(tune: dict = None):
 
                     ax_price.cla()
                     ax_equity.cla()
+                    nav_state["marker_hover_points"] = []
 
                     preview_mode = bool(nav_state.get("preview_mode"))
                     add_plots = []
@@ -1623,7 +1741,7 @@ def ma_strategy(tune: dict = None):
                         ax_equity.set_ylim(fixed_equity_ylim)
 
                     ax_price.set_title(
-                        f"BTC - OHLC + MAs | Last: ${last_close_price:,.2f} | Candles: {len(price_df)} (x{render_step}) | Offset: {offset_clamped} | Drag/Wheel/\u2190/\u2192 | \u2191 oldest | \u2193 latest",
+                        f"BTC - OHLC + MAs | Last: ${last_close_price:,.2f} | Candles: {len(price_df)} (x{render_step}) | Offset: {offset_clamped} | Drag/Wheel/\u2190/\u2192 | \u2191 oldest | \u2193 latest | Left-click near trade marker for reasons",
                         color=chart_palette["text"],
                     )
                     ax_price.set_ylabel("BTC Price")
@@ -1696,6 +1814,94 @@ def ma_strategy(tune: dict = None):
                         visible=False,
                         zorder=31,
                     )
+                    # Prevent stacking fig-level text artists across re-renders.
+                    old_marker_tooltip = nav_state.get("marker_tooltip_artist")
+                    if old_marker_tooltip is not None:
+                        try:
+                            old_marker_tooltip.remove()
+                        except Exception:
+                            pass
+                    old_debug_overlay = nav_state.get("debug_overlay_artist")
+                    if old_debug_overlay is not None:
+                        try:
+                            old_debug_overlay.remove()
+                        except Exception:
+                            pass
+                    nav_state["marker_tooltip_artist"] = fig.text(
+                        0.992,
+                        0.968,
+                        "",
+                        transform=fig.transFigure,
+                        ha="right",
+                        va="top",
+                        fontsize=8,
+                        color=chart_palette["label_fg"],
+                        bbox=dict(
+                            boxstyle="round,pad=0.34",
+                            facecolor=chart_palette["label_bg"],
+                            edgecolor=chart_palette["label_edge"],
+                            linewidth=0.9,
+                        ),
+                        visible=False,
+                        zorder=120,
+                    )
+                    nav_state["debug_overlay_artist"] = fig.text(
+                        0.992,
+                        0.998,
+                        "DEBUG overlay ON",
+                        transform=fig.transFigure,
+                        ha="right",
+                        va="top",
+                        fontsize=8,
+                        color="#EAF2FF",
+                        bbox=dict(
+                            boxstyle="round,pad=0.26",
+                            facecolor="#1E2A39",
+                            edgecolor="#6C7F97",
+                            linewidth=0.9,
+                            alpha=0.92,
+                        ),
+                        visible=True,
+                        zorder=140,
+                    )
+
+                    def register_hover_points(values_arr, marker_local_idx, reasons_map):
+                        if reasons_map is None:
+                            return
+                        finite_mask = np.isfinite(values_arr)
+                        if not finite_mask.any():
+                            return
+                        for j in np.where(finite_mask)[0]:
+                            src_local_idx = int(marker_local_idx[j]) if j < len(marker_local_idx) else -1
+                            if src_local_idx < 0:
+                                continue
+                            src_idx = int(plot_start + src_local_idx)
+                            reason_text = reasons_map.get(src_idx)
+                            if not reason_text:
+                                reason_text = f"Trade marker at index {src_idx}\nReason data not found in current run."
+                            ts = time_index[j]
+                            if isinstance(ts, pd.Timestamp):
+                                ts_dt = ts.to_pydatetime()
+                            else:
+                                ts_dt = pd.Timestamp(ts, tz="UTC").to_pydatetime()
+                            nav_state["marker_hover_points"].append(
+                                {
+                                    "x": float(mdates.date2num(ts_dt)),
+                                    "y": float(values_arr[j]),
+                                    "text": reason_text,
+                                }
+                            )
+
+                    register_hover_points(ds_long_open, ds_long_open_marker_idx, long_open_reasons)
+                    register_hover_points(ds_long_close, ds_long_close_marker_idx, long_close_reasons)
+                    register_hover_points(ds_short_open, ds_short_open_marker_idx, short_open_reasons)
+                    register_hover_points(ds_short_close, ds_short_close_marker_idx, short_close_reasons)
+                    debug_overlay_artist = nav_state.get("debug_overlay_artist")
+                    if debug_overlay_artist is not None:
+                        debug_overlay_artist.set_text(
+                            f"DEBUG overlay ON | markers: {len(nav_state.get('marker_hover_points', []))}"
+                        )
+                        debug_overlay_artist.set_visible(True)
 
                     fig.subplots_adjust(left=0.06, right=0.99, top=0.92, bottom=0.09, hspace=0.04)
                     nav_state["initial_xlim"] = ax_price.get_xlim()
@@ -1717,7 +1923,15 @@ def ma_strategy(tune: dict = None):
 
             def hide_crosshair(redraw=False):
                 changed = False
-                for key in ("vline_price", "vline_equity", "hline_price", "hline_equity", "price_label", "balance_label"):
+                for key in (
+                    "vline_price",
+                    "vline_equity",
+                    "hline_price",
+                    "hline_equity",
+                    "price_label",
+                    "balance_label",
+                    "marker_tooltip_artist",
+                ):
                     artist = nav_state.get(key)
                     if artist is not None and artist.get_visible():
                         artist.set_visible(False)
@@ -1729,6 +1943,28 @@ def ma_strategy(tune: dict = None):
                 toolbar = getattr(getattr(fig.canvas, "manager", None), "toolbar", None)
                 mode = str(getattr(toolbar, "mode", "")).lower() if toolbar is not None else ""
                 return mode
+
+            def find_nearest_marker_point(event):
+                if event is None or event.x is None or event.y is None:
+                    return None
+                if event.inaxes is None or id(event.inaxes) != id(ax_price):
+                    return None
+                if not ax_price.bbox.contains(event.x, event.y):
+                    return None
+                hover_points = nav_state.get("marker_hover_points", [])
+                if not hover_points:
+                    return None
+                nearest_point = None
+                nearest_dist2 = None
+                for pt in hover_points:
+                    px, py = ax_price.transData.transform((pt["x"], pt["y"]))
+                    dx = float(event.x) - float(px)
+                    dy = float(event.y) - float(py)
+                    d2 = (dx * dx) + (dy * dy)
+                    if nearest_dist2 is None or d2 < nearest_dist2:
+                        nearest_dist2 = d2
+                        nearest_point = pt
+                return nearest_point
 
             def sync_from_axis_xlim(active_ax):
                 initial_map = nav_state.get("initial_xlim_by_axis", {})
@@ -1887,6 +2123,7 @@ def ma_strategy(tune: dict = None):
                 hline_equity = nav_state.get("hline_equity")
                 price_label = nav_state.get("price_label")
                 balance_label = nav_state.get("balance_label")
+                marker_tooltip_artist = nav_state.get("marker_tooltip_artist")
                 if None in (vline_price, vline_equity, hline_price, hline_equity, price_label, balance_label):
                     return
 
@@ -1921,6 +2158,23 @@ def ma_strategy(tune: dict = None):
                     hline_equity.set_visible(False)
                     balance_label.set_visible(False)
 
+                # Hover tooltip for trade markers (fallback mode requested by user).
+                if marker_tooltip_artist is not None:
+                    hit_point = find_nearest_marker_point(event)
+                    if hit_point is not None:
+                        marker_tooltip_artist.set_text(hit_point["text"])
+                        marker_tooltip_artist.set_visible(True)
+                    else:
+                        marker_tooltip_artist.set_visible(False)
+                debug_overlay_artist = nav_state.get("debug_overlay_artist")
+                if debug_overlay_artist is not None:
+                    in_price = ax_price.bbox.contains(event.x, event.y)
+                    tip = "ON" if (marker_tooltip_artist is not None and marker_tooltip_artist.get_visible()) else "OFF"
+                    debug_overlay_artist.set_text(
+                        f"DEBUG overlay ON | markers: {len(nav_state.get('marker_hover_points', []))} | in_price: {in_price} | tip: {tip}"
+                    )
+                    debug_overlay_artist.set_visible(True)
+
                 fig.canvas.draw_idle()
 
             def on_leave(_event):
@@ -1936,7 +2190,7 @@ def ma_strategy(tune: dict = None):
 
                 button = getattr(event, "button", None)
                 button_text = str(button).lower()
-                is_right_click = (button == 3) or ("right" in button_text)
+                is_right_click = (button == MouseButton.RIGHT) or (button == 3) or ("right" in button_text)
 
                 nav_state["press_axis_id"] = id(event.inaxes)
                 if is_right_click:
@@ -1965,6 +2219,15 @@ def ma_strategy(tune: dict = None):
                 drag_mode = nav_state.get("drag_mode")
 
                 if drag_mode == "yscale":
+                    # If toolbar pan/zoom is active, sync x-range immediately on right-drag release
+                    # so newly visible candles render without requiring an extra click.
+                    if ("pan" in toolbar_mode) or ("zoom" in toolbar_mode):
+                        set_fixed_ylim_for_axis(ax_price, ax_price.get_ylim())
+                        set_fixed_ylim_for_axis(ax_equity, ax_equity.get_ylim())
+                        nav_state["press_px"] = None
+                        nav_state["preview_mode"] = False
+                        nav_state["did_live_drag"] = False
+                        sync_from_axis_xlim(active_ax)
                     nav_state["drag_mode"] = None
                     nav_state["press_axis_id"] = None
                     nav_state["yscale_press_y_px"] = None
