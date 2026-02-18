@@ -16,7 +16,7 @@ from chart_renderer import render_backtest_chart
 # end = get_candle_index("2025-12-18")     ----> 278640
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2025-01-01","2026-02-14"))
+start, end = get_candle_index(("2019-01-01","2026-02-14"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 current_position = None  # None | "long" | "short"
@@ -109,52 +109,70 @@ def ma_strategy(tune: dict = None):
     optimize = bool(tune.get('optimize')) if tune else False
     csv_logger = TradeCSVLogger(optimize=optimize)
 
-    # ---- settings is here ----
-    balance = 1000     # base balance
-    leverage = 10      # leverage
-    safe_leverage_high = 4      # leverage safe mode high
-    safe_leverage_med = 3      # leverage safe mode medium
-    safe_leverage_low = 2      # leverage safe mode low
+    # ---- settings ----
+    # Capital & position sizing
+    balance = 1000                  # base balance
+    leverage = 10                   # default leverage
+    trade_amount_percent = 0.5      # 50% of balance per trade
     save_money = 0
-    trade_amount_percent = 0.5  # 50% of balance per trade
-    monthly_profit_percent_stop_trade = 8    # if 8% per month profit --> don't trade on that month 
-    monthly_compound = 3    # after get 'monthly_profit_percent_stop_trade' per month how much money goes for next month
+
+    # Safe leverage levels
+    safe_leverage_low = 2
+    safe_leverage_med = 3
+    safe_leverage_high = 4
+
+    # Safe leverage activation thresholds (% of tactical balance)
+    safe_leverage_balance_pct_low = 80
+    safe_leverage_balance_pct_med = 80
+    safe_leverage_balance_pct_high = 90
+    # Save-money recovery (recover amount = 100 - trigger)
+    save_money_recover_trigger_pct = 75
+
+    # Monthly control
+    monthly_profit_percent_stop_trade = 8  # stop trading month after reaching this profit %
+    monthly_compound = 3                   # raise tactical balance by this % for next month
     monthly_close_filter = True
+
+    # Filters & behavior switches
     adx_filter = True
     volume_filter = True
     atr_filter = True
     skip_logic = False
-    
-    cooldown_after_big_pnl = 4 * 3  # [4 * 26] [4 * 3]  is good  # number of skip candles
-    cooldown_until_index = -1        # best of cooldown_after_big_pnl: 4*12 , 4*46
 
-    ma_distance_threshold = 0.00159  # 0.16٪
-    candle_move_threshold = 0.008 # 0.8٪
+    # Cooldown
+    cooldown_after_big_pnl = 4 * 3
+    cooldown_until_index = -1
 
+    # Entry context thresholds
+    ma_distance_threshold = 0.00159
+    candle_move_threshold = 0.008
     impulse_move_threshold_pct = 1.5
-    impulse_lookback = 5          # candles to measure sharp move
-    late_entry_atr_mult = 0.8     # overextension vs ATR
-    late_entry_body_ratio = 0.6   # current body must be <= 60% of prior body to be "cooling"
-    late_entry_ema_pct = 0.005    # fallback overextension vs EMA when ATR missing (0.5%)
+    impulse_lookback = 5
+    late_entry_atr_mult = 0.8
+    late_entry_body_ratio = 0.6
+    late_entry_ema_pct = 0.005
 
-    # Entry/exit tuning (avoid magic numbers; tweakable)
-    slope_window = 5                # candles for EMA slope check
-    entry_score_threshold = 10       # points required to trigger entry
-    exit_score_threshold = 6        # points required to trigger exit
-    trail_activate_pct = 0.007      # arm trailing after +0.7% move from entry
-    trail_retrace_pct = 0.003       # exit if price retraces 0.3% from peak
-    loss_exit_pct = 0.05            # add 1 exit point if loss reaches 6% (no leverage)
-    profit_exit_pct = 0.07          # add 1 exit point if profit reaches 8% (no leverage) # 0.01, 0.07 is good
-    adx_exit_threshold = 15.0       # trend strength fade threshold
-    adx_exit_lookback = 1           # confirm ADX is falling vs N candles ago
-    entry_adx_threshold = 20.5      # ADX threshold for entry score confirmation
-    entry_atr_threshold = 1.2       # 1, 1.1, 1.2, 1.3 should be test
-    opposite_atr_body_mult = 0.6    # strong opposite candle body vs ATR
+    # Entry/exit controls
+    entry_score_threshold = 10
+    exit_score_threshold = 6
+
+    slope_window = 5
+    trail_activate_pct = 0.007
+    trail_retrace_pct = 0.003
+    loss_exit_pct = 0.05
+    profit_exit_pct = 0.07
+    adx_exit_threshold = 15.0
+    adx_exit_lookback = 1
+    entry_adx_threshold = 20.5
+    entry_atr_threshold = 1.2
+    opposite_atr_body_mult = 0.6
+
+    # Indicator periods
     period_adx = 14
     period_atr = 14
     period_atr_ma = 21
     period_vol_avg = 12
-    volume_spike_multiplier = 1.24  # volume confirmation threshold: vol_now >= multiplier * vol_avg
+    volume_spike_multiplier = 1.24
     plot_max_candles = 1200   # chart render limit to keep plotting fast (set <=0 for full range)
     plot_end_offset = 0       # drop latest N candles from chart to inspect older windows
     plot_step_candles = 300   # navigation step for loading older/newer windows
@@ -354,6 +372,18 @@ def ma_strategy(tune: dict = None):
 
         if 'safe_leverage_high' in tune:
             safe_leverage_high = float(tune['safe_leverage_high'])
+
+        if 'safe_leverage_balance_pct_low' in tune:
+            safe_leverage_balance_pct_low = float(tune['safe_leverage_balance_pct_low'])
+
+        if 'safe_leverage_balance_pct_med' in tune:
+            safe_leverage_balance_pct_med = float(tune['safe_leverage_balance_pct_med'])
+
+        if 'safe_leverage_balance_pct_high' in tune:
+            safe_leverage_balance_pct_high = float(tune['safe_leverage_balance_pct_high'])
+
+        if 'save_money_recover_trigger_pct' in tune:
+            save_money_recover_trigger_pct = float(tune['save_money_recover_trigger_pct'])
             
         if 'cooldown_after_big_pnl' in tune:
             cooldown_after_big_pnl = int(tune['cooldown_after_big_pnl'])
@@ -450,7 +480,9 @@ def ma_strategy(tune: dict = None):
     # ---- MANAGE TRADES ----
     trade_manager = TradeManager(csv_logger, first_balance, monthly_profit_percent_stop_trade, 
                                  tactical_balance, monthly_close_filter, monthly_compound, leverage, safe_leverage_low,
-                                 safe_leverage_med, safe_leverage_high)
+                                 safe_leverage_med, safe_leverage_high, safe_leverage_balance_pct_low,
+                                 safe_leverage_balance_pct_med, safe_leverage_balance_pct_high,
+                                 save_money_recover_trigger_pct)
 
     # ---- get_ADX ----
     # reuse existing `indicator` instance (created above) to avoid re-initialization
