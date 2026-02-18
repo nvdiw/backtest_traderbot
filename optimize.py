@@ -35,6 +35,7 @@ param_grid = {
     'trail_activate_pct': [0.006, 0.007, 0.008],
     'trail_retrace_pct': [0.003, 0.004, 0.005],
     'loss_exit_pct': [0.01, 0.02, 0.03],
+    'profit_exit_pct': [0.01, 0.02, 0.03],
     'adx_exit_threshold': [14, 15, 16, 17, 18.0, 19, 20],
     'adx_exit_lookback': [1, 2, 3, 4, 5],
     'entry_adx_threshold': [i/10 for i in range(100, 306, 5)],
@@ -53,7 +54,8 @@ param_grid = {
     'entry_score_adx': [1, 2, 3],
     'entry_score_volume': [1, 2, 3],
     'entry_late_penalty': [0, 1, 2, 3],
-    'exit_score_loss_guard': [1, 2, 3],
+    'exit_score_loss_guard': [0, 1, 2, 3],
+    'exit_score_profit_guard': [0, 1, 2, 3],
     'exit_score_ema_slope': [1, 2, 3],
     'exit_score_ema_cross': [1, 2, 3],
     'exit_score_ma_trend': [1, 2, 3],
@@ -76,8 +78,7 @@ param_grid = {
     'ma_200': [180, 190, 200, 210, 220, 230]
 }
 
-param_grid = {'entry_adx_threshold': [i/10 for i in range(200, 211, 1)]
-}
+# param_grid = {  }
 
 keys = list(param_grid.keys())
 combos = list(itertools.product(*(param_grid[k] for k in keys)))
