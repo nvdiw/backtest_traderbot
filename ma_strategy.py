@@ -143,7 +143,8 @@ def ma_strategy(tune: dict = None):
     exit_score_threshold = 6        # points required to trigger exit
     trail_activate_pct = 0.007      # arm trailing after +0.7% move from entry
     trail_retrace_pct = 0.003       # exit if price retraces 0.3% from peak
-    loss_exit_pct = 0.06            # add 1 exit point if loss reaches 6% (no leverage)
+    loss_exit_pct = 0.05            # add 1 exit point if loss reaches 6% (no leverage)
+    profit_exit_pct = 0.07          # add 1 exit point if profit reaches 8% (no leverage) # 0.01, 0.07 is good
     adx_exit_threshold = 15.0       # trend strength fade threshold
     adx_exit_lookback = 1           # confirm ADX is falling vs N candles ago
     entry_adx_threshold = 20.5      # ADX threshold for entry score confirmation
@@ -180,7 +181,8 @@ def ma_strategy(tune: dict = None):
     entry_late_penalty = 1  # applied as a subtraction
 
     # exit positive
-    exit_score_loss_guard = 3
+    exit_score_loss_guard = 2
+    exit_score_profit_guard = 2
     exit_score_ema_slope = 1
     exit_score_ema_cross = 3
     exit_score_ma_trend = 1
@@ -260,6 +262,9 @@ def ma_strategy(tune: dict = None):
         if 'loss_exit_pct' in tune:
             loss_exit_pct = float(tune['loss_exit_pct'])
 
+        if 'profit_exit_pct' in tune:
+            profit_exit_pct = float(tune['profit_exit_pct'])
+
         if 'adx_exit_threshold' in tune:
             adx_exit_threshold = float(tune['adx_exit_threshold'])
 
@@ -298,6 +303,9 @@ def ma_strategy(tune: dict = None):
 
         if 'exit_score_loss_guard' in tune:
             exit_score_loss_guard = int(tune['exit_score_loss_guard'])
+
+        if 'exit_score_profit_guard' in tune:
+            exit_score_profit_guard = int(tune['exit_score_profit_guard'])
 
         if 'exit_score_ema_slope' in tune:
             exit_score_ema_slope = int(tune['exit_score_ema_slope'])
@@ -768,29 +776,35 @@ def ma_strategy(tune: dict = None):
                     exit_score += exit_score_loss_guard
                     exit_reasons.append(("Loss guard triggered", exit_score_loss_guard))
 
-            # 1) EMA slope weakness (look back `slope_window` candles)
+            # 1) profit guard (no leverage): if price rises >= profit_exit_pct from entry
+            if entry_price is not None:
+                if close_prices[i] >= entry_price * (1 + profit_exit_pct):
+                    exit_score += exit_score_profit_guard
+                    exit_reasons.append(("Profit guard triggered", exit_score_profit_guard))
+
+            # 2) EMA slope weakness (look back `slope_window` candles)
             if i - slope_window >= 0 and ema_16[i] < ema_16[i - slope_window]:
                 exit_score += exit_score_ema_slope
                 exit_reasons.append(("EMA16 slope weakness", exit_score_ema_slope))
 
-            # 2) EMA crossing below MA50
+            # 3) EMA crossing below MA50
             if ema_16[i] < ma_50[i]:
                 exit_score += exit_score_ema_cross
                 exit_reasons.append(("EMA16 crossed below MA50", exit_score_ema_cross))
 
-            # 3) long-term trend weakening (MA100 < MA200)
+            # 4) long-term trend weakening (MA100 < MA200)
             if ma_100[i] < ma_200[i]:
                 exit_score += exit_score_ma_trend
                 exit_reasons.append(("MA100 below MA200", exit_score_ma_trend))
 
-            # 4) trailing stop based on pullback from peak (armed after min profit)
+            # 5) trailing stop based on pullback from peak (armed after min profit)
             if entry_index is not None and i > entry_index:
                 if highest_since_entry >= entry_price * (1 + trail_activate_pct):
                     if close_prices[i] <= highest_since_entry * (1 - trail_retrace_pct):
                         exit_score += exit_score_trailing
                         exit_reasons.append(("Trailing retrace exit", exit_score_trailing))
 
-            # 5) ADX weakening (trend strength fading)
+            # 6) ADX weakening (trend strength fading)
             if i - adx_exit_lookback >= 0:
                 adx_now = adx[i]
                 adx_prev = adx[i - adx_exit_lookback]
@@ -800,7 +814,7 @@ def ma_strategy(tune: dict = None):
                             exit_score += exit_score_adx
                             exit_reasons.append(("ADX weakening", exit_score_adx))
 
-            # 6) strong opposite candle (body >= ATR * mult)
+            # 7) strong opposite candle (body >= ATR * mult)
             if atr[i] is not None and atr[i] > 0:
                 if close_prices[i] < open_prices[i]:
                     body = open_prices[i] - close_prices[i]
@@ -1034,29 +1048,35 @@ def ma_strategy(tune: dict = None):
                     exit_score += exit_score_loss_guard
                     exit_reasons.append(("Loss guard triggered", exit_score_loss_guard))
 
-            # 1) EMA slope weakness for short (EMA trending up)
+            # 1) profit guard (no leverage): if price drops >= profit_exit_pct from entry
+            if entry_price is not None:
+                if close_prices[i] <= entry_price * (1 - profit_exit_pct):
+                    exit_score += exit_score_profit_guard
+                    exit_reasons.append(("Profit guard triggered", exit_score_profit_guard))
+
+            # 2) EMA slope weakness for short (EMA trending up)
             if i - slope_window >= 0 and ema_16[i] > ema_16[i - slope_window]:
                 exit_score += exit_score_ema_slope
                 exit_reasons.append(("EMA16 slope weakness (short)", exit_score_ema_slope))
 
-            # 2) EMA crossing above MA50
+            # 3) EMA crossing above MA50
             if ema_16[i] > ma_50[i]:
                 exit_score += exit_score_ema_cross
                 exit_reasons.append(("EMA16 crossed above MA50", exit_score_ema_cross))
 
-            # 3) long-term trend weakening for short (MA100 >= MA200)
+            # 4) long-term trend weakening for short (MA100 >= MA200)
             if ma_100[i] >= ma_200[i]:
                 exit_score += exit_score_ma_trend
                 exit_reasons.append(("MA100 above/equal MA200", exit_score_ma_trend))
 
-            # 4) trailing stop based on pullback from trough (armed after min profit)
+            # 5) trailing stop based on pullback from trough (armed after min profit)
             if entry_index is not None and i > entry_index:
                 if lowest_since_entry <= entry_price * (1 - trail_activate_pct):
                     if close_prices[i] >= lowest_since_entry * (1 + trail_retrace_pct):
                         exit_score += exit_score_trailing
                         exit_reasons.append(("Trailing retrace exit", exit_score_trailing))
 
-            # 5) ADX weakening (trend strength fading)
+            # 6) ADX weakening (trend strength fading)
             if i - adx_exit_lookback >= 0:
                 adx_now = adx[i]
                 adx_prev = adx[i - adx_exit_lookback]
@@ -1066,7 +1086,7 @@ def ma_strategy(tune: dict = None):
                             exit_score += exit_score_adx
                             exit_reasons.append(("ADX weakening", exit_score_adx))
 
-            # 6) strong opposite candle (body >= ATR * mult)
+            # 7) strong opposite candle (body >= ATR * mult)
             if atr[i] is not None and atr[i] > 0:
                 if close_prices[i] > open_prices[i]:
                     body = close_prices[i] - open_prices[i]
