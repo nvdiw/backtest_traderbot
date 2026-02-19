@@ -16,7 +16,7 @@ from chart_renderer import render_backtest_chart
 # end = get_candle_index("2025-12-18")     ----> 278640
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2019-01-01","2026-02-14"))
+start, end = get_candle_index(("2023-01-01","2026-02-14"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 current_position = None  # None | "long" | "short"
@@ -66,6 +66,22 @@ low_prices = np.asarray(low_prices, dtype=float)
 high_prices = np.asarray(high_prices, dtype=float)
 volume_prices = np.asarray(volume_prices, dtype=float)
 
+_INDICATOR_CACHE = {
+    "ema": {},
+    "ma": {},
+    "adx": {},
+    "atr": {},
+    "atr_ma": {},
+    "vol_avg": {},
+}
+
+
+def _cached_indicator(kind, key, builder):
+    cache = _INDICATOR_CACHE[kind]
+    if key not in cache:
+        cache[key] = builder()
+    return cache[key]
+
 
 # Calculate Trade Duration
 def trade_duration(open_time: str, close_time: str):
@@ -107,6 +123,7 @@ def ma_strategy(tune: dict = None):
 
     # detect optimization mode early so we can disable I/O and heavy bookkeeping
     optimize = bool(tune.get('optimize')) if tune else False
+    verbose = not optimize
     csv_logger = TradeCSVLogger(optimize=optimize)
 
     # ---- settings ----
@@ -153,7 +170,7 @@ def ma_strategy(tune: dict = None):
     late_entry_ema_pct = 0.005
 
     # Entry/exit controls
-    entry_score_threshold = 10
+    entry_score_threshold = 9
     exit_score_threshold = 6
 
     slope_window = 5
@@ -173,6 +190,8 @@ def ma_strategy(tune: dict = None):
     period_atr_ma = 21
     period_vol_avg = 12
     volume_spike_multiplier = 1.24
+
+    # Matplot setting
     plot_max_candles = 1200   # chart render limit to keep plotting fast (set <=0 for full range)
     plot_end_offset = 0       # drop latest N candles from chart to inspect older windows
     plot_step_candles = 300   # navigation step for loading older/newer windows
@@ -190,7 +209,6 @@ def ma_strategy(tune: dict = None):
     # entry positive
     entry_score_cross = 1
     entry_score_ema_vs_ma50 = 3
-    entry_score_close_vs_ema16 = 1
     entry_score_ma_trend = 1
     entry_score_ma_distance_or_candle = 1
     entry_score_adx = 1
@@ -301,8 +319,6 @@ def ma_strategy(tune: dict = None):
         if 'entry_score_ema_vs_ma50' in tune:
             entry_score_ema_vs_ma50 = int(tune['entry_score_ema_vs_ma50'])
 
-        if 'entry_score_close_vs_ema16' in tune:
-            entry_score_close_vs_ema16 = int(tune['entry_score_close_vs_ema16'])
 
         if 'entry_score_ma_trend' in tune:
             entry_score_ma_trend = int(tune['entry_score_ma_trend'])
@@ -453,52 +469,63 @@ def ma_strategy(tune: dict = None):
     indicator = Indicator(close_prices, period=None)
 
     # MA/EMA
-    ema_16 = 16
-    ma_50 = 50
-    ma_100 = 102
-    ma_200 = 198
+    ema_16_period = 16
+    ma_50_period = 50
+    ma_100_period = 102
+    ma_200_period = 198
     
 
     # Optimize: MA, EMA
     if tune:
         if 'ema_16' in tune:
-            ema_16 = int(tune['ema_16'])
+            ema_16_period = int(tune['ema_16'])
         if 'ma_50' in tune:
-            ma_50 = int(tune['ma_50'])
+            ma_50_period = int(tune['ma_50'])
         if 'ma_100' in tune:
-            ma_100 = int(tune['ma_100'])
+            ma_100_period = int(tune['ma_100'])
         if 'ma_200' in tune:
-            ma_200 = int(tune['ma_200'])
+            ma_200_period = int(tune['ma_200'])
 
-    ema_16 = indicator.get_EMA(ema_16)
-    ma_50 = indicator.get_MA(ma_50)
-    ma_100 = indicator.get_MA(ma_100)
-    ma_200 = indicator.get_MA(ma_200)
+    ema_16 = _cached_indicator("ema", ema_16_period, lambda: indicator.get_EMA(ema_16_period))
+    ma_50 = _cached_indicator("ma", ma_50_period, lambda: indicator.get_MA(ma_50_period))
+    ma_100 = _cached_indicator("ma", ma_100_period, lambda: indicator.get_MA(ma_100_period))
+    ma_200 = _cached_indicator("ma", ma_200_period, lambda: indicator.get_MA(ma_200_period))
 
 
 
     # ---- MANAGE TRADES ----
-    trade_manager = TradeManager(csv_logger, first_balance, monthly_profit_percent_stop_trade, 
+    trade_manager = TradeManager(csv_logger, first_balance, monthly_profit_percent_stop_trade,
                                  tactical_balance, monthly_close_filter, monthly_compound, leverage, safe_leverage_low,
                                  safe_leverage_med, safe_leverage_high, safe_leverage_balance_pct_low,
                                  safe_leverage_balance_pct_med, safe_leverage_balance_pct_high,
-                                 save_money_recover_trigger_pct)
+                                 save_money_recover_trigger_pct, verbose=verbose)
 
     # ---- get_ADX ----
     # reuse existing `indicator` instance (created above) to avoid re-initialization
-    adx = indicator.get_ADX(
-        high_prices,
-        low_prices,
-        close_prices,
-        period=period_adx
+    adx = _cached_indicator(
+        "adx",
+        period_adx,
+        lambda: indicator.get_ADX(high_prices, low_prices, close_prices, period=period_adx),
     )
 
     # ---- get_ATR ----
-    atr = indicator.get_ATR(high_prices, low_prices, close_prices, period=period_atr)
+    atr = _cached_indicator(
+        "atr",
+        period_atr,
+        lambda: indicator.get_ATR(high_prices, low_prices, close_prices, period=period_atr),
+    )
     # ---- get_ATR_MA ----
-    atr_ma = indicator.get_ATR_MA(atr, period=period_atr_ma)
+    atr_ma = _cached_indicator(
+        "atr_ma",
+        (period_atr, period_atr_ma),
+        lambda: indicator.get_ATR_MA(atr, period=period_atr_ma),
+    )
     # ---- get volume average ----
-    vol_avg_15_list = indicator.get_volume_avg(volume_prices, period=period_vol_avg)
+    vol_avg_15_list = _cached_indicator(
+        "vol_avg",
+        period_vol_avg,
+        lambda: indicator.get_volume_avg(volume_prices, period=period_vol_avg),
+    )
 
     # you can use times for open/close orders
     # # ---- time filter mask (13:30 UTC close time) ----
@@ -694,24 +721,20 @@ def ma_strategy(tune: dict = None):
                 if ema_16[i] > ma_50[i]:
                     entry_score += entry_score_ema_vs_ma50
                     entry_reasons.append(("EMA16 above MA50", entry_score_ema_vs_ma50))
-                # 3) close above EMA16
-                if close_prices[i] > ema_16[i]:
-                    entry_score += entry_score_close_vs_ema16
-                    entry_reasons.append(("Close above EMA16", entry_score_close_vs_ema16))
-                # 4) Ma 130 > Ma 200
+                # 3) Ma 130 > Ma 200
                 if ma_100[i] >= ma_200[i]:
                     entry_score += entry_score_ma_trend
                     entry_reasons.append(("MA100 above/equal MA200", entry_score_ma_trend))
-                # 5) ma_distance or last_candle_move is strong
+                # 4) ma_distance or last_candle_move is strong
                 if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
                     entry_score += entry_score_ma_distance_or_candle
                     entry_reasons.append(("Momentum strength (MA distance or candle move)", entry_score_ma_distance_or_candle))
-                # 6) ===== ADX FILTER =====
+                # 5) ===== ADX FILTER =====
                 if adx_filter == True :
                     if adx[i] != None and adx[i] >= entry_adx_threshold:
                         entry_score += entry_score_adx
                         entry_reasons.append(("ADX strength confirmation", entry_score_adx))
-                # 7) ===== VOLUME FILTER =====
+                # 6) ===== VOLUME FILTER =====
                 if volume_filter:
                     vol_now = volume_prices[i]
                     vol_avg15 = vol_avg_15_list[i]
@@ -749,7 +772,8 @@ def ma_strategy(tune: dict = None):
                     if skip_logic and skip_trades_left > 0:
                         skip_trades_left -= 1
                         last_trade_cross_index = last_cross_index
-                        print(f"⏭️ SKIP LONG | skips left: {skip_trades_left}")
+                        if verbose:
+                            print(f"⏭️ SKIP LONG | skips left: {skip_trades_left}")
                         continue
 
                     # ---- open long ----
@@ -965,24 +989,20 @@ def ma_strategy(tune: dict = None):
                 if ema_16[i] <= ma_50[i]:
                     entry_score += entry_score_ema_vs_ma50
                     entry_reasons.append(("EMA16 below/equal MA50", entry_score_ema_vs_ma50))
-                # 3) close below EMA16
-                if close_prices[i] < ema_16[i]:
-                    entry_score += entry_score_close_vs_ema16
-                    entry_reasons.append(("Close below EMA16", entry_score_close_vs_ema16))
-                # 4) Ma 130 < Ma 200
+                # 3) Ma 130 < Ma 200
                 if ma_100[i] < ma_200[i]:
                     entry_score += entry_score_ma_trend
                     entry_reasons.append(("MA100 below MA200", entry_score_ma_trend))
-                # 5) ma_distance or last_candle_move is strong
+                # 4) ma_distance or last_candle_move is strong
                 if ma_distance > ma_distance_threshold or last_candle_move > candle_move_threshold:
                     entry_score += entry_score_ma_distance_or_candle
                     entry_reasons.append(("Momentum strength (MA distance or candle move)", entry_score_ma_distance_or_candle))
-                # 6) ===== ADX FILTER =====
+                # 5) ===== ADX FILTER =====
                 if adx_filter == True :
                     if adx[i] != None and adx[i] >= entry_adx_threshold:
                         entry_score += entry_score_adx
                         entry_reasons.append(("ADX strength confirmation", entry_score_adx))
-                # 7) ===== VOLUME FILTER =====
+                # 6) ===== VOLUME FILTER =====
                 if volume_filter:
                     vol_now = volume_prices[i]
                     vol_avg15 = vol_avg_15_list[i]
@@ -1021,7 +1041,8 @@ def ma_strategy(tune: dict = None):
                     if skip_logic and skip_trades_left > 0:
                         skip_trades_left -= 1
                         last_trade_cross_index = last_cross_index
-                        print(f"⏭️ SKIP SHORT | skips left: {skip_trades_left}")
+                        if verbose:
+                            print(f"⏭️ SKIP SHORT | skips left: {skip_trades_left}")
                         continue
 
                     # ---- open short ----
@@ -1221,23 +1242,24 @@ def ma_strategy(tune: dict = None):
     win_rate = (total_wins / (total_wins + total_losses)) * 100 if (total_wins + total_losses) > 0 else 0
 
 
-    print("✅ BACKTEST FINISHED")
-    print("Closed Trades:", count_closed_orders, "( Longs:", total_long, "| Shorts:", total_short, ")")
-    print("Total Wins:", total_wins, "| Total Wins Long:", total_wins_long, "| Total Wins Short:", total_wins_short)
-    print("Total Losses:", total_losses)
-    print("Final Balance:", round(balance, 2), "$")
-    print("Final Balance (No Fee):", round(balance_without_fee, 2), "$")
-    print("Total Fees Paid:", round(deducting_fee_total, 2), "$")
-    print("Fee Compounding Impact:",
-          round(balance_without_fee - balance - deducting_fee_total, 2), "$")
-    print("Maximum Drawdown:", round(max_drawdown, 2), "%")
-    print(f"Total Duration : {days} days, {hours} hours, {minutes} minutes")
-    print("Win Rate:", round(win_rate, 2), "%")
-    print("Total Profit:", round(sum(profits_lst), 2), "$")
-    print("Total Profit Percent:", round(t_profit_percent, 2), "%", "or", round(total_profit_percent, 2), "%")
-    print("saved Money:", round(save_money,2), "$")
-    print("Count Liquids:", total_liquids)
-    print("count_profit_more_than_8%_monthly:", len(lst_profit_percent_per_month))
+    if verbose:
+        print("✅ BACKTEST FINISHED")
+        print("Closed Trades:", count_closed_orders, "( Longs:", total_long, "| Shorts:", total_short, ")")
+        print("Total Wins:", total_wins, "| Total Wins Long:", total_wins_long, "| Total Wins Short:", total_wins_short)
+        print("Total Losses:", total_losses)
+        print("Final Balance:", round(balance, 2), "$")
+        print("Final Balance (No Fee):", round(balance_without_fee, 2), "$")
+        print("Total Fees Paid:", round(deducting_fee_total, 2), "$")
+        print("Fee Compounding Impact:",
+              round(balance_without_fee - balance - deducting_fee_total, 2), "$")
+        print("Maximum Drawdown:", round(max_drawdown, 2), "%")
+        print(f"Total Duration : {days} days, {hours} hours, {minutes} minutes")
+        print("Win Rate:", round(win_rate, 2), "%")
+        print("Total Profit:", round(sum(profits_lst), 2), "$")
+        print("Total Profit Percent:", round(t_profit_percent, 2), "%", "or", round(total_profit_percent, 2), "%")
+        print("saved Money:", round(save_money,2), "$")
+        print("Count Liquids:", total_liquids)
+        print("count_profit_more_than_8%_monthly:", len(lst_profit_percent_per_month))
 
     csv_logger.save_csv(
     first_balance=first_balance,
@@ -1314,6 +1336,7 @@ def ma_strategy(tune: dict = None):
         'wins': total_wins,
         'losses': total_losses,
         'maximum_drawdown': round(max_drawdown, 2),
+        'win_rate': round(win_rate, 2),
         "profit_more_than_8%": len(lst_profit_percent_per_month)
     }
 
