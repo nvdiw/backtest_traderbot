@@ -215,7 +215,9 @@ def render_backtest_chart(
         "hline_equity": None,
         "price_label": None,
         "balance_label": None,
+        "time_label": None,
         "marker_hover_points": [],
+        "visible_times": None,
         "marker_tooltip_artist": None,
         "debug_overlay_artist": None,
         "rendering": False,
@@ -654,6 +656,25 @@ def render_backtest_chart(
                 visible=False,
                 zorder=31,
             )
+            time_transform = mtransforms.blended_transform_factory(ax_equity.transData, ax_equity.transAxes)
+            nav_state["time_label"] = ax_equity.text(
+                x_mid,
+                0.02,
+                "",
+                transform=time_transform,
+                ha="center",
+                va="bottom",
+                fontsize=8,
+                color=chart_palette["label_fg"],
+                bbox=dict(
+                    boxstyle="round,pad=0.18",
+                    facecolor=chart_palette["label_bg"],
+                    edgecolor=chart_palette["label_edge"],
+                    linewidth=0.8,
+                ),
+                visible=False,
+                zorder=31,
+            )
             # Prevent stacking fig-level text artists across re-renders.
             old_marker_tooltip = nav_state.get("marker_tooltip_artist")
             if old_marker_tooltip is not None:
@@ -742,6 +763,7 @@ def render_backtest_chart(
                     f"DEBUG overlay ON | markers: {len(nav_state.get('marker_hover_points', []))}"
                 )
                 debug_overlay_artist.set_visible(True)
+            nav_state["visible_times"] = list(time_index)
     
             fig.subplots_adjust(left=0.06, right=0.99, top=0.92, bottom=0.09, hspace=0.04)
             nav_state["initial_xlim"] = ax_price.get_xlim()
@@ -770,6 +792,7 @@ def render_backtest_chart(
             "hline_equity",
             "price_label",
             "balance_label",
+            "time_label",
             "marker_tooltip_artist",
         ):
             artist = nav_state.get(key)
@@ -963,8 +986,9 @@ def render_backtest_chart(
         hline_equity = nav_state.get("hline_equity")
         price_label = nav_state.get("price_label")
         balance_label = nav_state.get("balance_label")
+        time_label = nav_state.get("time_label")
         marker_tooltip_artist = nav_state.get("marker_tooltip_artist")
-        if None in (vline_price, vline_equity, hline_price, hline_equity, price_label, balance_label):
+        if None in (vline_price, vline_equity, hline_price, hline_equity, price_label, balance_label, time_label):
             return
     
         cursor_x = ax_price.transData.inverted().transform((event.x, event.y))[0]
@@ -975,6 +999,26 @@ def render_backtest_chart(
         vline_equity.set_xdata([cursor_x, cursor_x])
         vline_price.set_visible(True)
         vline_equity.set_visible(True)
+        time_label.set_x(cursor_x)
+        visible_times = nav_state.get("visible_times") or []
+        if len(visible_times) > 0:
+            x_left, x_right = ax_price.get_xlim()
+            span = float(x_right - x_left)
+            if np.isfinite(span) and abs(span) > 1e-12:
+                frac = float(np.clip((cursor_x - x_left) / span, 0.0, 1.0))
+                idx = int(round(frac * (len(visible_times) - 1)))
+                idx = int(np.clip(idx, 0, len(visible_times) - 1))
+                ts = visible_times[idx]
+                if not isinstance(ts, pd.Timestamp):
+                    ts = pd.Timestamp(ts, tz="UTC")
+                elif ts.tzinfo is None:
+                    ts = ts.tz_localize("UTC")
+                time_label.set_text(ts.strftime("%Y-%m-%d %H:%M"))
+                time_label.set_visible(True)
+            else:
+                time_label.set_visible(False)
+        else:
+            time_label.set_visible(False)
     
         # show price horizontal/label only when cursor is inside price panel
         if ax_price.bbox.contains(event.x, event.y):
