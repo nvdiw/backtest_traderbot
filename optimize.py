@@ -17,7 +17,6 @@ import time
 import multiprocessing
 import argparse
 import os
-from functools import partial
 from ma_strategy import ma_strategy
 
 # Grid to search (kept reasonable to limit runtime)
@@ -48,7 +47,6 @@ param_grid = {
     'opposite_atr_body_mult': [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5],
     'entry_score_cross': [1, 2, 3],
     'entry_score_ema_vs_ma50': [1, 2, 3],
-    'entry_score_close_vs_ema16': [1, 2, 3],
     'entry_score_ma_trend': [1, 2, 3],
     'entry_score_ma_distance_or_candle': [1, 2, 3],
     'entry_score_adx': [1, 2, 3],
@@ -93,7 +91,7 @@ while True:
     try:
         with open(out_file, 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(keys + ['final_balance', 'total_profit', 'total_profit_percent', 'closed_trades', 'wins', 'losses', 'maximum_drawdown', 'duration_s', 'profit_more_than_8%'])
+            writer.writerow(keys + ['final_balance', 'total_profit', 'total_profit_percent', 'closed_trades', 'wins', 'losses', 'maximum_drawdown', 'win_rate', 'duration_s', 'profit_more_than_8%'])
         break
 
     except PermissionError:
@@ -118,45 +116,82 @@ def _evaluate_pair(pair):
     return idx, tune, res, duration, err
 
 
-def _write_result_row(out_file, keys, tune, res, duration):
-    row = [tune[k] for k in keys] + [res.get('final_balance'), res.get('total_profit'), res.get('total_profit_percent'), res.get('closed_trades'), res.get('wins'), res.get('losses'), res.get('maximum_drawdown'), round(duration, 2), res.get('profit_more_than_8%')]
-    with open(out_file, 'a', newline='') as f:
+def _result_to_row(keys, tune, res, duration):
+    return [tune[k] for k in keys] + [
+        res.get('final_balance'),
+        res.get('total_profit'),
+        res.get('total_profit_percent'),
+        res.get('closed_trades'),
+        res.get('wins'),
+        res.get('losses'),
+        res.get('maximum_drawdown'),
+        res.get('win_rate'),
+        round(duration, 2),
+        res.get('profit_more_than_8%')
+    ]
+
+
+def _append_rows(path, rows):
+    if not rows:
+        return
+    with open(path, 'a', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(row)
+        writer.writerows(rows)
 
 
-def main(workers: int):
+def main(workers: int, chunksize: int, flush_every: int, log_every: int):
     best = None
     start_time_all = time.time()
+    total = len(combos)
+    rows_buffer = []
+    completed = 0
 
-    pairs = list(enumerate(combos, 1))
+    if chunksize <= 0:
+        if workers and workers > 1:
+            chunksize = max(1, total // (workers * 8))
+        else:
+            chunksize = 1
 
     # try parallel execution (parent does all file I/O)
     if workers and workers > 1:
         with multiprocessing.Pool(processes=workers) as pool:
-            for idx, tune, res, duration, err in pool.imap_unordered(_evaluate_pair, pairs, chunksize=1):
+            for idx, tune, res, duration, err in pool.imap_unordered(_evaluate_pair, enumerate(combos, 1), chunksize=chunksize):
+                completed += 1
                 if err:
                     print(f"Combo {idx}/{len(combos)} {tune} raised error: {err}")
                     continue
 
-                _write_result_row(out_file, keys, tune, res, duration)
-                print(f"[{idx}/{len(combos)}] tune={tune} profit={res.get('final_balance')}")
+                rows_buffer.append(_result_to_row(keys, tune, res, duration))
+                if len(rows_buffer) >= flush_every:
+                    _append_rows(out_file, rows_buffer)
+                    rows_buffer.clear()
+
+                if log_every > 0 and (completed % log_every == 0 or completed == total):
+                    print(f"[{completed}/{total}] last_idx={idx} duration={duration:.2f}s")
 
                 if best is None or res.get('total_profit', -1) > best['total_profit']:
                     best = {'tune': tune, **res}
     else:
         # fallback to sequential (original behaviour)
-        for idx, combo in pairs:
+        for idx, combo in enumerate(combos, 1):
+            completed += 1
             idx, tune, res, duration, err = _evaluate_pair((idx, combo))
             if err:
                 print(f"Combo {idx}/{len(combos)} {tune} raised error: {err}")
                 continue
 
-            _write_result_row(out_file, keys, tune, res, duration)
-            print(f"[{idx}/{len(combos)}] tune={tune} profit={res.get('final_balance')}")
+            rows_buffer.append(_result_to_row(keys, tune, res, duration))
+            if len(rows_buffer) >= flush_every:
+                _append_rows(out_file, rows_buffer)
+                rows_buffer.clear()
+
+            if log_every > 0 and (completed % log_every == 0 or completed == total):
+                print(f"[{completed}/{total}] last_idx={idx} duration={duration:.2f}s")
 
             if best is None or res.get('total_profit', -1) > best['total_profit']:
                 best = {'tune': tune, **res}
+
+    _append_rows(out_file, rows_buffer)
 
     print('Total duration (s):', time.time() - start_time_all)
     print('Best:', best)
@@ -172,6 +207,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Optimize ma_strategy (parallel).')
     parser.add_argument('-w', '--workers', type=int, default=min(8, (os.cpu_count() or 1)),
                         help='number of worker processes (default: min(8, cpu_count))')
+    parser.add_argument('--chunksize', type=int, default=0,
+                        help='imap_unordered chunksize (0=auto)')
+    parser.add_argument('--flush-every', type=int, default=32,
+                        help='flush result rows to CSV every N finished combos')
+    parser.add_argument('--log-every', type=int, default=10,
+                        help='print progress every N finished combos (0=silent)')
     args = parser.parse_args()
-    main(args.workers)
+    main(args.workers, args.chunksize, args.flush_every, args.log_every)
 
