@@ -34,7 +34,9 @@ def trade_duration(open_time: str, close_time: str):
 # Trade manager class to encapsulate open/close logic without changing behavior
 class TradeManager:
     def __init__(self, csv_logger, first_balance, monthly_profit_percent_stop_trade, tactical_balance,
-                 monthly_close_filter, monthly_compound, leverage, safe_leverage_low, safe_leverage_med, safe_leverage_high) :
+                 monthly_close_filter, monthly_compound, leverage, safe_leverage_low, safe_leverage_med,
+                 safe_leverage_high, safe_leverage_balance_pct_low, safe_leverage_balance_pct_med,
+                 safe_leverage_balance_pct_high, save_money_recover_trigger_pct, verbose=True) :
         self.csv_logger = csv_logger
         self.first_balance = first_balance
         self.monthly_profit_percent_stop_trade = monthly_profit_percent_stop_trade
@@ -45,6 +47,11 @@ class TradeManager:
         self.safe_leverage_low = safe_leverage_low
         self.safe_leverage_med = safe_leverage_med
         self.safe_leverage_high = safe_leverage_high
+        self.safe_leverage_balance_pct_low = safe_leverage_balance_pct_low
+        self.safe_leverage_balance_pct_med = safe_leverage_balance_pct_med
+        self.safe_leverage_balance_pct_high = safe_leverage_balance_pct_high
+        self.save_money_recover_trigger_pct = save_money_recover_trigger_pct
+        self.verbose = bool(verbose)
         # self.just_one_time = True
 
 
@@ -65,11 +72,11 @@ class TradeManager:
             margin = balance * trade_amount_percent
         
         # ---------- Leverage ----------
-        if balance <= self.tactical_balance * 80 / 100:
+        if balance <= self.tactical_balance * self.safe_leverage_balance_pct_low / 100:
             leverage = self.safe_leverage_low
-        elif balance <= self.tactical_balance * 85 / 100:
+        elif balance <= self.tactical_balance * self.safe_leverage_balance_pct_med / 100:
             leverage = self.safe_leverage_med
-        elif balance <= self.tactical_balance * 90 / 100:
+        elif balance <= self.tactical_balance * self.safe_leverage_balance_pct_high / 100:
             leverage =  self.safe_leverage_high
         else:
             leverage = self.leverage    # = 10
@@ -89,7 +96,8 @@ class TradeManager:
         open_time_value = open_times[i]
         current_position = "long"
 
-        print("Open LONG at price:", entry_price, "$", "| Open Time:", open_time_value, "| leverage:", leverage)
+        if self.verbose:
+            print("Open LONG at price:", entry_price, "$", "| Open Time:", open_time_value, "| leverage:", leverage)
 
         return {
             'entry_price': entry_price,
@@ -168,21 +176,23 @@ class TradeManager:
         pnl_percent_without_leverage = ((pnl / margin) * 100 ) / leverage
         if pnl_percent_without_leverage >= 4:
             cooldown_until_index = i + cooldown_after_big_pnl
-            print(f"🟡 Cooldown Activated (LONG) until candle index {cooldown_until_index}")
+            if self.verbose:
+                print(f"🟡 Cooldown Activated (LONG) until candle index {cooldown_until_index}")
 
         close_time_value = open_times[i]
         days, hours, minutes = trade_duration(open_time_value, close_time_value)
 
 
-        print("Close LONG at price:", close_price, "$", "| Close Time:", close_time_value, "| leverage:", leverage)
-        print("Balance:", round(balance_before_trade, 2), "$", "→", round(balance, 2), "$", "| Save Money:", round(save_money, 2), "$")
-        print("Balance (no fee):",
-            round(balance_before_trade_no_fee, 2), "$", "→", round(balance_without_fee, 2), "$")
-        print("pnl:", round(pnl, 2), "$ |", round(pnl_percent, 2), "% |" , "Amount:", round(margin), "$")
-        print("fee:", round(total_fee, 2), "$")
-        print("Profit:", round(profit, 2), "$ |", round(profit_percent, 2), "%")
-        print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
-        print("-" * 90)
+        if self.verbose:
+            print("Close LONG at price:", close_price, "$", "| Close Time:", close_time_value, "| leverage:", leverage)
+            print("Balance:", round(balance_before_trade, 2), "$", "→", round(balance, 2), "$", "| Save Money:", round(save_money, 2), "$")
+            print("Balance (no fee):",
+                round(balance_before_trade_no_fee, 2), "$", "→", round(balance_without_fee, 2), "$")
+            print("pnl:", round(pnl, 2), "$ |", round(pnl_percent, 2), "% |" , "Amount:", round(margin), "$")
+            print("fee:", round(total_fee, 2), "$")
+            print("Profit:", round(profit, 2), "$ |", round(profit_percent, 2), "%")
+            print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
+            print("-" * 90)
 
         csv_logger.log_trade(
             "LONG",
@@ -208,10 +218,11 @@ class TradeManager:
         )
 
         # ---- save money ----
-        if balance < self.tactical_balance * 75 / 100:
-            if save_money >= self.tactical_balance * 25 / 100:
-                balance += self.tactical_balance * 25 / 100
-                save_money -= self.tactical_balance * 25 / 100
+        save_money_recover_amount_pct = 100 - self.save_money_recover_trigger_pct
+        if balance < self.tactical_balance * self.save_money_recover_trigger_pct / 100:
+            if save_money >= self.tactical_balance * save_money_recover_amount_pct / 100:
+                balance += self.tactical_balance * save_money_recover_amount_pct / 100
+                save_money -= self.tactical_balance * save_money_recover_amount_pct / 100
 
         # stop trade if we got 8% for this month
         if self.monthly_close_filter == True :
@@ -272,11 +283,11 @@ class TradeManager:
             margin = balance * trade_amount_percent
 
         # ---------- Leverage ----------
-        if balance <= self.tactical_balance * 80 / 100:
+        if balance <= self.tactical_balance * self.safe_leverage_balance_pct_low / 100:
             leverage = self.safe_leverage_low  # 2 low
-        elif balance <= self.tactical_balance * 85 / 100:
+        elif balance <= self.tactical_balance * self.safe_leverage_balance_pct_med / 100:
             leverage = self.safe_leverage_med  # 3 med
-        elif balance <= self.tactical_balance * 90 / 100:
+        elif balance <= self.tactical_balance * self.safe_leverage_balance_pct_high / 100:
             leverage = self.safe_leverage_high # 4 high
         else:
             leverage = self.leverage    # = 10
@@ -296,7 +307,8 @@ class TradeManager:
         open_time_value = open_times[i]
         current_position = "short"
 
-        print("Open SHORT at price:", entry_price, "$", "| Open Time:", open_time_value, "| leverage:", leverage)
+        if self.verbose:
+            print("Open SHORT at price:", entry_price, "$", "| Open Time:", open_time_value, "| leverage:", leverage)
 
         return {
             'entry_price': entry_price,
@@ -375,21 +387,23 @@ class TradeManager:
         pnl_percent_without_leverage = ((pnl / margin) * 100) / leverage
         if pnl_percent_without_leverage >= 4:
             cooldown_until_index = i + cooldown_after_big_pnl
-            print(f"🟡 Cooldown Activated (SHORT) until candle index {cooldown_until_index}")
+            if self.verbose:
+                print(f"🟡 Cooldown Activated (SHORT) until candle index {cooldown_until_index}")
 
         close_time_value = open_times[i]
         days, hours, minutes = trade_duration(open_time_value, close_time_value)
 
 
-        print("Close SHORT at price:", close_price, "$", "| Close Time:", close_time_value, "| leverage:", leverage)
-        print("Balance:", round(balance_before_trade, 2), "$", "→", round(balance, 2), "$", "| Save Money:", round(save_money, 2), "$")
-        print("Balance (no fee):",
-            round(balance_before_trade_no_fee, 2), "$", "→", round(balance_without_fee, 2), "$")
-        print("pnl:", round(pnl, 2), "$ |", round(pnl_percent, 2), "% |", "Amount:", round(margin), "$")
-        print("fee:", round(total_fee, 2), "$")
-        print("Profit:", round(profit, 2), "$ |", round(profit_percent, 2), "%")
-        print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
-        print("-" * 90)
+        if self.verbose:
+            print("Close SHORT at price:", close_price, "$", "| Close Time:", close_time_value, "| leverage:", leverage)
+            print("Balance:", round(balance_before_trade, 2), "$", "→", round(balance, 2), "$", "| Save Money:", round(save_money, 2), "$")
+            print("Balance (no fee):",
+                round(balance_before_trade_no_fee, 2), "$", "→", round(balance_without_fee, 2), "$")
+            print("pnl:", round(pnl, 2), "$ |", round(pnl_percent, 2), "% |", "Amount:", round(margin), "$")
+            print("fee:", round(total_fee, 2), "$")
+            print("Profit:", round(profit, 2), "$ |", round(profit_percent, 2), "%")
+            print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
+            print("-" * 90)
 
         csv_logger.log_trade(
             "SHORT",
@@ -415,10 +429,11 @@ class TradeManager:
         )
 
         # ---- save money ----
-        if balance < self.tactical_balance * 75 / 100:
-            if save_money >= self.tactical_balance * 25 / 100:
-                balance += self.tactical_balance * 25 / 100
-                save_money -= self.tactical_balance * 25 / 100
+        save_money_recover_amount_pct = 100 - self.save_money_recover_trigger_pct
+        if balance < self.tactical_balance * self.save_money_recover_trigger_pct / 100:
+            if save_money >= self.tactical_balance * save_money_recover_amount_pct / 100:
+                balance += self.tactical_balance * save_money_recover_amount_pct / 100
+                save_money -= self.tactical_balance * save_money_recover_amount_pct / 100
 
         # stop trade if we got 8% for this month
         if self.monthly_close_filter == True :
@@ -517,8 +532,9 @@ class TradeManager:
 
         days, hours, minutes = trade_duration(open_time_value, close_time_value)
 
-        print("ðŸ”´ LONG LIQUIDATED at price:", round(close_price, 2),
-            "| Time:", close_time_value)
+        if self.verbose:
+            print("\U0001F534 LONG LIQUIDATED at price:", round(close_price, 2),
+                "| Time:", close_time_value)
 
         # -------- CSV LOG --------
         csv_logger.log_trade(
@@ -614,8 +630,9 @@ class TradeManager:
 
         days, hours, minutes = trade_duration(open_time_value, close_time_value)
 
-        print("ðŸ”´ SHORT LIQUIDATED at price:", round(close_price, 2),
-            "| Time:", close_time_value)
+        if self.verbose:
+            print("\U0001F534 SHORT LIQUIDATED at price:", round(close_price, 2),
+                "| Time:", close_time_value)
 
         # -------- CSV LOG --------
         csv_logger.log_trade(
