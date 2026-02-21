@@ -2,6 +2,7 @@
 
 import pandas as pd
 import numpy as np
+import os
 
 # My Codes :
 from trade_csv_logger import TradeCSVLogger
@@ -1415,7 +1416,8 @@ def ma_strategy(tune: dict = None):
     end_time=last_close_time,
     days=days,
     hours=hours,
-    minutes=minutes
+    minutes=minutes,
+    file_name=os.path.join("outputs", "trades", "data_orders.csv"),
     )
 
     # optimize already determined earlier; skip plotting when optimizing
@@ -1466,7 +1468,11 @@ def ma_strategy(tune: dict = None):
     # generate monthly summary CSV silently (no terminal output)
     if not optimize:
         try:
-            write_monthly_summary(in_file='data_orders.csv', out_file='monthly_data_orders.csv', quiet=True)
+            write_monthly_summary(
+                in_file=os.path.join("outputs", "trades", "data_orders.csv"),
+                out_file=os.path.join("outputs", "monthly", "monthly_data_orders.csv"),
+                quiet=True,
+            )
         except Exception:
             # avoid crashing the backtest if monthly summary fails
             pass

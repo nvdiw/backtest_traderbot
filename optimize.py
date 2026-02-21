@@ -92,7 +92,9 @@ keys = list(param_grid.keys())
 combos = list(itertools.product(*(param_grid[k] for k in keys)))
 print(f"Total combinations to test: {len(combos)}")
 
-out_file = 'optimization_results.csv'
+out_dir = os.path.join('outputs', 'optimize')
+out_file = os.path.join(out_dir, 'optimization_results.csv')
+os.makedirs(out_dir, exist_ok=True)
 while True:
     try:
         with open(out_file, 'w', newline='') as f:
@@ -101,7 +103,7 @@ while True:
         break
 
     except PermissionError:
-        answer = input("please close: optimization_results.csv after close write ok: ")
+        answer = input(f"please close: {out_file} after close write ok: ")
         if answer == "ok":
             print("thanks!")
 
@@ -203,7 +205,8 @@ def main(workers: int, chunksize: int, flush_every: int, log_every: int):
     print('Best:', best)
 
     # Save best to a small file
-    with open('best_params.txt', 'w') as f:
+    best_file = os.path.join(out_dir, 'best_params.txt')
+    with open(best_file, 'w') as f:
         f.write(str(best) + '\n')
 
     print('Results saved to', out_file)

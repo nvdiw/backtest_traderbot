@@ -1,8 +1,8 @@
 """
 check_monthly_data.py
 
-Reads `data_orders.csv`, aggregates trade statistics by the month of the CLOSE time,
-and writes `monthly_data_orders.csv` with summary metrics.
+Reads trade orders CSV, aggregates trade statistics by the month of the CLOSE time,
+and writes monthly summary CSV with summary metrics.
 
 Usage:
     python check_monthly_data.py
@@ -23,15 +23,16 @@ Output columns:
 - last_balance (balance_after of last trade in the month)
 - net_percent ((last_balance/first_balance - 1) * 100) when available
 
-This script assumes `data_orders.csv` is in the same folder.
+Default paths:
+- input:  `outputs/trades/data_orders.csv`
+- output: `outputs/monthly/monthly_data_orders.csv`
 """
 
 import os
 import pandas as pd
 
-# Use plain relative filenames (no os module) so script can run from project root
-IN_FILE = 'data_orders.csv'
-OUT_FILE = 'monthly_data_orders.csv'
+IN_FILE = os.path.join('outputs', 'trades', 'data_orders.csv')
+OUT_FILE = os.path.join('outputs', 'monthly', 'monthly_data_orders.csv')
 
 
 def summarize_monthly(df: pd.DataFrame) -> pd.DataFrame:
@@ -112,6 +113,9 @@ def write_monthly_summary(in_file=IN_FILE, out_file=OUT_FILE, quiet=True):
         return False
 
     out_df = summarize_monthly(df)
+    out_dir = os.path.dirname(out_file)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     out_df.to_csv(out_file, index=False)
     if not quiet:
         print(f"Wrote monthly summary to: {out_file}")

@@ -1,4 +1,5 @@
 import pandas as pd
+import os
 
 
 class TradeCSVLogger:
@@ -79,7 +80,7 @@ class TradeCSVLogger:
         days,
         hours,
         minutes,
-        file_name: str = "data_orders.csv"
+        file_name: str = os.path.join("outputs", "trades", "data_orders.csv")
     ):
         if self.optimize:
             # do not write any files during optimization
@@ -133,9 +134,12 @@ class TradeCSVLogger:
             df.loc[len(df), columns] = [summary_row_full[col] for col in columns]
         while True:
             try:
+                output_dir = os.path.dirname(file_name)
+                if output_dir:
+                    os.makedirs(output_dir, exist_ok=True)
                 df.to_csv(file_name, index=False, encoding="utf-8")
                 break
             except PermissionError:
-                answer = input("please close: data_orders.csv after close write ok: ")
+                answer = input(f"please close: {file_name} after close write ok: ")
                 if answer == "ok":
                     print("thanks!")
