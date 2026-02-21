@@ -154,6 +154,7 @@ def ma_strategy(tune: dict = None):
     adx_filter = True
     volume_filter = True
     atr_filter = True
+    consecutive_losses_month_stop_filter = False
     skip_logic = False
 
     # Cooldown
@@ -183,6 +184,10 @@ def ma_strategy(tune: dict = None):
     entry_adx_threshold = 20.5
     entry_atr_threshold = 1.2
     opposite_atr_body_mult = 0.6
+    sharp_move_threshold_pct = 13.0
+    sharp_move_lookback_candles = 400
+    post_cross_penalty_candles = 15
+    consecutive_losses_stop_until_month = 5
 
     # Indicator periods
     period_adx = 14
@@ -216,6 +221,7 @@ def ma_strategy(tune: dict = None):
     # entry negative
     entry_late_penalty = 1  # applied as a subtraction
 
+
     # exit positive
     exit_score_loss_guard = 2
     exit_score_profit_guard = 2
@@ -225,6 +231,8 @@ def ma_strategy(tune: dict = None):
     exit_score_trailing = 1
     exit_score_adx = 1
     exit_score_opposite_candle = 1
+    # exit negative
+    post_cross_penalty_score = 3
 
     def build_score_reason_text(title, reasons, total_score, threshold):
         lines = [title]
@@ -238,7 +246,39 @@ def ma_strategy(tune: dict = None):
         lines.append(f"Total Score: {total_score}")
         lines.append(f"Threshold: {threshold}")
         return "\n".join(lines)
-    
+
+    def strongest_directional_moves_pct(prices, start_idx, end_idx):
+        """Measure strongest ordered up/down moves in one pass."""
+        if end_idx <= start_idx:
+            return 0.0, 0.0
+
+        first_price = float(prices[start_idx])
+        if not np.isfinite(first_price) or first_price <= 0:
+            return 0.0, 0.0
+
+        max_up_move_pct = 0.0
+        max_down_move_pct = 0.0
+        trough = first_price
+        peak = first_price
+        for j in range(start_idx + 1, end_idx + 1):
+            price = float(prices[j])
+            if not np.isfinite(price) or price <= 0:
+                continue
+
+            up_move_pct = (price / trough - 1.0) * 100.0
+            if up_move_pct > max_up_move_pct:
+                max_up_move_pct = up_move_pct
+            if price < trough:
+                trough = price
+
+            down_move_pct = (peak / price - 1.0) * 100.0
+            if down_move_pct > max_down_move_pct:
+                max_down_move_pct = down_move_pct
+            if price > peak:
+                peak = price
+
+        return max_up_move_pct, max_down_move_pct
+
     # Apply tune overrides (explicit assignments to avoid relying on locals())
     if tune:
         if 'slope_window' in tune:
@@ -313,6 +353,21 @@ def ma_strategy(tune: dict = None):
         if 'opposite_atr_body_mult' in tune:
             opposite_atr_body_mult = float(tune['opposite_atr_body_mult'])
 
+        if 'sharp_move_threshold_pct' in tune:
+            sharp_move_threshold_pct = float(tune['sharp_move_threshold_pct'])
+
+        if 'sharp_move_lookback_candles' in tune:
+            sharp_move_lookback_candles = int(tune['sharp_move_lookback_candles'])
+
+        if 'post_cross_penalty_candles' in tune:
+            post_cross_penalty_candles = int(tune['post_cross_penalty_candles'])
+
+        if 'consecutive_losses_stop_until_month' in tune:
+            consecutive_losses_stop_until_month = int(tune['consecutive_losses_stop_until_month'])
+
+        if 'post_cross_penalty_score' in tune:
+            post_cross_penalty_score = int(tune['post_cross_penalty_score'])
+
         if 'entry_score_cross' in tune:
             entry_score_cross = int(tune['entry_score_cross'])
 
@@ -374,6 +429,9 @@ def ma_strategy(tune: dict = None):
         if 'volume_filter' in tune:
             volume_filter = bool(tune['volume_filter'])
 
+        if 'consecutive_losses_month_stop_filter' in tune:
+            consecutive_losses_month_stop_filter = bool(tune['consecutive_losses_month_stop_filter'])
+
         if 'skip_logic' in tune:
             skip_logic = bool(tune['skip_logic'])
 
@@ -421,6 +479,8 @@ def ma_strategy(tune: dict = None):
     count_closed_orders = 0
     profit_percent_per_month = 0
     consecutive_losses = 0
+    loss_streak_until_month_stop = 0
+    stop_trading_until_new_month_by_losses = False
     skip_trades_left = 0
     max_drawdown = 0
 
@@ -455,6 +515,8 @@ def ma_strategy(tune: dict = None):
     cross_seen = False               # whether EMA16/MA50 have crossed at least once
     last_cross_dir = None           # 'bull' or 'bear'
     last_cross_index = None
+    last_cross_strongest_up_move_pct = 0.0
+    last_cross_strongest_down_move_pct = 0.0
     last_trade_cross_index = None   # index of the cross used to open the last trade
     trade_power = True
 
@@ -555,11 +617,29 @@ def ma_strategy(tune: dict = None):
                 cross_seen = True
                 last_cross_dir = 'bull'
                 last_cross_index = i
+                lookback = max(2, sharp_move_lookback_candles)
+                start_idx = max(0, i - (lookback - 1))
+                last_cross_strongest_up_move_pct, last_cross_strongest_down_move_pct = strongest_directional_moves_pct(
+                    close_prices, start_idx, i
+                )
             # bearish cross: EMA crosses below MA
             elif ema_16[i-1] >= ma_50[i-1] and ema_16[i] < ma_50[i]:
                 cross_seen = True
                 last_cross_dir = 'bear'
                 last_cross_index = i
+                lookback = max(2, sharp_move_lookback_candles)
+                start_idx = max(0, i - (lookback - 1))
+                last_cross_strongest_up_move_pct, last_cross_strongest_down_move_pct = strongest_directional_moves_pct(
+                    close_prices, start_idx, i
+                )
+
+        # stop trading after N consecutive losses until next month starts
+        if consecutive_losses_month_stop_filter and stop_trading_until_new_month_by_losses:
+            if int(start + i) in lst_month_starts:
+                stop_trading_until_new_month_by_losses = False
+                loss_streak_until_month_stop = 0
+            else:
+                continue
         
         # monthly filter if we got good profit in month, bot will stop on this month
         if monthly_close_filter == True:
@@ -627,6 +707,14 @@ def ma_strategy(tune: dict = None):
                 equity_curve = liq_updates['equity_curve']
                 max_drawdown = liq_updates['max_drawdown']
                 total_liquids = liq_updates['total_liquids']
+                if consecutive_losses_month_stop_filter:
+                    loss_streak_until_month_stop += 1
+                    if (
+                        consecutive_losses_stop_until_month > 0
+                        and loss_streak_until_month_stop >= consecutive_losses_stop_until_month
+                    ):
+                        stop_trading_until_new_month_by_losses = True
+                        loss_streak_until_month_stop = 0
                 current_position = None
                 entry_price = None
                 entry_index = None
@@ -677,6 +765,14 @@ def ma_strategy(tune: dict = None):
                 equity_curve = liq_updates['equity_curve']
                 max_drawdown = liq_updates['max_drawdown']
                 total_liquids = liq_updates['total_liquids']
+                if consecutive_losses_month_stop_filter:
+                    loss_streak_until_month_stop += 1
+                    if (
+                        consecutive_losses_stop_until_month > 0
+                        and loss_streak_until_month_stop >= consecutive_losses_stop_until_month
+                    ):
+                        stop_trading_until_new_month_by_losses = True
+                        loss_streak_until_month_stop = 0
                 current_position = None
                 entry_price = None
                 entry_index = None
@@ -877,6 +973,20 @@ def ma_strategy(tune: dict = None):
                     if body >= atr[i] * opposite_atr_body_mult:
                         exit_score += exit_score_opposite_candle
                         exit_reasons.append(("Strong opposite bearish candle", exit_score_opposite_candle))
+            
+            # ---- negative scores
+            # 0) temporary post-cross penalty after a sharp move (LONG only)
+            if last_cross_index is not None and i > last_cross_index and post_cross_penalty_candles > 0:
+                candles_since_cross = i - last_cross_index
+                if (
+                    last_cross_strongest_up_move_pct >= sharp_move_threshold_pct
+                    and candles_since_cross < post_cross_penalty_candles
+                ):
+                    exit_score -= post_cross_penalty_score
+                    exit_reasons.append((
+                        f"Post-cross sharp-move penalty ({candles_since_cross} candles since cross, up-move={last_cross_strongest_up_move_pct:.2f}%)",
+                        -post_cross_penalty_score,
+                    ))
 
             if exit_score >= exit_score_threshold:
                 exit_reason_text = build_score_reason_text(
@@ -951,8 +1061,18 @@ def ma_strategy(tune: dict = None):
                 # count consecutive_losses 
                 if profits_lst[-1] < 0:
                     consecutive_losses += 1
+                    if consecutive_losses_month_stop_filter:
+                        loss_streak_until_month_stop += 1
+                        if (
+                            consecutive_losses_stop_until_month > 0
+                            and loss_streak_until_month_stop >= consecutive_losses_stop_until_month
+                        ):
+                            stop_trading_until_new_month_by_losses = True
+                            loss_streak_until_month_stop = 0
                 else:
                     consecutive_losses = 0
+                    if consecutive_losses_month_stop_filter:
+                        loss_streak_until_month_stop = 0
 
                 if consecutive_losses >= 2:
                     skip_trades_left = 2
@@ -1147,6 +1267,20 @@ def ma_strategy(tune: dict = None):
                         exit_score += exit_score_opposite_candle
                         exit_reasons.append(("Strong opposite bullish candle", exit_score_opposite_candle))
 
+            # ---- negative scores
+            # 0) temporary post-cross penalty after a sharp move (SHORT mirror)
+            if last_cross_index is not None and i > last_cross_index and post_cross_penalty_candles > 0:
+                candles_since_cross = i - last_cross_index
+                if (
+                    last_cross_strongest_down_move_pct >= sharp_move_threshold_pct
+                    and candles_since_cross < post_cross_penalty_candles
+                ):
+                    exit_score -= post_cross_penalty_score
+                    exit_reasons.append((
+                        f"Post-cross sharp-move penalty ({candles_since_cross} candles since cross, down-move={last_cross_strongest_down_move_pct:.2f}%)",
+                        -post_cross_penalty_score,
+                    ))
+
             if exit_score >= exit_score_threshold:
                 exit_reason_text = build_score_reason_text(
                     "SHORT EXIT SCORE REASONS",
@@ -1221,8 +1355,18 @@ def ma_strategy(tune: dict = None):
                 # count consecutive_losses 
                 if profits_lst[-1] < 0:
                     consecutive_losses += 1
+                    if consecutive_losses_month_stop_filter:
+                        loss_streak_until_month_stop += 1
+                        if (
+                            consecutive_losses_stop_until_month > 0
+                            and loss_streak_until_month_stop >= consecutive_losses_stop_until_month
+                        ):
+                            stop_trading_until_new_month_by_losses = True
+                            loss_streak_until_month_stop = 0
                 else:
                     consecutive_losses = 0
+                    if consecutive_losses_month_stop_filter:
+                        loss_streak_until_month_stop = 0
 
                 if consecutive_losses >= 2:
                     skip_trades_left = 2
