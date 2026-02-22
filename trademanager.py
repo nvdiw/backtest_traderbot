@@ -149,9 +149,9 @@ class TradeManager:
 
         # profit after fee
         profit = balance - balance_before_trade
-        profit_percent = profit * 100 / balance_before_trade
+        profit_percent = (profit * 100 / balance_before_trade) if balance_before_trade != 0 else 0
         profit_percent_per_month = ((balance * 100) / self.tactical_balance) - 100
-        pnl_percent = (pnl / margin) * 100
+        pnl_percent = ((pnl / margin) * 100) if margin != 0 else 0
 
         deducting_fee_total += total_fee
         profits_lst.append(profit)
@@ -175,7 +175,7 @@ class TradeManager:
         total_long += 1
 
         # ---- COOLDOWN AFTER BIG PROFIT ----
-        pnl_percent_without_leverage = ((pnl / margin) * 100 ) / leverage
+        pnl_percent_without_leverage = (((pnl / margin) * 100 ) / leverage) if (margin != 0 and leverage != 0) else 0
         if pnl_percent_without_leverage >= 4:
             cooldown_until_index = i + cooldown_after_big_pnl
             if self.verbose:
@@ -378,9 +378,9 @@ class TradeManager:
 
         # profit after fee
         profit = balance - balance_before_trade
-        profit_percent = profit * 100 / balance_before_trade
+        profit_percent = (profit * 100 / balance_before_trade) if balance_before_trade != 0 else 0
         profit_percent_per_month = ((balance * 100) / self.tactical_balance) - 100
-        pnl_percent = (pnl / margin) * 100
+        pnl_percent = ((pnl / margin) * 100) if margin != 0 else 0
 
         deducting_fee_total += total_fee
         profits_lst.append(profit)
@@ -404,7 +404,7 @@ class TradeManager:
         total_short += 1
 
         # ---- COOLDOWN AFTER BIG PROFIT ----
-        pnl_percent_without_leverage = ((pnl / margin) * 100) / leverage
+        pnl_percent_without_leverage = (((pnl / margin) * 100) / leverage) if (margin != 0 and leverage != 0) else 0
         if pnl_percent_without_leverage >= 4:
             cooldown_until_index = i + cooldown_after_big_pnl
             if self.verbose:
