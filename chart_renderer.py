@@ -23,10 +23,14 @@ def render_backtest_chart(
     long_close_points,
     short_open_points,
     short_close_points,
+    penalty_long_points,
+    penalty_short_points,
     long_open_reasons,
     long_close_reasons,
     short_open_reasons,
     short_close_reasons,
+    penalty_long_reasons,
+    penalty_short_reasons,
     plot_end_offset,
     plot_max_candles,
     plot_step_candles,
@@ -81,6 +85,7 @@ def render_backtest_chart(
         "long_close": "#2FCF82",
         "short_open": "#FF98A8",
         "short_close": "#E96A7E",
+        "penalty": "#FFD84D",
         "equity": "#5CC8F2",
         "divider": "#44586E",
         "crosshair": "#9AABC1",
@@ -360,6 +365,8 @@ def render_backtest_chart(
             long_close_arr = np.full(n_full, np.nan, dtype=float)
             short_open_arr = np.full(n_full, np.nan, dtype=float)
             short_close_arr = np.full(n_full, np.nan, dtype=float)
+            penalty_long_arr = np.full(n_full, np.nan, dtype=float)
+            penalty_short_arr = np.full(n_full, np.nan, dtype=float)
     
             def place_trade_markers(points, arr):
                 if not points:
@@ -373,6 +380,8 @@ def render_backtest_chart(
             place_trade_markers(long_close_points, long_close_arr)
             place_trade_markers(short_open_points, short_open_arr)
             place_trade_markers(short_close_points, short_close_arr)
+            place_trade_markers(penalty_long_points, penalty_long_arr)
+            place_trade_markers(penalty_short_points, penalty_short_arr)
     
             # Adaptive render density:
             # - Zoom in  => full detail (no downsample)
@@ -404,6 +413,8 @@ def render_backtest_chart(
             ds_long_close, ds_long_close_marker_idx = downsample_last_valid_with_index(long_close_arr, render_step)
             ds_short_open, ds_short_open_marker_idx = downsample_last_valid_with_index(short_open_arr, render_step)
             ds_short_close, ds_short_close_marker_idx = downsample_last_valid_with_index(short_close_arr, render_step)
+            ds_penalty_long, ds_penalty_long_marker_idx = downsample_last_valid_with_index(penalty_long_arr, render_step)
+            ds_penalty_short, ds_penalty_short_marker_idx = downsample_last_valid_with_index(penalty_short_arr, render_step)
     
             time_index = pd.to_datetime(ds_times, utc=True)
             price_df = pd.DataFrame(
@@ -428,6 +439,8 @@ def render_backtest_chart(
             long_close_series = pd.Series(ds_long_close, index=time_index)
             short_open_series = pd.Series(ds_short_open, index=time_index)
             short_close_series = pd.Series(ds_short_close, index=time_index)
+            penalty_long_series = pd.Series(ds_penalty_long, index=time_index)
+            penalty_short_series = pd.Series(ds_penalty_short, index=time_index)
     
             ax_price.cla()
             ax_equity.cla()
@@ -521,6 +534,30 @@ def render_backtest_chart(
                         markersize=46,
                         color=chart_palette["short_close"],
                         alpha=0.9,
+                    )
+                )
+            if (not preview_mode) and has_finite(penalty_long_series):
+                add_plots.append(
+                    mpf.make_addplot(
+                        penalty_long_series,
+                        ax=ax_price,
+                        type="scatter",
+                        marker="X",
+                        markersize=54,
+                        color=chart_palette["penalty"],
+                        alpha=0.95,
+                    )
+                )
+            if (not preview_mode) and has_finite(penalty_short_series):
+                add_plots.append(
+                    mpf.make_addplot(
+                        penalty_short_series,
+                        ax=ax_price,
+                        type="scatter",
+                        marker="X",
+                        markersize=54,
+                        color=chart_palette["penalty"],
+                        alpha=0.95,
                     )
                 )
             if has_finite(equity_series):
@@ -757,6 +794,8 @@ def render_backtest_chart(
             register_hover_points(ds_long_close, ds_long_close_marker_idx, long_close_reasons)
             register_hover_points(ds_short_open, ds_short_open_marker_idx, short_open_reasons)
             register_hover_points(ds_short_close, ds_short_close_marker_idx, short_close_reasons)
+            register_hover_points(ds_penalty_long, ds_penalty_long_marker_idx, penalty_long_reasons)
+            register_hover_points(ds_penalty_short, ds_penalty_short_marker_idx, penalty_short_reasons)
             debug_overlay_artist = nav_state.get("debug_overlay_artist")
             if debug_overlay_artist is not None:
                 debug_overlay_artist.set_text(

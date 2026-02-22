@@ -17,7 +17,7 @@ from chart_renderer import render_backtest_chart
 # end = get_candle_index("2025-12-18")     ----> 278640
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2019-01-01","2026-02-14"))
+start, end = get_candle_index(("2023-01-01","2026-02-14"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 current_position = None  # None | "long" | "short"
@@ -170,7 +170,7 @@ def ma_strategy(tune: dict = None):
     impulse_move_threshold_pct = 1.5
     impulse_lookback = 5
     late_entry_atr_mult = 0.8
-    late_entry_body_ratio = 0.6
+    late_entry_body_ratio = 0.8
     late_entry_ema_pct = 0.005
 
     # Entry/exit controls
@@ -187,8 +187,8 @@ def ma_strategy(tune: dict = None):
     entry_adx_threshold = 20.5
     entry_atr_threshold = 1.2
     opposite_atr_body_mult = 0.6
-    sharp_move_threshold_pct = 13.0
-    sharp_move_lookback_candles = 400
+    sharp_move_threshold_pct = 12.0
+    sharp_move_lookback_candles = 600
     post_cross_penalty_candles = 15
     consecutive_losses_stop_until_month = 5
 
@@ -212,7 +212,10 @@ def ma_strategy(tune: dict = None):
     plot_drag_preview_factor = 0.42  # render fewer candles while dragging for smoother live updates
     plot_drag_update_interval_ms = 16  # target drag refresh cadence (~60Hz upper bound)
     plot_yscale_drag_sensitivity = 0.0030  # right-drag vertical zoom sensitivity
-    
+
+    plot_post_cross_penalty_markers = True  # show yellow markers where post-cross penalty is applied
+
+
     # ---- score weights (entry/exit) ----
     # entry positive
     entry_score_cross = 1
@@ -507,6 +510,10 @@ def ma_strategy(tune: dict = None):
     long_close_reasons = {} if not optimize else None
     short_open_reasons = {} if not optimize else None
     short_close_reasons = {} if not optimize else None
+    penalty_long_points = [] if (not optimize and plot_post_cross_penalty_markers) else None
+    penalty_short_points = [] if (not optimize and plot_post_cross_penalty_markers) else None
+    penalty_long_reasons = {} if (not optimize and plot_post_cross_penalty_markers) else None
+    penalty_short_reasons = {} if (not optimize and plot_post_cross_penalty_markers) else None
 
     current_position = None
     entry_price = None
@@ -991,12 +998,23 @@ def ma_strategy(tune: dict = None):
                 if (
                     last_cross_strongest_up_move_pct >= sharp_move_threshold_pct
                     and candles_since_cross < post_cross_penalty_candles
+                    and ema_16[i] < ma_50[i]
                 ):
                     exit_score -= post_cross_penalty_score
+                    penalty_reason_text = (
+                        f"Post-cross sharp-move penalty ({candles_since_cross} candles since cross, "
+                        f"up-move={last_cross_strongest_up_move_pct:.2f}%)"
+                    )
                     exit_reasons.append((
-                        f"Post-cross sharp-move penalty ({candles_since_cross} candles since cross, up-move={last_cross_strongest_up_move_pct:.2f}%)",
+                        penalty_reason_text,
                         -post_cross_penalty_score,
                     ))
+                    if penalty_long_points is not None:
+                        penalty_long_points.append((i, close_prices[i]))
+                        if penalty_long_reasons is not None:
+                            penalty_long_reasons[i] = (
+                                f"LONG penalty marker\n{penalty_reason_text}\nScore impact: -{post_cross_penalty_score}"
+                            )
 
             if exit_score >= exit_score_threshold:
                 exit_reason_text = build_score_reason_text(
@@ -1284,12 +1302,23 @@ def ma_strategy(tune: dict = None):
                 if (
                     last_cross_strongest_down_move_pct >= sharp_move_threshold_pct
                     and candles_since_cross < post_cross_penalty_candles
+                    and ema_16[i] > ma_50[i]
                 ):
                     exit_score -= post_cross_penalty_score
+                    penalty_reason_text = (
+                        f"Post-cross sharp-move penalty ({candles_since_cross} candles since cross, "
+                        f"down-move={last_cross_strongest_down_move_pct:.2f}%)"
+                    )
                     exit_reasons.append((
-                        f"Post-cross sharp-move penalty ({candles_since_cross} candles since cross, down-move={last_cross_strongest_down_move_pct:.2f}%)",
+                        penalty_reason_text,
                         -post_cross_penalty_score,
                     ))
+                    if penalty_short_points is not None:
+                        penalty_short_points.append((i, close_prices[i]))
+                        if penalty_short_reasons is not None:
+                            penalty_short_reasons[i] = (
+                                f"SHORT penalty marker\n{penalty_reason_text}\nScore impact: -{post_cross_penalty_score}"
+                            )
 
             if exit_score >= exit_score_threshold:
                 exit_reason_text = build_score_reason_text(
@@ -1451,10 +1480,14 @@ def ma_strategy(tune: dict = None):
             long_close_points=long_close_points,
             short_open_points=short_open_points,
             short_close_points=short_close_points,
+            penalty_long_points=penalty_long_points,
+            penalty_short_points=penalty_short_points,
             long_open_reasons=long_open_reasons,
             long_close_reasons=long_close_reasons,
             short_open_reasons=short_open_reasons,
             short_close_reasons=short_close_reasons,
+            penalty_long_reasons=penalty_long_reasons,
+            penalty_short_reasons=penalty_short_reasons,
             plot_end_offset=plot_end_offset,
             plot_max_candles=plot_max_candles,
             plot_step_candles=plot_step_candles,
