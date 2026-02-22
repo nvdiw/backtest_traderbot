@@ -67,7 +67,9 @@ param_grid = {
     'consecutive_losses_stop_until_month': [5],
     'trade_amount_percent': [0.5, 0.6, 0.7, 0.8, 0.9, 1],
     'monthly_profit_percent_stop_trade': [5, 6, 7, 8, 9, 10],
-    'monthly_close_filter': [True, False],
+    'monthly_loss_percent_stop_trade': [i for i in range(14, 31)],
+    'monthly_profit_close_filter': [True, False],
+    'monthly_loss_close_filter': [True, False],
     'consecutive_losses_month_stop_filter': [True, False],
     'adx_filter': [True, False],
     'volume_filter': [True, False],
@@ -78,7 +80,7 @@ param_grid = {
     'safe_leverage_balance_pct_low': [80, 75, 70, 65],
     'safe_leverage_balance_pct_med': [85, 80, 75, 70],
     'safe_leverage_balance_pct_high': [90, 85, 80, 75],
-    'save_money_recover_trigger_pct': [75, 70, 65, 60, 55],
+    'save_money_recover_trigger_pct': [i for i in range(60, 76)],
     'cooldown_after_big_pnl': [i for i in range(0, 300, 4)],
     'ema_16': [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
     'ma_50': [45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55],
@@ -99,7 +101,7 @@ while True:
     try:
         with open(out_file, 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(keys + ['final_balance', 'total_profit', 'total_profit_percent', 'closed_trades', 'wins', 'losses', 'maximum_drawdown', 'win_rate', 'duration_s', 'profit_more_than_8%'])
+            writer.writerow(keys + ['final_balance', 'total_profit', 'total_profit_percent', 'closed_trades', 'wins', 'losses', 'maximum_drawdown', 'win_rate', 'duration_s', 'profit_months', 'loss_months'])
         break
 
     except PermissionError:
@@ -135,7 +137,8 @@ def _result_to_row(keys, tune, res, duration):
         res.get('maximum_drawdown'),
         res.get('win_rate'),
         round(duration, 2),
-        res.get('profit_more_than_8%')
+        res.get('profit_months'),
+        res.get('loss_months')
     ]
 
 

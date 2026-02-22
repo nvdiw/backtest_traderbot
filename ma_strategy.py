@@ -17,7 +17,7 @@ from chart_renderer import render_backtest_chart
 # end = get_candle_index("2025-12-18")     ----> 278640
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2023-01-01","2026-02-14"))
+start, end = get_candle_index(("2019-01-01","2026-02-14"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 current_position = None  # None | "long" | "short"
@@ -148,8 +148,10 @@ def ma_strategy(tune: dict = None):
 
     # Monthly control
     monthly_profit_percent_stop_trade = 8  # stop trading month after reaching this profit %
+    monthly_loss_percent_stop_trade = 19   # stop trading month after reaching this loss %
     monthly_compound = 3                   # raise tactical balance by this % for next month
-    monthly_close_filter = True
+    monthly_profit_close_filter = True
+    monthly_loss_close_filter = False
 
     # Filters & behavior switches
     adx_filter = True
@@ -421,8 +423,14 @@ def ma_strategy(tune: dict = None):
         if 'monthly_profit_percent_stop_trade' in tune:
             monthly_profit_percent_stop_trade = int(tune['monthly_profit_percent_stop_trade'])
 
-        if 'monthly_close_filter' in tune:
-            monthly_close_filter = bool(tune['monthly_close_filter'])
+        if 'monthly_loss_percent_stop_trade' in tune:
+            monthly_loss_percent_stop_trade = int(tune['monthly_loss_percent_stop_trade'])
+
+        if 'monthly_profit_close_filter' in tune:
+            monthly_profit_close_filter = bool(tune['monthly_profit_close_filter'])
+
+        if 'monthly_loss_close_filter' in tune:
+            monthly_loss_close_filter = bool(tune['monthly_loss_close_filter'])
 
         if 'adx_filter' in tune:
             adx_filter = bool(tune['adx_filter'])
@@ -558,7 +566,8 @@ def ma_strategy(tune: dict = None):
 
     # ---- MANAGE TRADES ----
     trade_manager = TradeManager(csv_logger, first_balance, monthly_profit_percent_stop_trade,
-                                 tactical_balance, monthly_close_filter, monthly_compound, leverage, safe_leverage_low,
+                                 monthly_loss_percent_stop_trade, tactical_balance, monthly_profit_close_filter,
+                                 monthly_loss_close_filter, monthly_compound, leverage, safe_leverage_low,
                                  safe_leverage_med, safe_leverage_high, safe_leverage_balance_pct_low,
                                  safe_leverage_balance_pct_med, safe_leverage_balance_pct_high,
                                  save_money_recover_trigger_pct, verbose=verbose)
@@ -642,8 +651,8 @@ def ma_strategy(tune: dict = None):
             else:
                 continue
         
-        # monthly filter if we got good profit in month, bot will stop on this month
-        if monthly_close_filter == True:
+        # monthly filter if profit/loss monthly stop toggles are active
+        if monthly_profit_close_filter or monthly_loss_close_filter:
             if trade_power == False:
                 if int(start+i) in lst_month_starts:
                     lst_profit_percent_per_month.append(profit_percent_per_month)
@@ -1387,6 +1396,9 @@ def ma_strategy(tune: dict = None):
     win_rate = (total_wins / (total_wins + total_losses)) * 100 if (total_wins + total_losses) > 0 else 0
 
 
+    profit_months_count = sum(1 for p in lst_profit_percent_per_month if p > 0)
+    loss_months_count = sum(1 for p in lst_profit_percent_per_month if p < 0)
+
     if verbose:
         print("✅ BACKTEST FINISHED")
         print("Closed Trades:", count_closed_orders, "( Longs:", total_long, "| Shorts:", total_short, ")")
@@ -1404,7 +1416,8 @@ def ma_strategy(tune: dict = None):
         print("Total Profit Percent:", round(t_profit_percent, 2), "%", "or", round(total_profit_percent, 2), "%")
         print("saved Money:", round(save_money,2), "$")
         print("Count Liquids:", total_liquids)
-        print("count_profit_more_than_8%_monthly:", len(lst_profit_percent_per_month))
+        print("count_profit_months:", profit_months_count)
+        print("count_loss_months:", loss_months_count)
 
     csv_logger.save_csv(
     first_balance=first_balance,
@@ -1487,7 +1500,9 @@ def ma_strategy(tune: dict = None):
         'losses': total_losses,
         'maximum_drawdown': round(max_drawdown, 2),
         'win_rate': round(win_rate, 2),
-        "profit_more_than_8%": len(lst_profit_percent_per_month)
+        "profit_more_than_8%": profit_months_count,
+        "profit_months": profit_months_count,
+        "loss_months": loss_months_count
     }
 
 

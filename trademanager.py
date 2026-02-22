@@ -33,15 +33,17 @@ def trade_duration(open_time: str, close_time: str):
 
 # Trade manager class to encapsulate open/close logic without changing behavior
 class TradeManager:
-    def __init__(self, csv_logger, first_balance, monthly_profit_percent_stop_trade, tactical_balance,
-                 monthly_close_filter, monthly_compound, leverage, safe_leverage_low, safe_leverage_med,
+    def __init__(self, csv_logger, first_balance, monthly_profit_percent_stop_trade, monthly_loss_percent_stop_trade,
+                 tactical_balance, monthly_profit_close_filter, monthly_loss_close_filter, monthly_compound, leverage, safe_leverage_low, safe_leverage_med,
                  safe_leverage_high, safe_leverage_balance_pct_low, safe_leverage_balance_pct_med,
                  safe_leverage_balance_pct_high, save_money_recover_trigger_pct, verbose=True) :
         self.csv_logger = csv_logger
         self.first_balance = first_balance
         self.monthly_profit_percent_stop_trade = monthly_profit_percent_stop_trade
+        self.monthly_loss_percent_stop_trade = monthly_loss_percent_stop_trade
         self.tactical_balance = tactical_balance
-        self.monthly_close_filter = monthly_close_filter
+        self.monthly_profit_close_filter = monthly_profit_close_filter
+        self.monthly_loss_close_filter = monthly_loss_close_filter
         self.monthly_compound = monthly_compound
         self.leverage = leverage
         self.safe_leverage_low = safe_leverage_low
@@ -217,19 +219,27 @@ class TradeManager:
             profit_percent_per_month
         )
 
-        # ---- save money ----
-        save_money_recover_amount_pct = 100 - self.save_money_recover_trigger_pct
-        if balance < self.tactical_balance * self.save_money_recover_trigger_pct / 100:
-            if save_money >= self.tactical_balance * save_money_recover_amount_pct / 100:
-                balance += self.tactical_balance * save_money_recover_amount_pct / 100
-                save_money -= self.tactical_balance * save_money_recover_amount_pct / 100
+        used_save_money_for_monthly_loss = False
 
-        # stop trade if we got 8% for this month
-        if self.monthly_close_filter == True :
+        # stop trade if we got monthly target profit
+        if self.monthly_profit_close_filter == True :
             if profit_percent_per_month >= self.monthly_profit_percent_stop_trade:
                 self.tactical_balance = self.tactical_balance + (self.tactical_balance * self.monthly_compound / 100)
                 save_money += balance - self.tactical_balance
                 balance = self.tactical_balance
+                cooldown_until_index = i
+                trade_power = False    # off
+
+        # stop trade if we got monthly max loss
+        if self.monthly_loss_close_filter == True:
+            if profit_percent_per_month <= -self.monthly_loss_percent_stop_trade:
+                needed_to_tactical = self.tactical_balance - balance
+                if needed_to_tactical > 0 and save_money >= needed_to_tactical:
+                    balance += needed_to_tactical
+                    save_money -= needed_to_tactical
+                    used_save_money_for_monthly_loss = True
+
+            if profit_percent_per_month <= -self.monthly_loss_percent_stop_trade:
                 cooldown_until_index = i
                 trade_power = False    # off
 
@@ -239,9 +249,19 @@ class TradeManager:
             #     if self.just_one_time == True:
             #         cooldown_until_index = i + 4 * 24 * 10
             #         self.just_one_time = False
-        else :
+        if self.monthly_profit_close_filter == False and self.monthly_loss_close_filter == False:
             if balance >= self.tactical_balance * 1.08:
                 self.tactical_balance = balance
+
+        # ---- save money ----
+        # Run generic recovery only when trading is still on and we did not already
+        # use save money inside monthly-loss handling for this close event.
+        if trade_power and (not used_save_money_for_monthly_loss):
+            save_money_recover_amount_pct = 100 - self.save_money_recover_trigger_pct
+            if balance < self.tactical_balance * self.save_money_recover_trigger_pct / 100:
+                if save_money >= self.tactical_balance * save_money_recover_amount_pct / 100:
+                    balance += self.tactical_balance * save_money_recover_amount_pct / 100
+                    save_money -= self.tactical_balance * save_money_recover_amount_pct / 100
 
         current_position = None
 
@@ -428,19 +448,27 @@ class TradeManager:
             profit_percent_per_month
         )
 
-        # ---- save money ----
-        save_money_recover_amount_pct = 100 - self.save_money_recover_trigger_pct
-        if balance < self.tactical_balance * self.save_money_recover_trigger_pct / 100:
-            if save_money >= self.tactical_balance * save_money_recover_amount_pct / 100:
-                balance += self.tactical_balance * save_money_recover_amount_pct / 100
-                save_money -= self.tactical_balance * save_money_recover_amount_pct / 100
+        used_save_money_for_monthly_loss = False
 
-        # stop trade if we got 8% for this month
-        if self.monthly_close_filter == True :
+        # stop trade if we got monthly target profit
+        if self.monthly_profit_close_filter == True :
             if profit_percent_per_month >= self.monthly_profit_percent_stop_trade:
                 self.tactical_balance = self.tactical_balance + (self.tactical_balance * self.monthly_compound / 100)
                 save_money += balance - self.tactical_balance
                 balance = self.tactical_balance
+                cooldown_until_index = i
+                trade_power = False    # off
+
+        # stop trade if we got monthly max loss
+        if self.monthly_loss_close_filter == True:
+            if profit_percent_per_month <= -self.monthly_loss_percent_stop_trade:
+                needed_to_tactical = self.tactical_balance - balance
+                if needed_to_tactical > 0 and save_money >= needed_to_tactical:
+                    balance += needed_to_tactical
+                    save_money -= needed_to_tactical
+                    used_save_money_for_monthly_loss = True
+
+            if profit_percent_per_month <= -self.monthly_loss_percent_stop_trade:
                 cooldown_until_index = i
                 trade_power = False    # off
 
@@ -451,9 +479,19 @@ class TradeManager:
             #         cooldown_until_index = i + 4 * 24 * 10
             #         self.just_one_time = False
 
-        else :
+        if self.monthly_profit_close_filter == False and self.monthly_loss_close_filter == False:
             if balance >= self.tactical_balance * 1.08:
                 self.tactical_balance = balance
+
+        # ---- save money ----
+        # Run generic recovery only when trading is still on and we did not already
+        # use save money inside monthly-loss handling for this close event.
+        if trade_power and (not used_save_money_for_monthly_loss):
+            save_money_recover_amount_pct = 100 - self.save_money_recover_trigger_pct
+            if balance < self.tactical_balance * self.save_money_recover_trigger_pct / 100:
+                if save_money >= self.tactical_balance * save_money_recover_amount_pct / 100:
+                    balance += self.tactical_balance * save_money_recover_amount_pct / 100
+                    save_money -= self.tactical_balance * save_money_recover_amount_pct / 100
 
         current_position = None
 
