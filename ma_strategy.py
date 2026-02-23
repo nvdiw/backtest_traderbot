@@ -182,6 +182,7 @@ def ma_strategy(tune: dict = None):
     trail_retrace_pct = 0.003
     loss_exit_pct = 0.05
     profit_exit_pct = 0.07
+    loss_lock_step_pct = 0.01  # step % for locking in losses (trailing loss target)
     adx_exit_threshold = 15.0
     adx_exit_lookback = 1
     entry_adx_threshold = 20.5
@@ -371,6 +372,9 @@ def ma_strategy(tune: dict = None):
         if 'consecutive_losses_stop_until_month' in tune:
             consecutive_losses_stop_until_month = int(tune['consecutive_losses_stop_until_month'])
 
+        if 'loss_lock_step_pct' in tune:
+            loss_lock_step_pct = float(tune['loss_lock_step_pct'])
+
         if 'post_cross_penalty_score' in tune:
             post_cross_penalty_score = int(tune['post_cross_penalty_score'])
 
@@ -526,6 +530,7 @@ def ma_strategy(tune: dict = None):
     balance_before_trade_no_fee = None
     open_time_value = None
     atr_ratio = None
+    target_close_price_loss = None
 
     # ---- Cross & Exit state and parameters ----
     cross_seen = False               # whether EMA16/MA50 have crossed at least once
@@ -626,6 +631,14 @@ def ma_strategy(tune: dict = None):
 
         if ema_16[i] is None or ma_50[i] is None or ma_100[i] is None or ma_200[i] is None:
             continue
+        
+        if (target_close_price_loss == None) and (entry_price is not None):
+            target_close_price_loss = entry_price
+        if target_close_price_loss is not None:
+            if close_prices[i] >= target_close_price_loss * (1 + loss_lock_step_pct) and current_position == "long":
+                target_close_price_loss = target_close_price_loss * (1 + loss_lock_step_pct)
+            elif close_prices[i] <= target_close_price_loss * (1 - loss_lock_step_pct) and current_position == "short":
+                target_close_price_loss = target_close_price_loss * (1 - loss_lock_step_pct)
 
         # ----- Detect EMA16 / MA50 crosses (update cross state) -----
         if i > 0 and ema_16[i-1] is not None and ma_50[i-1] is not None:
@@ -940,8 +953,8 @@ def ma_strategy(tune: dict = None):
                 highest_since_entry = high_prices[i]
 
             # 0) loss guard (no leverage): if price drops >= loss_exit_pct from entry
-            if entry_price is not None:
-                if close_prices[i] <= entry_price * (1 - loss_exit_pct):
+            if target_close_price_loss is not None:
+                if close_prices[i] <= target_close_price_loss * (1 - loss_exit_pct):
                     exit_score += exit_score_loss_guard
                     exit_reasons.append(("Loss guard triggered", exit_score_loss_guard))
 
@@ -1081,6 +1094,7 @@ def ma_strategy(tune: dict = None):
                 entry_index = None
                 highest_since_entry = None
                 lowest_since_entry = None
+                target_close_price_loss = None
                 if long_close_points is not None:
                     long_close_points.append((i, close_price))
                     if long_close_reasons is not None:
@@ -1244,8 +1258,8 @@ def ma_strategy(tune: dict = None):
                 lowest_since_entry = low_prices[i]
 
             # 0) loss guard (no leverage): if price rises >= loss_exit_pct from entry
-            if entry_price is not None:
-                if close_prices[i] >= entry_price * (1 + loss_exit_pct):
+            if target_close_price_loss is not None:
+                if close_prices[i] >= target_close_price_loss * (1 + loss_exit_pct):
                     exit_score += exit_score_loss_guard
                     exit_reasons.append(("Loss guard triggered", exit_score_loss_guard))
 
@@ -1386,6 +1400,7 @@ def ma_strategy(tune: dict = None):
                 entry_index = None
                 highest_since_entry = None
                 lowest_since_entry = None
+                target_close_price_loss = None
                 if short_close_points is not None:
                     short_close_points.append((i, close_price))
                     if short_close_reasons is not None:
