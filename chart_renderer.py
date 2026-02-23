@@ -226,6 +226,8 @@ def render_backtest_chart(
         "marker_tooltip_artist": None,
         "debug_overlay_artist": None,
         "rendering": False,
+        "last_click_time": 0.0,
+        "last_click_axis": None,
     }
     
     def has_finite(series_obj):
@@ -928,6 +930,47 @@ def render_backtest_chart(
             return True
         return False
     
+    def calculate_auto_range_for_visible_data():
+        """Calculate y-range based on min/max of visible price and equity data."""
+        # Get visible candle indices
+        old_size = int(nav_state["window_size"])
+        old_size = max(1, min(total_candles, old_size))
+        old_offset = min(max(int(nav_state["offset"]), 0), max(0, total_candles - old_size))
+        start_idx = total_candles - old_offset - old_size
+        end_idx = total_candles - old_offset
+        
+        if start_idx < 0 or end_idx <= start_idx:
+            return None, None
+        
+        # Calculate price range (high/low of visible candles)
+        visible_high = np.nanmax(high_prices[start_idx:end_idx]) if np.isfinite(high_prices[start_idx:end_idx]).any() else None
+        visible_low = np.nanmin(low_prices[start_idx:end_idx]) if np.isfinite(low_prices[start_idx:end_idx]).any() else None
+        
+        if visible_high is not None and visible_low is not None and np.isfinite([visible_high, visible_low]).all():
+            # Add 1% padding on each side
+            price_range = visible_high - visible_low
+            padding = price_range * 0.01 if price_range > 0 else visible_low * 0.01
+            price_ylim = (visible_low - padding, visible_high + padding)
+        else:
+            price_ylim = None
+        
+        # Calculate equity range (min/max balance of visible period)
+        if ypoints_total_balance and len(ypoints_total_balance) >= end_idx:
+            visible_balance = ypoints_total_balance[start_idx:end_idx]
+            visible_balance_max = np.nanmax(visible_balance) if visible_balance else None
+            visible_balance_min = np.nanmin(visible_balance) if visible_balance else None
+            
+            if visible_balance_max is not None and visible_balance_min is not None and np.isfinite([visible_balance_max, visible_balance_min]).all():
+                balance_range = visible_balance_max - visible_balance_min
+                padding = balance_range * 0.01 if balance_range > 0 else visible_balance_min * 0.01
+                equity_ylim = (visible_balance_min - padding, visible_balance_max + padding)
+            else:
+                equity_ylim = None
+        else:
+            equity_ylim = None
+        
+        return price_ylim, equity_ylim
+    
     def on_key(event):
         key = (event.key or "").lower()
         if key in ("left", "a"):
@@ -1130,6 +1173,33 @@ def render_backtest_chart(
         nav_state["yscale_start_ylim"] = None
         nav_state["did_live_drag"] = False
         nav_state["last_drag_update_ts"] = 0.0
+    
+    def on_double_click(event):
+        # Only handle double-click on price or equity panels
+        if event.inaxes not in (ax_price, ax_equity):
+            return
+        price_ylim, equity_ylim = calculate_auto_range_for_visible_data()
+        if event.inaxes == ax_price and price_ylim is not None:
+            nav_state["fixed_ylim_price"] = price_ylim
+            ax_price.set_ylim(price_ylim)
+            fig.canvas.draw_idle()
+        elif event.inaxes == ax_equity and equity_ylim is not None:
+            nav_state["fixed_ylim_equity"] = equity_ylim
+            ax_equity.set_ylim(equity_ylim)
+            fig.canvas.draw_idle()
+
+    def on_click(event):
+        # Detect double-click (within 0.35s and same axis)
+        now = time.perf_counter()
+        last_time = nav_state.get("last_click_time", 0.0)
+        last_axis = nav_state.get("last_click_axis", None)
+        is_double = (now - last_time < 0.35) and (last_axis == event.inaxes)
+        nav_state["last_click_time"] = now
+        nav_state["last_click_axis"] = event.inaxes
+        if is_double:
+            on_double_click(event)
+
+    cid_click = fig.canvas.mpl_connect("button_press_event", on_click)
     
     def on_release(event):
         if nav_state["rendering"]:
