@@ -14,10 +14,10 @@ from chart_renderer import render_backtest_chart
 
 
 # start = get_candle_index("2025-01-01")   ----> 244944
-# end = get_candle_index("2025-12-18")     ----> 278640
+# end = get_candle_index("2026-02-23")     ----> 285070
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2023-01-01","2026-02-14"))
+start, end = get_candle_index(("2023-01-01","2026-02-23"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 current_position = None  # None | "long" | "short"
@@ -30,7 +30,7 @@ def fetch_all_data(start: int, end: int):
 
     rows_to_read = end - start
     data = pd.read_csv(
-        './data_candle/btc_15m_data_2018_to_2025.csv',
+        './data_candle/btc_15m_data_2018_to_2026.csv',
         skiprows=range(1, start + 1),
         nrows=rows_to_read,
         usecols=['Open time', 'Close time', 'Open', 'Close', 'Low', 'High', 'Volume'],
@@ -180,8 +180,10 @@ def ma_strategy(tune: dict = None):
     slope_window = 5
     trail_activate_pct = 0.007
     trail_retrace_pct = 0.003
-    loss_exit_pct = 0.05
-    profit_exit_pct = 0.07
+    loss_exit_pct_1 = 0.05  # 5% loss threshold
+    loss_exit_pct_2 = 0.04  # 4% loss threshold
+    profit_exit_pct_1 = 0.15  # 15% profit threshold
+    profit_exit_pct_2 = 0.10  # 7% profit threshold
     loss_lock_step_pct = 0.01  # step % for locking in losses (trailing loss target)
     adx_exit_threshold = 15.0
     adx_exit_lookback = 1
@@ -230,8 +232,10 @@ def ma_strategy(tune: dict = None):
 
 
     # exit positive
-    exit_score_loss_guard = 2
-    exit_score_profit_guard = 2
+    exit_score_loss_guard_1 = 3
+    exit_score_loss_guard_2 = 1
+    exit_score_profit_guard_1 = 3
+    exit_score_profit_guard_2 = 3
     exit_score_ema_slope = 1
     exit_score_ema_cross = 3
     exit_score_ma_trend = 1
@@ -288,6 +292,30 @@ def ma_strategy(tune: dict = None):
 
     # Apply tune overrides (explicit assignments to avoid relying on locals())
     if tune:
+        if 'loss_exit_pct_1' in tune:
+            loss_exit_pct_1 = float(tune['loss_exit_pct_1'])
+
+        if 'loss_exit_pct_2' in tune:
+            loss_exit_pct_2 = float(tune['loss_exit_pct_2'])
+
+        if 'exit_score_loss_guard_1' in tune:
+            exit_score_loss_guard_1 = int(tune['exit_score_loss_guard_1'])
+
+        if 'exit_score_loss_guard_2' in tune:
+            exit_score_loss_guard_2 = int(tune['exit_score_loss_guard_2'])
+
+        if 'profit_exit_pct_1' in tune:
+            profit_exit_pct_1 = float(tune['profit_exit_pct_1'])
+
+        if 'profit_exit_pct_2' in tune:
+            profit_exit_pct_2 = float(tune['profit_exit_pct_2'])
+
+        if 'exit_score_profit_guard_1' in tune:
+            exit_score_profit_guard_1 = int(tune['exit_score_profit_guard_1'])
+
+        if 'exit_score_profit_guard_2' in tune:
+            exit_score_profit_guard_2 = int(tune['exit_score_profit_guard_2'])   
+
         if 'slope_window' in tune:
             slope_window = int(tune['slope_window'])
 
@@ -952,17 +980,25 @@ def ma_strategy(tune: dict = None):
             if high_prices[i] > highest_since_entry:
                 highest_since_entry = high_prices[i]
 
-            # 0) loss guard (no leverage): if price drops >= loss_exit_pct from entry
+            # 0) loss guard (no leverage): multi-level scoring
             if target_close_price_loss is not None:
-                if close_prices[i] <= target_close_price_loss * (1 - loss_exit_pct):
-                    exit_score += exit_score_loss_guard
-                    exit_reasons.append(("Loss guard triggered", exit_score_loss_guard))
+                loss_pct = (target_close_price_loss - close_prices[i]) / target_close_price_loss
+                if loss_pct >= loss_exit_pct_2:
+                    exit_score += exit_score_loss_guard_2
+                    exit_reasons.append((f"Loss guard triggered ({loss_exit_pct_2*100:.0f}%+ loss)", exit_score_loss_guard_2))
+                if loss_pct >= loss_exit_pct_1:
+                    exit_score += exit_score_loss_guard_1
+                    exit_reasons.append((f"Loss guard triggered ({loss_exit_pct_1*100:.0f}%+ loss)", exit_score_loss_guard_1))
 
-            # 1) profit guard (no leverage): if price rises >= profit_exit_pct from entry
+            # 1) profit guard (no leverage): multi-level scoring
             if entry_price is not None:
-                if close_prices[i] >= entry_price * (1 + profit_exit_pct):
-                    exit_score += exit_score_profit_guard
-                    exit_reasons.append(("Profit guard triggered", exit_score_profit_guard))
+                profit_pct = (close_prices[i] - entry_price) / entry_price
+                if profit_pct >= profit_exit_pct_2:
+                    exit_score += exit_score_profit_guard_2
+                    exit_reasons.append((f"Profit guard triggered ({profit_exit_pct_2*100:.0f}%+ profit)", exit_score_profit_guard_2))
+                if profit_pct >= profit_exit_pct_1:
+                    exit_score += exit_score_profit_guard_1
+                    exit_reasons.append((f"Profit guard triggered ({profit_exit_pct_1*100:.0f}%+ profit)", exit_score_profit_guard_1))
 
             # 2) EMA slope weakness (look back `slope_window` candles)
             if i - slope_window >= 0 and ema_16[i] < ema_16[i - slope_window]:
@@ -1257,17 +1293,25 @@ def ma_strategy(tune: dict = None):
             if low_prices[i] < lowest_since_entry:
                 lowest_since_entry = low_prices[i]
 
-            # 0) loss guard (no leverage): if price rises >= loss_exit_pct from entry
+            # 0) loss guard (no leverage): multi-level scoring (short)
             if target_close_price_loss is not None:
-                if close_prices[i] >= target_close_price_loss * (1 + loss_exit_pct):
-                    exit_score += exit_score_loss_guard
-                    exit_reasons.append(("Loss guard triggered", exit_score_loss_guard))
+                loss_pct = (close_prices[i] - target_close_price_loss) / target_close_price_loss
+                if loss_pct >= loss_exit_pct_2:
+                    exit_score += exit_score_loss_guard_2
+                    exit_reasons.append((f"Loss guard triggered ({loss_exit_pct_2*100:.0f}%+ loss)", exit_score_loss_guard_2))
+                if loss_pct >= loss_exit_pct_1:
+                    exit_score += exit_score_loss_guard_1
+                    exit_reasons.append((f"Loss guard triggered ({loss_exit_pct_1*100:.0f}%+ loss)", exit_score_loss_guard_1))
 
-            # 1) profit guard (no leverage): if price drops >= profit_exit_pct from entry
+            # 1) profit guard (no leverage): multi-level scoring (short)
             if entry_price is not None:
-                if close_prices[i] <= entry_price * (1 - profit_exit_pct):
-                    exit_score += exit_score_profit_guard
-                    exit_reasons.append(("Profit guard triggered", exit_score_profit_guard))
+                profit_pct = (entry_price - close_prices[i]) / entry_price
+                if profit_pct >= profit_exit_pct_2:
+                    exit_score += exit_score_profit_guard_2
+                    exit_reasons.append((f"Profit guard triggered ({profit_exit_pct_2*100:.0f}%+ profit)", exit_score_profit_guard_2))
+                if profit_pct >= profit_exit_pct_1:
+                    exit_score += exit_score_profit_guard_1
+                    exit_reasons.append((f"Profit guard triggered ({profit_exit_pct_1*100:.0f}%+ profit)", exit_score_profit_guard_1))
 
             # 2) EMA slope weakness for short (EMA trending up)
             if i - slope_window >= 0 and ema_16[i] > ema_16[i - slope_window]:

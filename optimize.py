@@ -53,6 +53,17 @@ param_grid = {
     'entry_score_volume': [1, 2, 3],
     'entry_late_penalty': [0, 1, 2, 3],
     'exit_score_loss_guard': [0, 1, 2, 3],
+    # Multi-level loss guard params
+    'loss_exit_pct_1': [0.02, 0.025, 0.03],
+    'loss_exit_pct_2': [0.04, 0.045, 0.05],
+    'exit_score_loss_guard_1': [1, 2],
+    'exit_score_loss_guard_2': [2, 3],
+    # Multi-level profit guard params
+    'profit_exit_pct_1': [0.03, 0.04],
+    'profit_exit_pct_2': [0.07, 0.08],
+    'exit_score_profit_guard_1': [1, 2],
+    'exit_score_profit_guard_2': [2, 3],
+
     'exit_score_profit_guard': [0, 1, 2, 3],
     'exit_score_ema_slope': [1, 2, 3],
     'exit_score_ema_cross': [1, 2, 3],
@@ -89,7 +100,12 @@ param_grid = {
     'ma_200': [180, 190, 200, 210, 220, 230]
 }
 
-# param_grid = {  }
+param_grid = { 
+        'profit_exit_pct_1': [0.07, 0.08, 0.09, 0.10, 0.12, 0.15, 0.20],  # 2%, 2.5%, 3%
+        'profit_exit_pct_2': [0.07, 0.08, 0.09, 0.10, 0.12, 0.15, 0.20],  # 4%, 4.5%, 5%
+        'exit_score_profit_guard_1': [1, 2, 3],
+        'exit_score_profit_guard_2': [1, 2, 3],
+ }
 
 keys = list(param_grid.keys())
 combos = list(itertools.product(*(param_grid[k] for k in keys)))
