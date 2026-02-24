@@ -1,7 +1,7 @@
 import pandas as pd
 
 # open the csv file
-df = pd.read_csv("./data_candle/btc_15m_data_2018_to_2025.csv", parse_dates=["Open time"])
+df = pd.read_csv("./data_candle/btc_15m_data_2018_to_2026.csv", parse_dates=["Open time"])
 
 # get candle index
 def get_candle_index(date, time=None):
@@ -96,3 +96,7 @@ def get_month_start_indices(start_idx: int, end_idx: int, just_index : bool):
 # x = get_candle_index("2025-01-01", "00:00")
 # y = get_candle_index("2025-03-03", "04:15")
 # print("y =", y, "x =", x, "| y - x = ", int(y) - int(x))
+# y = get_candle_index("2026-02-23")
+# print(y)               # 285070
+# start, end = get_candle_index(("2026-01-01","2026-02-23"))
+# print(start, "|", end)          # 279982 | 285070
