@@ -754,9 +754,6 @@ def ma_strategy(tune: dict = None):
                     p['entry_price'],
                     p['leverage'],
                     p['margin'],
-                    p['margin_no_fee'],
-                    p['balance_before_trade'],
-                    p['balance_before_trade_no_fee'],
                     balance,
                     balance_without_fee,
                     deducting_fee_total,
@@ -769,7 +766,6 @@ def ma_strategy(tune: dict = None):
                     p['open_time_value'],
                     csv_logger,
                     trade_amount_percent,
-                    profit_percent_per_month,
                     total_liquids,
                     p['trade_id'],
                     remaining_open_margin,
@@ -811,9 +807,6 @@ def ma_strategy(tune: dict = None):
                     p['entry_price'],
                     p['leverage'],
                     p['margin'],
-                    p['margin_no_fee'],
-                    p['balance_before_trade'],
-                    p['balance_before_trade_no_fee'],
                     balance,
                     balance_without_fee,
                     deducting_fee_total,
@@ -826,7 +819,6 @@ def ma_strategy(tune: dict = None):
                     p['open_time_value'],
                     csv_logger,
                     trade_amount_percent,
-                    profit_percent_per_month,
                     total_liquids,
                     p['trade_id'],
                     remaining_open_margin,
@@ -957,11 +949,10 @@ def ma_strategy(tune: dict = None):
                         close_times,
                         balance,
                         balance_without_fee,
-                        first_balance,
                         trade_amount_percent,
-                        margin_balance,
-                        leverage)
-                    
+                        margin_balance)
+                    if updates is None:
+                        continue
 
                     balance = updates['balance']
                     balance_without_fee = updates['balance_without_fee']
@@ -1108,8 +1099,6 @@ def ma_strategy(tune: dict = None):
                     p['margin_no_fee'],
                     balance,
                     balance_without_fee,
-                    p['balance_before_trade'],
-                    p['balance_before_trade_no_fee'],
                     deducting_fee_total,
                     profits_lst,
                     total_profit_percent,
@@ -1274,11 +1263,10 @@ def ma_strategy(tune: dict = None):
                         close_times,
                         balance,
                         balance_without_fee,
-                        first_balance,
                         trade_amount_percent,
-                        margin_balance,
-                        leverage)
-                    
+                        margin_balance)
+                    if updates is None:
+                        continue
 
                     balance = updates['balance']
                     balance_without_fee = updates['balance_without_fee']
@@ -1424,8 +1412,6 @@ def ma_strategy(tune: dict = None):
                     p['margin_no_fee'],
                     balance,
                     balance_without_fee,
-                    p['balance_before_trade'],
-                    p['balance_before_trade_no_fee'],
                     deducting_fee_total,
                     profits_lst,
                     total_profit_percent,
