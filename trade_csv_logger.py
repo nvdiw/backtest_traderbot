@@ -33,6 +33,7 @@ class TradeCSVLogger:
         "duration_minutes",
         "save_money",
         "profit_percent_per_month",
+        "other_open_positions_at_close",
     ]
 
     def __init__(self, optimize: bool = False):
@@ -66,7 +67,8 @@ class TradeCSVLogger:
         hours,
         minutes,
         save_money,
-        profit_percent_per_month
+        profit_percent_per_month,
+        other_open_positions_at_close
     ):
         if self.optimize:
             # no per-trade allocations during optimization
@@ -96,7 +98,8 @@ class TradeCSVLogger:
             "duration_hours": hours,
             "duration_minutes": minutes,
             "save_money": save_money,
-            "profit_percent_per_month": profit_percent_per_month
+            "profit_percent_per_month": profit_percent_per_month,
+            "other_open_positions_at_close": bool(other_open_positions_at_close),
         })
 
     def save_csv(
