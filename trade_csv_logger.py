@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+from collections import Counter
 
 
 class TradeCSVLogger:
@@ -8,6 +9,32 @@ class TradeCSVLogger:
     - In optimize mode (optimize=True) it becomes a no-op to avoid disk I/O
       and reduce per-trade overhead (much faster for grid search).
     """
+    COLUMNS = [
+        "trade_id",
+        "type",
+        "open_time",
+        "close_time",
+        "entry_price",
+        "close_price",
+        "tactical_balance",
+        "balance_before",
+        "balance_after",
+        "total_assets",
+        "amount",
+        "profit",
+        "profit_percent",
+        "pnl_percent",
+        "fee_paid",
+        "leverage",
+        "trade_amount_percent",
+        "duration_minutes_total",
+        "duration_days",
+        "duration_hours",
+        "duration_minutes",
+        "save_money",
+        "profit_percent_per_month",
+    ]
+
     def __init__(self, optimize: bool = False):
         self.optimize = bool(optimize)
         if self.optimize:
@@ -18,12 +45,14 @@ class TradeCSVLogger:
 
     def log_trade(
         self,
+        trade_id,
         trade_type,
         open_time,
         close_time,
         entry_price,
         close_price,
         tactical_balance,
+        total_assets,
         balance_before,
         balance_after,
         margin,
@@ -45,12 +74,14 @@ class TradeCSVLogger:
             return
 
         self.rows.append({
+            "trade_id": trade_id,
             "type": trade_type,
             "open_time": open_time,
             "close_time": close_time,
             "entry_price": entry_price,
             "close_price": close_price,
             "tactical_balance": tactical_balance,
+            "total_assets": total_assets,
             "balance_before": balance_before,
             "balance_after": balance_after,
             "amount": margin,
@@ -86,37 +117,16 @@ class TradeCSVLogger:
             # do not write any files during optimization
             return {"rows_logged": getattr(self, "_count", 0)}
 
-        columns = [
-            "type",
-            "open_time",
-            "close_time",
-            "entry_price",
-            "close_price",
-            "tactical_balance",
-            "balance_before",
-            "balance_after",
-            "amount",
-            "leverage",
-            "trade_amount_percent",
-            "profit",
-            "profit_percent",
-            "pnl_percent",
-            "fee_paid",
-            "duration_minutes_total",
-            "duration_days",
-            "duration_hours",
-            "duration_minutes",
-            "save_money",
-            "profit_percent_per_month",
-        ]
-        df = pd.DataFrame(self.rows, columns=columns)
+        df = pd.DataFrame(self.rows, columns=self.COLUMNS)
 
         summary_row = {
+            "trade_id": None,
             "type": "SUMMARY",
             "open_time": start_time,
             "close_time": end_time,
             "entry_price": None,
             "close_price": None,
+            "total_assets": final_balance,
             "balance_before": first_balance,
             "balance_after": final_balance,
             "profit": total_profit,
@@ -126,20 +136,66 @@ class TradeCSVLogger:
             "duration_hours": hours,
             "duration_minutes": minutes
         }
-        summary_row_full = {col: summary_row.get(col, None) for col in columns}
+        summary_row_full = {col: summary_row.get(col, None) for col in self.COLUMNS}
 
         if df.empty:
-            df = pd.DataFrame([summary_row_full], columns=columns)
+            df = pd.DataFrame([summary_row_full], columns=self.COLUMNS)
         else:
-            df.loc[len(df), columns] = [summary_row_full[col] for col in columns]
+            df.loc[len(df), self.COLUMNS] = [summary_row_full[col] for col in self.COLUMNS]
         while True:
             try:
                 output_dir = os.path.dirname(file_name)
                 if output_dir:
                     os.makedirs(output_dir, exist_ok=True)
                 df.to_csv(file_name, index=False, encoding="utf-8")
+                self._save_colored_excel(df, file_name)
                 break
             except PermissionError:
                 answer = input(f"please close: {file_name} after close write ok: ")
                 if answer == "ok":
                     print("thanks!")
+
+    def _save_colored_excel(self, df: pd.DataFrame, csv_file_name: str):
+        """
+        CSV cannot store background colors.
+        Create a companion XLSX with very light-blue rows for trades
+        that share the same close_time (2+ trades closed together).
+        """
+        if df.empty:
+            return
+
+        try:
+            from openpyxl import load_workbook
+            from openpyxl.styles import PatternFill
+        except Exception:
+            return
+
+        excel_file_name = os.path.splitext(csv_file_name)[0] + ".xlsx"
+        df.to_excel(excel_file_name, index=False)
+
+        close_times = [str(x) for x in df.get("close_time", [])]
+        types = [str(x) for x in df.get("type", [])]
+        valid_close_times = [
+            ct for ct, t in zip(close_times, types)
+            if ct and ct.lower() != "none" and t != "SUMMARY"
+        ]
+        close_counts = Counter(valid_close_times)
+        multi_close_times = {ct for ct, c in close_counts.items() if c >= 2}
+        if not multi_close_times:
+            return
+
+        wb = load_workbook(excel_file_name)
+        ws = wb.active
+        fill = PatternFill(fill_type="solid", fgColor="EAF4FF")  # very light blue
+
+        # Row 1 is header, data starts from row 2
+        for idx, row in enumerate(df.itertuples(index=False), start=2):
+            row_type = str(getattr(row, "type", ""))
+            row_close_time = str(getattr(row, "close_time", ""))
+            if row_type == "SUMMARY":
+                continue
+            if row_close_time in multi_close_times:
+                for col in range(1, ws.max_column + 1):
+                    ws.cell(row=idx, column=col).fill = fill
+
+        wb.save(excel_file_name)
