@@ -78,6 +78,16 @@ param_grid = {
     'consecutive_losses_stop_until_month': [5],
     'loss_lock_step_pct': [0.01, 0.02, 0.03, 0.04, 0.05],
     'trade_amount_percent': [0.5, 0.6, 0.7, 0.8, 0.9, 1],
+    'trade_amount_percent_neworder': [0.05, 0.1, 0.15, 0.2],
+    'scale_in_trigger_move_pct': [0.005, 0.01, 0.015, 0.02],
+    'scale_entry_amount_percent': [0.2],
+    'scale_entry_profit_trigger_pct': [0.01, 0.015, 0.02, 0.03, 0.04, 0.05],
+    'scale_entry_loss_trigger_pct': [0.01, 0.015, 0.02, 0.03, 0.04, 0.05],
+    'scale_entry_on_profit_enabled': [False, True],
+    'scale_entry_on_loss_enabled': [False, True],
+    'loss_scale_entry_filter_enabled': [False, True],
+    'loss_scale_entry_min_score': [2, 3, 4],
+    'loss_scale_entry_atr_ratio_min': [0.9, 1.0, 1.1, 1.2],
     'monthly_profit_percent_stop_trade': [5, 6, 7, 8, 9, 10],
     'monthly_loss_percent_stop_trade': [i for i in range(14, 31)],
     'monthly_profit_close_filter': [True, False],
@@ -101,10 +111,8 @@ param_grid = {
 }
 
 param_grid = { 
-        'profit_exit_pct_1': [0.07, 0.08, 0.09, 0.10, 0.12, 0.15, 0.20],  # 2%, 2.5%, 3%
-        'profit_exit_pct_2': [0.07, 0.08, 0.09, 0.10, 0.12, 0.15, 0.20],  # 4%, 4.5%, 5%
-        'exit_score_profit_guard_1': [1, 2, 3],
-        'exit_score_profit_guard_2': [1, 2, 3],
+    'scale_entry_on_loss_enabled': [False, True],
+    'loss_scale_entry_filter_enabled': [False, True],
  }
 
 keys = list(param_grid.keys())

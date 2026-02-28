@@ -17,7 +17,7 @@ from chart_renderer import render_backtest_chart
 # end = get_candle_index("2026-02-23")     ----> 285070
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2023-01-01","2026-02-14"))
+start, end = get_candle_index(("2023-01-01","2026-02-23"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 # Fetch data from CSV file
@@ -128,6 +128,9 @@ def ma_strategy(tune: dict = None):
     balance = 1000                  # base balance
     leverage = 10                   # default leverage
     trade_amount_percent = 0.5      # 50% of balance per trade
+    scale_entry_amount_percent = 0.2       # order size for the extra (second) entry
+    scale_entry_profit_trigger_pct = 0.04  # favorable move trigger from first entry (e.g. 0.04 = 4%)
+    scale_entry_loss_trigger_pct = 0.03    # adverse move trigger from first entry (e.g. 0.04 = 4%)
     save_money = 0
 
     # Safe leverage levels
@@ -148,6 +151,13 @@ def ma_strategy(tune: dict = None):
     monthly_compound = 3                   # raise tactical balance by this % for next month
     monthly_profit_close_filter = True
     monthly_loss_close_filter = False
+    
+    scale_in_enabled = True
+    scale_entry_on_profit_enabled = True  # open second entry only after favorable move
+    scale_entry_on_loss_enabled = False    # open second entry after adverse move (same distance)
+    loss_scale_entry_filter_enabled = True
+    loss_scale_entry_min_score = 2         # minimum quality score required for loss-based scale entry
+    loss_scale_entry_atr_ratio_min = 1.0   # ATR/ATR_MA threshold for loss-based scale entry (LONG & SHORT)
 
     # Filters & behavior switches
     adx_filter = True
@@ -155,7 +165,7 @@ def ma_strategy(tune: dict = None):
     atr_filter = True
     consecutive_losses_month_stop_filter = False
     skip_logic = False
-    max_open_trades = 1  # 1 = single-position mode, >1 allows multiple concurrent positions
+    max_open_trades = 2  # 1 = single-position mode, >1 allows multiple concurrent positions
 
     # Cooldown
     cooldown_after_big_pnl = 4 * 3
@@ -452,6 +462,29 @@ def ma_strategy(tune: dict = None):
         if 'trade_amount_percent' in tune:
             trade_amount_percent = float(tune['trade_amount_percent'])
 
+        if 'scale_entry_amount_percent' in tune:
+            scale_entry_amount_percent = float(tune['scale_entry_amount_percent'])
+        elif 'trade_amount_percent_neworder' in tune:
+            # backward compatibility with previous parameter name
+            scale_entry_amount_percent = float(tune['trade_amount_percent_neworder'])
+
+        if 'scale_entry_profit_trigger_pct' in tune:
+            scale_entry_profit_trigger_pct = float(tune['scale_entry_profit_trigger_pct'])
+
+        if 'scale_entry_loss_trigger_pct' in tune:
+            scale_entry_loss_trigger_pct = float(tune['scale_entry_loss_trigger_pct'])
+
+        if 'scale_entry_trigger_pct' in tune:
+            # backward compatibility with shared trigger parameter
+            shared_scale_entry_trigger_pct = float(tune['scale_entry_trigger_pct'])
+            scale_entry_profit_trigger_pct = shared_scale_entry_trigger_pct
+            scale_entry_loss_trigger_pct = shared_scale_entry_trigger_pct
+        elif 'scale_in_trigger_move_pct' in tune:
+            # backward compatibility with previous parameter name
+            legacy_scale_entry_trigger_pct = float(tune['scale_in_trigger_move_pct'])
+            scale_entry_profit_trigger_pct = legacy_scale_entry_trigger_pct
+            scale_entry_loss_trigger_pct = legacy_scale_entry_trigger_pct
+
         if 'monthly_profit_percent_stop_trade' in tune:
             monthly_profit_percent_stop_trade = int(tune['monthly_profit_percent_stop_trade'])
 
@@ -469,6 +502,30 @@ def ma_strategy(tune: dict = None):
 
         if 'volume_filter' in tune:
             volume_filter = bool(tune['volume_filter'])
+
+        if 'scale_in_enabled' in tune:
+            scale_in_enabled = bool(tune['scale_in_enabled'])
+
+        if 'scale_entry_on_profit_enabled' in tune:
+            scale_entry_on_profit_enabled = bool(tune['scale_entry_on_profit_enabled'])
+
+        if 'scale_entry_on_loss_enabled' in tune:
+            scale_entry_on_loss_enabled = bool(tune['scale_entry_on_loss_enabled'])
+
+        if 'loss_scale_entry_filter_enabled' in tune:
+            loss_scale_entry_filter_enabled = bool(tune['loss_scale_entry_filter_enabled'])
+
+        if 'loss_scale_entry_min_score' in tune:
+            loss_scale_entry_min_score = int(tune['loss_scale_entry_min_score'])
+
+        if 'loss_scale_entry_atr_ratio_min' in tune:
+            loss_scale_entry_atr_ratio_min = float(tune['loss_scale_entry_atr_ratio_min'])
+        else:
+            # backward compatibility with older split params
+            if 'loss_scale_entry_long_atr_ratio_min' in tune:
+                loss_scale_entry_atr_ratio_min = float(tune['loss_scale_entry_long_atr_ratio_min'])
+            if 'loss_scale_entry_short_atr_ratio_min' in tune:
+                loss_scale_entry_atr_ratio_min = float(tune['loss_scale_entry_short_atr_ratio_min'])
 
         if 'consecutive_losses_month_stop_filter' in tune:
             consecutive_losses_month_stop_filter = bool(tune['consecutive_losses_month_stop_filter'])
@@ -858,7 +915,7 @@ def ma_strategy(tune: dict = None):
         # ===================== OPEN LONG =====================
         # Require that EMA/MA50 have crossed and the last cross was bullish,
         # and avoid opening multiple trades for the same cross.
-        if len(open_positions) < max_open_trades and _count_open("short") == 0 and i >= cooldown_until_index:
+        if len(open_positions) < max_open_trades and _count_open("short") == 0 and _count_open("long") == 0 and i >= cooldown_until_index:
             if cross_seen and last_trade_cross_index != last_cross_index:
 
                 entry_score = 0
@@ -984,12 +1041,101 @@ def ma_strategy(tune: dict = None):
 
                     updates = None
 
+        # ===================== SCALE ENTRY LONG =====================
+        if scale_in_enabled and len(open_positions) < max_open_trades and _count_open("short") == 0 and _count_open("long") > 0 and i >= cooldown_until_index:
+            first_long_position = min(
+                (p for p in open_positions if p['side'] == "long"),
+                key=lambda x: x['entry_index'],
+                default=None
+            )
+            if first_long_position is not None:
+                first_long_entry_price = first_long_position['entry_price']
+                long_scale_entry_profit_trigger_price = first_long_entry_price * (1 + scale_entry_profit_trigger_pct)
+                long_scale_entry_loss_trigger_price = first_long_entry_price * (1 - scale_entry_loss_trigger_pct)
+                long_scale_entry_reason = None
+                if scale_entry_on_profit_enabled and close_prices[i] >= long_scale_entry_profit_trigger_price:
+                    long_scale_entry_reason = "profit"
+                elif scale_entry_on_loss_enabled and close_prices[i] <= long_scale_entry_loss_trigger_price:
+                    long_scale_entry_reason = "loss"
+
+                long_loss_scale_entry_score = 0
+                if long_scale_entry_reason == "loss" and loss_scale_entry_filter_enabled:
+                    # loss-based scale entry is allowed only when trend and momentum still support LONG.
+                    if ema_16[i] > ma_50[i]:
+                        long_loss_scale_entry_score += 1
+                    if ma_100[i] >= ma_200[i]:
+                        long_loss_scale_entry_score += 1
+                    if i > 0 and close_prices[i] > open_prices[i] and close_prices[i] > close_prices[i - 1]:
+                        long_loss_scale_entry_score += 1
+                    if atr[i] is not None and atr_ma[i] is not None and atr_ma[i] > 0:
+                        long_scale_entry_atr_ratio = atr[i] / atr_ma[i]
+                        if long_scale_entry_atr_ratio >= loss_scale_entry_atr_ratio_min:
+                            long_loss_scale_entry_score += 1
+                    if long_loss_scale_entry_score < loss_scale_entry_min_score:
+                        long_scale_entry_reason = None
+
+                if long_scale_entry_reason is not None:
+                    updates = trade_manager.open_long(
+                        i,
+                        close_prices,
+                        close_times,
+                        balance,
+                        balance_without_fee,
+                        scale_entry_amount_percent,
+                        margin_balance)
+                    if updates is not None:
+                        balance = updates['balance']
+                        balance_without_fee = updates['balance_without_fee']
+                        position = {
+                            'trade_id': next_trade_id,
+                            'side': "long",
+                            'entry_price': updates['entry_price'],
+                            'entry_index': i,
+                            'highest_since_entry': max(updates['entry_price'], high_prices[i]),
+                            'lowest_since_entry': min(updates['entry_price'], low_prices[i]),
+                            'position_size': updates['position_size'],
+                            'position_size_no_fee': updates['position_size_no_fee'],
+                            'balance_before_trade': updates['balance_before_trade'],
+                            'balance_before_trade_no_fee': updates['balance_before_trade_no_fee'],
+                            'margin': updates['margin'],
+                            'margin_no_fee': updates['margin_no_fee'],
+                            'leverage': updates['leverage'],
+                            'open_time_value': updates['open_time_value'],
+                            'target_close_price_loss': updates['entry_price'],
+                        }
+                        open_positions.append(position)
+                        next_trade_id += 1
+                        if long_open_points is not None:
+                            long_open_points.append((i, position['entry_price']))
+                            if long_open_reasons is not None:
+                                long_scale_entry_text = (
+                                    f"LONG SCALE ENTRY\n"
+                                    f"Order size: {scale_entry_amount_percent*100:.2f}%\n"
+                                )
+                                if long_scale_entry_reason == "profit":
+                                    long_scale_entry_text += (
+                                        f"Price moved +{scale_entry_profit_trigger_pct*100:.2f}% from first LONG entry."
+                                    )
+                                else:
+                                    long_scale_entry_text += (
+                                        f"Price moved -{scale_entry_loss_trigger_pct*100:.2f}% from first LONG entry."
+                                    )
+                                    if loss_scale_entry_filter_enabled:
+                                        long_scale_entry_text += (
+                                            f"\nLoss filter score: {long_loss_scale_entry_score}/{loss_scale_entry_min_score}"
+                                        )
+                                long_open_reasons[i] = (
+                                    long_scale_entry_text
+                                )
+                    updates = None
+
 
         # ===================== CLOSE LONG =====================
+        close_all_longs = False
+        long_exit_reason_text = None
         for p in open_positions[:]:
             if p['side'] != "long":
                 continue
-            remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
             exit_score = 0
             exit_reasons = []
             entry_price = p['entry_price']
@@ -1056,8 +1202,8 @@ def ma_strategy(tune: dict = None):
                     if body >= atr[i] * opposite_atr_body_mult:
                         exit_score += exit_score_opposite_candle
                         exit_reasons.append(("Strong opposite bearish candle", exit_score_opposite_candle))
-            
-            # Negative Scores :
+
+            # Negative Scores:
             # 1) POST-CROSS SHARP-MOVE PENALTY
             if last_cross_index is not None and i > last_cross_index and post_cross_penalty_candles > 0:
                 candles_since_cross = i - last_cross_index
@@ -1080,12 +1226,19 @@ def ma_strategy(tune: dict = None):
                             )
 
             if exit_score >= exit_score_threshold:
-                exit_reason_text = build_score_reason_text(
+                long_exit_reason_text = build_score_reason_text(
                     "LONG EXIT SCORE REASONS",
                     exit_reasons,
                     exit_score,
                     exit_score_threshold,
                 )
+                close_all_longs = True
+                break
+
+        if close_all_longs:
+            long_positions_to_close = [p for p in open_positions[:] if p['side'] == "long"]
+            for p in long_positions_to_close:
+                remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
                 close_price = close_prices[i]
                 updates = trade_manager.close_long(
                     i,
@@ -1148,7 +1301,10 @@ def ma_strategy(tune: dict = None):
                 if long_close_points is not None:
                     long_close_points.append((i, close_price))
                     if long_close_reasons is not None:
-                        long_close_reasons[i] = exit_reason_text
+                        if len(long_positions_to_close) > 1:
+                            long_close_reasons[i] = f"{long_exit_reason_text}\nBatch close: all open LONG positions closed together."
+                        else:
+                            long_close_reasons[i] = long_exit_reason_text
 
                 if profits_lst[-1] < 0:
                     consecutive_losses += 1
@@ -1172,7 +1328,7 @@ def ma_strategy(tune: dict = None):
         # ===================== OPEN SHORT =====================
         # Require that EMA/MA50 have crossed and the last cross was bearish,
         # and avoid opening multiple trades for the same cross.
-        if len(open_positions) < max_open_trades and _count_open("long") == 0 and i >= cooldown_until_index:
+        if len(open_positions) < max_open_trades and _count_open("long") == 0 and _count_open("short") == 0 and i >= cooldown_until_index:
             if cross_seen and last_trade_cross_index != last_cross_index:
                 
                 entry_score = 0
@@ -1298,12 +1454,101 @@ def ma_strategy(tune: dict = None):
 
                     updates = None
 
+        # ===================== SCALE ENTRY SHORT =====================
+        if scale_in_enabled and len(open_positions) < max_open_trades and _count_open("long") == 0 and _count_open("short") > 0 and i >= cooldown_until_index:
+            first_short_position = min(
+                (p for p in open_positions if p['side'] == "short"),
+                key=lambda x: x['entry_index'],
+                default=None
+            )
+            if first_short_position is not None:
+                first_short_entry_price = first_short_position['entry_price']
+                short_scale_entry_profit_trigger_price = first_short_entry_price * (1 - scale_entry_profit_trigger_pct)
+                short_scale_entry_loss_trigger_price = first_short_entry_price * (1 + scale_entry_loss_trigger_pct)
+                short_scale_entry_reason = None
+                if scale_entry_on_profit_enabled and close_prices[i] <= short_scale_entry_profit_trigger_price:
+                    short_scale_entry_reason = "profit"
+                elif scale_entry_on_loss_enabled and close_prices[i] >= short_scale_entry_loss_trigger_price:
+                    short_scale_entry_reason = "loss"
+
+                short_loss_scale_entry_score = 0
+                if short_scale_entry_reason == "loss" and loss_scale_entry_filter_enabled:
+                    # loss-based scale entry is allowed only when trend and momentum still support SHORT.
+                    if ema_16[i] <= ma_50[i]:
+                        short_loss_scale_entry_score += 1
+                    if ma_100[i] < ma_200[i]:
+                        short_loss_scale_entry_score += 1
+                    if i > 0 and close_prices[i] < open_prices[i] and close_prices[i] < close_prices[i - 1]:
+                        short_loss_scale_entry_score += 1
+                    if atr[i] is not None and atr_ma[i] is not None and atr_ma[i] > 0:
+                        short_scale_entry_atr_ratio = atr[i] / atr_ma[i]
+                        if short_scale_entry_atr_ratio >= loss_scale_entry_atr_ratio_min:
+                            short_loss_scale_entry_score += 1
+                    if short_loss_scale_entry_score < loss_scale_entry_min_score:
+                        short_scale_entry_reason = None
+
+                if short_scale_entry_reason is not None:
+                    updates = trade_manager.open_short(
+                        i,
+                        close_prices,
+                        close_times,
+                        balance,
+                        balance_without_fee,
+                        scale_entry_amount_percent,
+                        margin_balance)
+                    if updates is not None:
+                        balance = updates['balance']
+                        balance_without_fee = updates['balance_without_fee']
+                        position = {
+                            'trade_id': next_trade_id,
+                            'side': "short",
+                            'entry_price': updates['entry_price'],
+                            'entry_index': i,
+                            'highest_since_entry': max(updates['entry_price'], high_prices[i]),
+                            'lowest_since_entry': min(updates['entry_price'], low_prices[i]),
+                            'position_size': updates['position_size'],
+                            'position_size_no_fee': updates['position_size_no_fee'],
+                            'balance_before_trade': updates['balance_before_trade'],
+                            'balance_before_trade_no_fee': updates['balance_before_trade_no_fee'],
+                            'margin': updates['margin'],
+                            'margin_no_fee': updates['margin_no_fee'],
+                            'leverage': updates['leverage'],
+                            'open_time_value': updates['open_time_value'],
+                            'target_close_price_loss': updates['entry_price'],
+                        }
+                        open_positions.append(position)
+                        next_trade_id += 1
+                        if short_open_points is not None:
+                            short_open_points.append((i, position['entry_price']))
+                            if short_open_reasons is not None:
+                                short_scale_entry_text = (
+                                    f"SHORT SCALE ENTRY\n"
+                                    f"Order size: {scale_entry_amount_percent*100:.2f}%\n"
+                                )
+                                if short_scale_entry_reason == "profit":
+                                    short_scale_entry_text += (
+                                        f"Price moved -{scale_entry_profit_trigger_pct*100:.2f}% from first SHORT entry."
+                                    )
+                                else:
+                                    short_scale_entry_text += (
+                                        f"Price moved +{scale_entry_loss_trigger_pct*100:.2f}% from first SHORT entry."
+                                    )
+                                    if loss_scale_entry_filter_enabled:
+                                        short_scale_entry_text += (
+                                            f"\nLoss filter score: {short_loss_scale_entry_score}/{loss_scale_entry_min_score}"
+                                        )
+                                short_open_reasons[i] = (
+                                    short_scale_entry_text
+                                )
+                    updates = None
+
 
         # ===================== CLOSE SHORT =====================
+        close_all_shorts = False
+        short_exit_reason_text = None
         for p in open_positions[:]:
             if p['side'] != "short":
                 continue
-            remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
             exit_score = 0
             exit_reasons = []
             entry_price = p['entry_price']
@@ -1370,7 +1615,7 @@ def ma_strategy(tune: dict = None):
                         exit_score += exit_score_opposite_candle
                         exit_reasons.append(("Strong opposite bullish candle", exit_score_opposite_candle))
 
-            # Negative Scores :
+            # Negative Scores:
             # 1) POST-CROSS SHARP-MOVE PENALTY
             if last_cross_index is not None and i > last_cross_index and post_cross_penalty_candles > 0:
                 candles_since_cross = i - last_cross_index
@@ -1393,12 +1638,19 @@ def ma_strategy(tune: dict = None):
                             )
 
             if exit_score >= exit_score_threshold:
-                exit_reason_text = build_score_reason_text(
+                short_exit_reason_text = build_score_reason_text(
                     "SHORT EXIT SCORE REASONS",
                     exit_reasons,
                     exit_score,
                     exit_score_threshold,
                 )
+                close_all_shorts = True
+                break
+
+        if close_all_shorts:
+            short_positions_to_close = [p for p in open_positions[:] if p['side'] == "short"]
+            for p in short_positions_to_close:
+                remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
                 close_price = close_prices[i]
                 updates = trade_manager.close_short(
                     i,
@@ -1462,7 +1714,10 @@ def ma_strategy(tune: dict = None):
                 if short_close_points is not None:
                     short_close_points.append((i, close_price))
                     if short_close_reasons is not None:
-                        short_close_reasons[i] = exit_reason_text
+                        if len(short_positions_to_close) > 1:
+                            short_close_reasons[i] = f"{short_exit_reason_text}\nBatch close: all open SHORT positions closed together."
+                        else:
+                            short_close_reasons[i] = short_exit_reason_text
 
                 if profits_lst[-1] < 0:
                     consecutive_losses += 1
