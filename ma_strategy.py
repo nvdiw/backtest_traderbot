@@ -11,38 +11,15 @@ from get_candle_index import get_candle_index, get_month_start_indices
 from trademanager import TradeManager
 from check_monthly_data import write_monthly_summary
 from chart_renderer import render_backtest_chart
+from fetch_calculate_data import fetch_all_data, trade_duration
 
 
 # start = get_candle_index("2025-01-01")   ----> 244944
 # end = get_candle_index("2026-02-23")     ----> 285070
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2023-01-01","2026-02-23"))
+start, end = get_candle_index(("2025-01-01","2026-02-23"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
-
-# Fetch data from CSV file
-def fetch_all_data(start: int, end: int):
-    """Load only the required candle window from CSV (start:end)."""
-    if start is None or end is None or end <= start:
-        return None
-
-    rows_to_read = end - start
-    data = pd.read_csv(
-        './data_candle/btc_15m_data_2018_to_2026.csv',
-        skiprows=range(1, start + 1),
-        nrows=rows_to_read,
-        usecols=['Open time', 'Close time', 'Open', 'Close', 'Low', 'High', 'Volume'],
-    )
-
-    return {
-        "Open time": data['Open time'].tolist(),
-        "Close time": data['Close time'].tolist(),
-        "Open": data['Open'].to_numpy(dtype=float),
-        "Close": data['Close'].to_numpy(dtype=float),
-        "Low": data['Low'].to_numpy(dtype=float),
-        "High": data['High'].to_numpy(dtype=float),
-        "Volume": data['Volume'].to_numpy(dtype=float)
-    }
 
 all_data = fetch_all_data(start, end)
 open_prices = all_data["Open"]
@@ -81,40 +58,6 @@ def _cached_indicator(kind, key, builder):
         cache[key] = builder()
     return cache[key]
 
-
-# Calculate Trade Duration
-def trade_duration(open_time: str, close_time: str):
-    # format: YYYY-MM-DD HH:MM:SS.microseconds
-
-    def parse(t):
-        t = t.strip()
-        date, time = t.split(" ")
-        y, m, d = map(int, date.split("-"))
-        h, mi, s = time.split(":")
-        s = int(float(s))  # drop microseconds
-        return y, m, d, int(h), int(mi), s
-
-    def to_seconds(y, m, d, h, mi, s):
-        # days per month (no leap year handling for simplicity)
-        mdays = [31,28,31,30,31,30,31,31,30,31,30,31]
-
-        days = y * 365 + sum(mdays[:m-1]) + (d - 1)
-        return days * 86400 + h * 3600 + mi * 60 + s
-
-    o = to_seconds(*parse(open_time))
-    c = to_seconds(*parse(close_time))
-
-    diff = c - o
-
-    days = diff // 86400
-    diff %= 86400
-    hours = diff // 3600
-    diff %= 3600
-    minutes = diff // 60
-
-    return days, hours, minutes
-
-
 # Main Trading Logic
 def ma_strategy(tune: dict = None):
 
@@ -128,9 +71,9 @@ def ma_strategy(tune: dict = None):
     balance = 1000                  # base balance
     leverage = 10                   # default leverage
     trade_amount_percent = 0.5      # 50% of balance per trade
-    scale_entry_amount_percent = 0.2       # order size for the extra (second) entry
-    scale_entry_profit_trigger_pct = 0.04  # favorable move trigger from first entry (e.g. 0.04 = 4%)
-    scale_entry_loss_trigger_pct = 0.03    # adverse move trigger from first entry (e.g. 0.04 = 4%)
+    scale_entry_amount_percent = 0.2        # order size for the extra (second) entry
+    scale_entry_profit_trigger_pct = 0.039  # favorable move trigger from first entry (e.g. 0.04 = 4%) 0.052 is good
+    scale_entry_loss_trigger_pct = 0.03     # adverse move trigger from first entry (e.g. 0.04 = 4%)
     save_money = 0
 
     # Safe leverage levels
@@ -151,10 +94,13 @@ def ma_strategy(tune: dict = None):
     monthly_compound = 3                   # raise tactical balance by this % for next month
     monthly_profit_close_filter = True
     monthly_loss_close_filter = False
-    
-    scale_in_enabled = True
+
+    # second entry enable/disable
     scale_entry_on_profit_enabled = True  # open second entry only after favorable move
     scale_entry_on_loss_enabled = False    # open second entry after adverse move (same distance)
+
+    # second entry filters
+    scale_in_enabled = True
     loss_scale_entry_filter_enabled = True
     loss_scale_entry_min_score = 2         # minimum quality score required for loss-based scale entry
     loss_scale_entry_atr_ratio_min = 1.0   # ATR/ATR_MA threshold for loss-based scale entry (LONG & SHORT)
