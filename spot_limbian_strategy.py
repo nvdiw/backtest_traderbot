@@ -71,16 +71,14 @@ def spot_limbian_strategy(tune: dict = None):
     balance = 1000                  # base balance
     leverage = 1                   # default leverage
     trade_amount_percent = 0.1      # 10% of balance per trade
-    scale_entry_amount_percent = 0.2        # order size for the extra (second) entry
-    scale_entry_profit_trigger_pct = 0.039  # favorable move trigger from first entry (e.g. 0.04 = 4%) 0.052 is good
-    scale_entry_loss_trigger_pct = 0.03     # adverse move trigger from first entry (e.g. 0.04 = 4%)
+
     save_money = 0
     symbol_change_pct = 0.05
 
     # Safe leverage levels
-    safe_leverage_low = 2
-    safe_leverage_med = 3
-    safe_leverage_high = 4
+    safe_leverage_low = 1
+    safe_leverage_med = 1
+    safe_leverage_high = 1
 
     # Safe leverage activation thresholds (% of tactical balance)
     safe_leverage_balance_pct_low = 80
@@ -93,23 +91,13 @@ def spot_limbian_strategy(tune: dict = None):
     monthly_profit_percent_stop_trade = 8  # stop trading month after reaching this profit %
     monthly_loss_percent_stop_trade = 19   # stop trading month after reaching this loss %
     monthly_compound = 3                   # raise tactical balance by this % for next month
-    monthly_profit_close_filter = True
+    monthly_profit_close_filter = False
     monthly_loss_close_filter = False
 
-    # second entry enable/disable
-    scale_entry_on_profit_enabled = True  # open second entry only after favorable move
-    scale_entry_on_loss_enabled = False    # open second entry after adverse move (same distance)
-
-    # second entry filters
-    scale_in_enabled = True
-    loss_scale_entry_filter_enabled = True
-    loss_scale_entry_min_score = 2         # minimum quality score required for loss-based scale entry
-    loss_scale_entry_atr_ratio_min = 1.0   # ATR/ATR_MA threshold for loss-based scale entry (LONG & SHORT)
-
     # Filters & behavior switches
-    adx_filter = True
-    volume_filter = True
-    atr_filter = True
+    adx_filter = False
+    volume_filter = False
+    atr_filter = False
     consecutive_losses_month_stop_filter = False
     skip_logic = False
     max_open_trades = 10  # 1 = single-position mode, >1 allows multiple concurrent positions
@@ -171,33 +159,6 @@ def spot_limbian_strategy(tune: dict = None):
     plot_yscale_drag_sensitivity = 0.0030  # right-drag vertical zoom sensitivity
 
     plot_post_cross_penalty_markers = True  # show yellow markers where post-cross penalty is applied
-
-
-    # ---- score weights (entry/exit) ----
-    # entry positive
-    entry_score_cross = 1
-    entry_score_ema_vs_ma50 = 3
-    entry_score_ma_trend = 1
-    entry_score_ma_distance_or_candle = 1
-    entry_score_adx = 1
-    entry_score_volume = 2
-    # entry negative
-    entry_late_penalty = 1  # applied as a subtraction
-
-
-    # exit positive
-    exit_score_loss_guard_1 = 3
-    exit_score_loss_guard_2 = 1
-    exit_score_profit_guard_1 = 3
-    exit_score_profit_guard_2 = 3
-    exit_score_ema_slope = 1
-    exit_score_ema_cross = 3
-    exit_score_ma_trend = 1
-    exit_score_trailing = 1
-    exit_score_adx = 1
-    exit_score_opposite_candle = 1
-    # exit negative
-    post_cross_penalty_score = 3
 
     def build_score_reason_text(title, reasons, total_score, threshold):
         lines = [title]
@@ -509,6 +470,9 @@ def spot_limbian_strategy(tune: dict = None):
 
         if 'max_open_trades' in tune:
             max_open_trades = max(1, int(tune['max_open_trades']))
+        
+        if 'symbol_change_pct' in tune:
+            symbol_change_pct = float(tune['symbol_change_pct'])
 
     # ---- setting end ----
     multi_position_enabled = max_open_trades > 1
@@ -640,17 +604,6 @@ def spot_limbian_strategy(tune: dict = None):
         period_vol_avg,
         lambda: indicator.get_volume_avg(volume_prices, period=period_vol_avg),
     )
-
-    # you can use times for open/close orders
-    # # ---- time filter mask (13:30 UTC close time) ----
-    # close_times_utc = pd.to_datetime(close_times, utc=True)
-    # time_1330_mask = (close_times_utc.hour == 13) & (close_times_utc.minute == 30)
-
-    #   # check data loaded correctly :
-    # print(len(open_prices), "candles loaded.")
-    # print("len(ema_16):", len(ema_16))
-    # print("len(ma_50):", len(ma_50))
-    # print("len adx:", len(adx))
 
     def _count_open(side):
         return sum(1 for p in open_positions if p['side'] == side)
@@ -860,7 +813,7 @@ def spot_limbian_strategy(tune: dict = None):
             continue
         
 
-        if last_price_entry == 0:
+        if last_price_entry <= close_prices[i]:
             last_price_entry = close_prices[i]
 
         # ===================== OPEN LONG =====================
