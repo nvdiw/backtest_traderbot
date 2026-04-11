@@ -18,6 +18,7 @@ import multiprocessing
 import argparse
 import os
 from ma_strategy import ma_strategy
+from spot_limbian_strategy import spot_limbian_strategy
 
 # Grid to search (kept reasonable to limit runtime)
 param_grid = {
@@ -107,13 +108,18 @@ param_grid = {
     'ema_16': [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
     'ma_50': [45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55],
     'ma_100': [100, 110, 120, 130, 140, 150],
-    'ma_200': [180, 190, 200, 210, 220, 230]
+    'ma_200': [180, 190, 200, 210, 220, 230],
+    'symbol_change_pct': [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10]
 }
 
 param_grid = { 
-    'scale_entry_on_loss_enabled': [False, True],
-    'loss_scale_entry_filter_enabled': [False, True],
+    'symbol_change_pct': [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10]
  }
+
+# strategies setting only one of them should be True
+ma = False
+spot_limbian = True
+
 
 keys = list(param_grid.keys())
 combos = list(itertools.product(*(param_grid[k] for k in keys)))
@@ -141,12 +147,24 @@ def _evaluate_pair(pair):
     tune = dict(zip(keys, combo))
     tune.update({'optimize': True})
     t0 = time.time()
-    try:
-        res = ma_strategy(tune=tune)
-        err = None
-    except Exception as e:
-        res = None
-        err = e
+
+    # ----strategies
+    if ma:
+        try:
+            res = ma_strategy(tune=tune)
+            err = None
+        except Exception as e:
+            res = None
+            err = e
+
+    elif spot_limbian:
+        try:
+            res = spot_limbian_strategy(tune=tune)
+            err = None
+        except Exception as e:
+            res = None
+            err = e
+
     duration = time.time() - t0
     return idx, tune, res, duration, err
 
