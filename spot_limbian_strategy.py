@@ -70,10 +70,10 @@ def spot_limbian_strategy(tune: dict = None):
     # Capital & position sizing
     balance = 1000                  # base balance
     leverage = 1                   # default leverage
-    trade_amount_percent = 0.1      # 10% of balance per trade
+    trade_amount_percent = 0.5      # 10% of balance per trade
 
     save_money = 0
-    symbol_change_pct = 0.05
+    symbol_change_pct = 0.06
 
     # Safe leverage levels
     safe_leverage_low = 1
@@ -614,7 +614,9 @@ def spot_limbian_strategy(tune: dict = None):
 
         if chart_data is not None:
             total_open_margin = sum(p['margin'] for p in open_positions)
-            chart_data.append([i, balance + total_open_margin + save_money])
+            open_positions_sizes = sum(p['position_size'] for p in open_positions)
+            margin_open_trades = open_positions_sizes * close_prices[i]
+            chart_data.append([i, balance + margin_open_trades + save_money])
 
         if ema_16[i] is None or ma_50[i] is None or ma_100[i] is None or ma_200[i] is None:
             continue
