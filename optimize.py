@@ -109,10 +109,15 @@ param_grid = {
     'ma_50': [45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55],
     'ma_100': [100, 110, 120, 130, 140, 150],
     'ma_200': [180, 190, 200, 210, 220, 230],
+    'max_open_trades': [i for i in range(1, 21)],
+    
+    # ==== spot_limbian_strategy variables ====
     'symbol_change_pct': [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10]
 }
 
 param_grid = { 
+    'trade_amount_percent': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
+    'max_open_trades': [i for i in range(1, 21)],
     'symbol_change_pct': [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10]
  }
 
