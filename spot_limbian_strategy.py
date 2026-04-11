@@ -817,7 +817,7 @@ def spot_limbian_strategy(tune: dict = None):
             last_price_entry = close_prices[i]
 
         # ===================== OPEN LONG =====================
-        if (close_prices[i] <= last_price_entry * (1 - symbol_change_pct)) and (len(open_positions) <= max_open_trades):
+        if (close_prices[i] <= last_price_entry * (1 - symbol_change_pct)) and (len(open_positions) < max_open_trades):
                     # ---- open long ----
                     updates = trade_manager.open_long(
                         i,
@@ -962,6 +962,7 @@ def spot_limbian_strategy(tune: dict = None):
     if verbose:
         print("✅ BACKTEST FINISHED")
         print("Closed Trades:", count_closed_orders, "( Longs:", total_long, "| Shorts:", total_short, ")")
+        print("Count open Trades:", len(open_positions))
         print("Total Wins:", total_wins, "| Total Wins Long:", total_wins_long, "| Total Wins Short:", total_wins_short)
         print("Total Losses:", total_losses)
         print("Final Balance:", round(balance, 2), "$")
