@@ -53,6 +53,7 @@ def render_backtest_chart(
     lst_profit_percent_per_month,
 ):
     ypoints_total_balance = [row[1] for row in chart_data]
+    zpoints_total_balance = [row[2] for row in chart_data]
     total_candles = len(close_prices)
     if total_candles == 0:
         return {
@@ -87,6 +88,7 @@ def render_backtest_chart(
         "short_close": "#E96A7E",
         "penalty": "#FFD84D",
         "equity": "#5CC8F2",
+        "equity_d": "#F2B15C",
         "divider": "#44586E",
         "crosshair": "#9AABC1",
         "label_fg": "#0C1420",
@@ -351,7 +353,8 @@ def render_backtest_chart(
             full_ma50 = np.asarray(ma_50[plot_start:plot_end], dtype=float)
             full_ma100 = np.asarray(ma_100[plot_start:plot_end], dtype=float)
             full_ma200 = np.asarray(ma_200[plot_start:plot_end], dtype=float)
-            full_equity = np.asarray(ypoints_total_balance[plot_start:plot_end], dtype=float)
+            full_equity_static = np.asarray(ypoints_total_balance[plot_start:plot_end], dtype=float)
+            full_equity_dynamic = np.asarray(zpoints_total_balance[plot_start:plot_end], dtype=float)
             n_full = len(full_close)
             if n_full == 0:
                 return
@@ -409,7 +412,8 @@ def render_backtest_chart(
             ds_ma50 = downsample_last(full_ma50, render_step)
             ds_ma100 = downsample_last(full_ma100, render_step)
             ds_ma200 = downsample_last(full_ma200, render_step)
-            ds_equity = downsample_last(full_equity, render_step)
+            ds_equity = downsample_last(full_equity_static, render_step)
+            dd_equity = downsample_last(full_equity_dynamic, render_step)
             ds_mark = downsample_last_valid(mark_arr, render_step)
             ds_long_open, ds_long_open_marker_idx = downsample_last_valid_with_index(long_open_arr, render_step)
             ds_long_close, ds_long_close_marker_idx = downsample_last_valid_with_index(long_close_arr, render_step)
@@ -435,7 +439,8 @@ def render_backtest_chart(
             ma50_series = pd.Series(ds_ma50, index=time_index)
             ma100_series = pd.Series(ds_ma100, index=time_index)
             ma200_series = pd.Series(ds_ma200, index=time_index)
-            equity_series = pd.Series(ds_equity, index=time_index)
+            equity_series_static = pd.Series(ds_equity, index=time_index)
+            equity_series_dynamic = pd.Series(dd_equity, index=time_index)
             mark_series = pd.Series(ds_mark, index=time_index)
             long_open_series = pd.Series(ds_long_open, index=time_index)
             long_close_series = pd.Series(ds_long_close, index=time_index)
@@ -562,11 +567,16 @@ def render_backtest_chart(
                         alpha=0.95,
                     )
                 )
-            if has_finite(equity_series):
+            if has_finite(equity_series_static):
                 add_plots.append(
-                    mpf.make_addplot(equity_series, ax=ax_equity, color=chart_palette["equity"], width=1.2)
+                    mpf.make_addplot(equity_series_static, ax=ax_equity, color=chart_palette["equity"], width=1.2)
                 )
-    
+
+            if has_finite(equity_series_dynamic):
+                add_plots.append(
+                    mpf.make_addplot(equity_series_dynamic, ax=ax_equity, color=chart_palette["equity_d"], width=1.2)
+                )
+
             last_close_price = float(ds_close[-1])
             plot_kwargs = {}
             if len(time_index) > 1:
