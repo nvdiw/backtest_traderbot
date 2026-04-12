@@ -613,10 +613,21 @@ def spot_limbian_strategy(tune: dict = None):
         # print(start+i)
 
         if chart_data is not None:
-            total_open_margin = sum(p['margin'] for p in open_positions)
-            open_positions_sizes = sum(p['position_size'] for p in open_positions)
-            margin_open_trades = open_positions_sizes * close_prices[i]
-            chart_data.append([i, balance + margin_open_trades + save_money])
+            # margin static
+            total_open_margin_static = sum(p['margin'] for p in open_positions)
+
+            # margin dynamic
+            lst_open_margin_dynamic = []
+            for p in open_positions:
+                if p['side'] == "long":
+                    profit_open_positions_pct = ((close_prices[i] - p['entry_price']) / p['entry_price']) * 100
+                if p['side'] == "short":
+                    profit_open_positions_pct = ((p['entry_price'] - close_prices[i]) / p['entry_price']) * 100
+                profit_open_positions_pct_leverage = profit_open_positions_pct * p['leverage']
+                lst_open_margin_dynamic.append(p['margin'] + p['margin'] * profit_open_positions_pct_leverage / 100)
+            total_open_margin_dynamic = sum(lst_open_margin_dynamic)
+
+            chart_data.append([i, balance + total_open_margin_static + save_money, balance + total_open_margin_dynamic + save_money])
 
         if ema_16[i] is None or ma_50[i] is None or ma_100[i] is None or ma_200[i] is None:
             continue
