@@ -70,10 +70,11 @@ def spot_limbian_strategy(tune: dict = None):
     # Capital & position sizing
     balance = 1000                  # base balance
     leverage = 1                   # default leverage
-    trade_amount_percent = 0.5      # 10% of balance per trade
+    trade_amount_percent = 0.08      # 10% of balance per trade
 
     save_money = 0
     symbol_change_pct = 0.06
+    more_symbol_change_pct = 0.05
 
     # Safe leverage levels
     safe_leverage_low = 1
@@ -100,7 +101,7 @@ def spot_limbian_strategy(tune: dict = None):
     atr_filter = False
     consecutive_losses_month_stop_filter = False
     skip_logic = False
-    max_open_trades = 10  # 1 = single-position mode, >1 allows multiple concurrent positions
+    max_open_trades = 15  # 1 = single-position mode, >1 allows multiple concurrent positions
 
     # Cooldown
     cooldown_after_big_pnl = 4 * 3
@@ -474,6 +475,9 @@ def spot_limbian_strategy(tune: dict = None):
         if 'symbol_change_pct' in tune:
             symbol_change_pct = float(tune['symbol_change_pct'])
 
+        if 'more_symbol_change_pct' in tune:
+            more_symbol_change_pct = float(tune['more_symbol_change_pct'])
+
     # ---- setting end ----
     multi_position_enabled = max_open_trades > 1
     if multi_position_enabled and verbose:
@@ -499,6 +503,7 @@ def spot_limbian_strategy(tune: dict = None):
     skip_trades_left = 0
     max_drawdown = 0
     last_price_entry = 0
+    remaining_open_margin = 0
 
     lst_profit_percent_per_month = []
     monthly_stop_reasons = []
@@ -884,7 +889,7 @@ def spot_limbian_strategy(tune: dict = None):
 
         long_positions_to_close = [p for p in open_positions[:] if p['side'] == "long"]
         for p in long_positions_to_close:
-            if p['entry_price'] * (1 + symbol_change_pct) <= close_prices[i]:
+            if p['entry_price'] * (1 + symbol_change_pct + more_symbol_change_pct) <= close_prices[i]:
                 updates = trade_manager.close_long(
                     i,
                     close_prices,
