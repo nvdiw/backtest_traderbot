@@ -85,7 +85,7 @@ class TradeManager:
         if balance >= trade_amount_percent * self.tactical_balance:
             margin = trade_amount_percent * self.tactical_balance
         else:
-            margin = balance * trade_amount_percent
+            margin = balance
         margin = max(0.0, min(margin, balance))
         if margin <= 0:
             return None
@@ -373,7 +373,7 @@ class TradeManager:
         if balance >= trade_amount_percent * self.tactical_balance:
             margin = trade_amount_percent * self.tactical_balance
         else:
-            margin = balance * trade_amount_percent
+            margin = balance
         margin = max(0.0, min(margin, balance))
         if margin <= 0:
             return None
