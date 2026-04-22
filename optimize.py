@@ -112,15 +112,17 @@ param_grid = {
     'max_open_trades': [i for i in range(1, 21)],
     
     # ==== spot_limbian_strategy variables ====
-    'symbol_change_pct': [0.00, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10],
-    'more_symbol_change_pct': [0.00, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10]
+    'symbol_change_pct': [i/100 for i in range(0, 11)],
+    'more_symbol_change_pct': [i/100 for i in range(1, 11)],
+    'max_trade_change_pct': [i/100 for i in range(5, 21)],
 }
 
 param_grid = {     
     'trade_amount_percent': [0.05, 0.1, 0.2, 0.3, 0.4],
-    'max_open_trades': [i for i in range(15, 26)],
-    'symbol_change_pct': [0.01, 0.02],
-    'more_symbol_change_pct': [0.08, 0.09, 0.10, 0.11, 0.12, 0.15]
+    'max_open_trades': [i for i in range(2, 21)],
+    # 'symbol_change_pct': [i/100 for i in range(0, 11)],
+    # 'more_symbol_change_pct': [i/100 for i in range(1, 11)]
+    # 'max_trade_change_pct': [i/100 for i in range(5, 21)]
  }
 
 # strategies setting only one of them should be True
