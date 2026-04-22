@@ -3,6 +3,7 @@
 import pandas as pd
 import numpy as np
 import os
+import json
 
 # My Codes :
 from trade_csv_logger import TradeCSVLogger
@@ -70,11 +71,13 @@ def spot_limbian_strategy(tune: dict = None):
     # Capital & position sizing
     balance = 1000                  # base balance
     leverage = 1                   # default leverage
-    trade_amount_percent = 0.08      # 10% of balance per trade
+    trade_amount_percent = 0.10      # 10% of balance per trade
 
     save_money = 0
-    symbol_change_pct = 0.06
-    more_symbol_change_pct = 0.05
+    symbol_change_pct = 0.01
+    more_symbol_change_pct = 0.06
+    max_open_trades = 5  # 1 = single-position mode, >1 allows multiple concurrent positions
+    max_trade_change_pct = 0.06
 
     # Safe leverage levels
     safe_leverage_low = 1
@@ -101,7 +104,7 @@ def spot_limbian_strategy(tune: dict = None):
     atr_filter = False
     consecutive_losses_month_stop_filter = False
     skip_logic = False
-    max_open_trades = 15  # 1 = single-position mode, >1 allows multiple concurrent positions
+    original_max_open_trades = max_open_trades
 
     # Cooldown
     cooldown_after_big_pnl = 4 * 3
@@ -477,6 +480,10 @@ def spot_limbian_strategy(tune: dict = None):
 
         if 'more_symbol_change_pct' in tune:
             more_symbol_change_pct = float(tune['more_symbol_change_pct'])
+        
+        if 'max_trade_change_pct' in tune:
+            max_trade_change_pct = float(tune['max_trade_change_pct'])
+
 
     # ---- setting end ----
     multi_position_enabled = max_open_trades > 1
@@ -539,6 +546,9 @@ def spot_limbian_strategy(tune: dict = None):
     last_cross_strongest_down_move_pct = 0.0
     last_trade_cross_index = None   # index of the cross used to open the last trade
     trade_power = True
+
+    # max open trades variables
+    was_high_len_positions = False
 
     balance_without_fee = balance
     first_balance = balance
@@ -834,6 +844,16 @@ def spot_limbian_strategy(tune: dict = None):
         if last_price_entry <= close_prices[i]:
             last_price_entry = close_prices[i]
 
+        if (last_price_entry * (1 - max_trade_change_pct) > close_prices[i]) and len(open_positions) == max_open_trades:
+            max_open_trades += original_max_open_trades
+
+        if len(open_positions) == max_open_trades:
+            was_high_len_positions = True
+
+        if (len(open_positions) <= max_open_trades - original_max_open_trades) and (was_high_len_positions is True):
+            max_open_trades = max(original_max_open_trades, max_open_trades - original_max_open_trades)
+            was_high_len_positions = False
+
         # ===================== OPEN LONG =====================
         if (close_prices[i] <= last_price_entry * (1 - symbol_change_pct)) and (len(open_positions) < max_open_trades):
                     # ---- open long ----
@@ -955,6 +975,8 @@ def spot_limbian_strategy(tune: dict = None):
                             long_close_reasons[i] = f"{long_exit_reason_text}\nBatch close: all open LONG positions closed together."
                         else:
                             long_close_reasons[i] = long_exit_reason_text
+
+                            
     # ===================== BACKTEST SUMMARY =====================
 
     if open_positions:
