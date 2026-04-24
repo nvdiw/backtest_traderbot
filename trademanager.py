@@ -94,7 +94,7 @@ class TradeManager:
         if balance_without_fee >= trade_amount_percent * self.tactical_balance:
             margin_no_fee = trade_amount_percent * self.tactical_balance
         else:
-            margin_no_fee = balance_without_fee * trade_amount_percent
+            margin_no_fee = balance_without_fee
         margin_no_fee = max(0.0, min(margin_no_fee, balance_without_fee))
         
         # ---------- Leverage ----------
@@ -199,7 +199,7 @@ class TradeManager:
         equity_curve.append(total_assets)
         # ---- calculate max drawdown ----
         peak = max(equity_curve)
-        drawdown = (balance + save_money - peak) / peak * 100
+        drawdown = (balance + save_money + remaining_open_margin - peak) / peak * 100
         max_drawdown = min(max_drawdown, drawdown)
 
         # ---- count wins and losses ----
@@ -382,7 +382,7 @@ class TradeManager:
         if balance_without_fee >= trade_amount_percent * self.tactical_balance:
             margin_no_fee = trade_amount_percent * self.tactical_balance
         else:
-            margin_no_fee = balance_without_fee * trade_amount_percent
+            margin_no_fee = balance_without_fee
         margin_no_fee = max(0.0, min(margin_no_fee, balance_without_fee))
 
         # ---------- Leverage ----------
@@ -487,7 +487,7 @@ class TradeManager:
         equity_curve.append(total_assets)
         # ---- calculate max drawdown ----
         peak = max(equity_curve)
-        drawdown = (balance + save_money - peak) / peak * 100
+        drawdown = (balance + save_money + remaining_open_margin - peak) / peak * 100
         max_drawdown = min(max_drawdown, drawdown)
 
         # ---- count wins and losses ----
