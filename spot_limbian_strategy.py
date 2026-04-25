@@ -19,7 +19,7 @@ from fetch_calculate_data import fetch_all_data, trade_duration
 # end = get_candle_index("2026-02-23")     ----> 285070
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2025-01-01","2026-02-23"))
+start, end = get_candle_index(("2023-01-01","2026-02-23"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 all_data = fetch_all_data(start, end)
@@ -641,8 +641,11 @@ def spot_limbian_strategy(tune: dict = None):
                 profit_open_positions_pct_leverage = profit_open_positions_pct * p['leverage']
                 lst_open_margin_dynamic.append(p['margin'] + p['margin'] * profit_open_positions_pct_leverage / 100)
             total_open_margin_dynamic = sum(lst_open_margin_dynamic)
+            
+            total_money_static = balance + total_open_margin_static + save_money
+            total_money_dynamic = balance + total_open_margin_dynamic + save_money
 
-            chart_data.append([i, balance + total_open_margin_static + save_money, balance + total_open_margin_dynamic + save_money])
+            chart_data.append([i, total_money_static, total_money_dynamic])
 
         if ema_16[i] is None or ma_50[i] is None or ma_100[i] is None or ma_200[i] is None:
             continue
@@ -856,60 +859,53 @@ def spot_limbian_strategy(tune: dict = None):
 
         # ===================== OPEN LONG =====================
         if (close_prices[i] <= last_price_entry * (1 - symbol_change_pct)) and (len(open_positions) < max_open_trades):
-                    # ---- open long ----
-                    updates = trade_manager.open_long(
-                        i,
-                        close_prices,
-                        close_times,
-                        balance,
-                        balance_without_fee,
-                        trade_amount_percent,
-                        margin_balance)
-                    if updates is None:
-                        continue
+            # ---- open long ----
+            updates = trade_manager.open_long(
+                i,
+                close_prices,
+                close_times,
+                balance,
+                balance_without_fee,
+                trade_amount_percent,
+                margin_balance)
 
-                    balance = updates['balance']
-                    balance_without_fee = updates['balance_without_fee']
-                    position = {
-                        'trade_id': next_trade_id,
-                        'side': "long",
-                        'entry_price': updates['entry_price'],
-                        'entry_index': i,
-                        'highest_since_entry': max(updates['entry_price'], high_prices[i]),
-                        'lowest_since_entry': min(updates['entry_price'], low_prices[i]),
-                        'position_size': updates['position_size'],
-                        'position_size_no_fee': updates['position_size_no_fee'],
-                        'balance_before_trade': updates['balance_before_trade'],
-                        'balance_before_trade_no_fee': updates['balance_before_trade_no_fee'],
-                        'margin': updates['margin'],
-                        'margin_no_fee': updates['margin_no_fee'],
-                        'leverage': updates['leverage'],
-                        'open_time_value': updates['open_time_value'],
-                        'target_close_price_loss': updates['entry_price'],
-                    }
-                    open_positions.append(position)
-                    last_price_entry = close_prices[i]
-                    next_trade_id += 1
-                    if long_open_points is not None:
-                        long_open_points.append((i, position['entry_price']))
-                        if long_open_reasons is not None:
-                            entry_reason_text = "reasons"
-                            long_open_reasons[i] = entry_reason_text
-                    # record which cross enabled this trade and init trailing state
-                    last_trade_cross_index = last_cross_index
+            if updates is not None:
+                balance = updates['balance']
+                balance_without_fee = updates['balance_without_fee']
+                position = {
+                    'trade_id': next_trade_id,
+                    'side': "long",
+                    'entry_price': updates['entry_price'],
+                    'entry_index': i,
+                    'highest_since_entry': max(updates['entry_price'], high_prices[i]),
+                    'lowest_since_entry': min(updates['entry_price'], low_prices[i]),
+                    'position_size': updates['position_size'],
+                    'position_size_no_fee': updates['position_size_no_fee'],
+                    'balance_before_trade': updates['balance_before_trade'],
+                    'balance_before_trade_no_fee': updates['balance_before_trade_no_fee'],
+                    'margin': updates['margin'],
+                    'margin_no_fee': updates['margin_no_fee'],
+                    'leverage': updates['leverage'],
+                    'open_time_value': updates['open_time_value'],
+                    'target_close_price_loss': updates['entry_price'],
+                }
+                open_positions.append(position)
+                last_price_entry = close_prices[i]
+                next_trade_id += 1
+                if long_open_points is not None:
+                    long_open_points.append((i, position['entry_price']))
+                    if long_open_reasons is not None:
+                        entry_reason_text = f"open this order because from last entry come down {symbol_change_pct * 100}%"
+                        long_open_reasons[i] = entry_reason_text
+                # record which cross enabled this trade and init trailing state
+                last_trade_cross_index = last_cross_index
 
-                    updates = None
+                updates = None
 
         # ===================== CLOSE LONG =====================
-        long_exit_reason_text = None
-        for p in open_positions[:]:
-            exit_reasons = []
-            entry_price = p['entry_price']
-
-
-        long_positions_to_close = [p for p in open_positions[:] if p['side'] == "long"]
+        long_positions_to_close = [p for p in open_positions if p['side'] == "long"]
         for p in long_positions_to_close:
-            if p['entry_price'] * (1 + symbol_change_pct + more_symbol_change_pct) <= close_prices[i]:
+            if (p['entry_price'] * (1 + symbol_change_pct + more_symbol_change_pct) <= close_prices[i]) or (total_money_static * 0.90 >= total_money_dynamic):
                 updates = trade_manager.close_long(
                     i,
                     close_prices,
@@ -972,9 +968,9 @@ def spot_limbian_strategy(tune: dict = None):
                     long_close_points.append((i, close_prices[i]))
                     if long_close_reasons is not None:
                         if len(long_positions_to_close) > 1:
-                            long_close_reasons[i] = f"{long_exit_reason_text}\nBatch close: all open LONG positions closed together."
+                            long_close_reasons[i] = f"close ID: {p['trade_id']} for moving upper than {round((symbol_change_pct + more_symbol_change_pct) * 100, 2)}%"
                         else:
-                            long_close_reasons[i] = long_exit_reason_text
+                            long_close_reasons[i] = "None"
 
                             
     # ===================== BACKTEST SUMMARY =====================
