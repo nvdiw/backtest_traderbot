@@ -967,38 +967,37 @@ def ma_strategy(tune: dict = None):
                         balance_without_fee,
                         trade_amount_percent,
                         margin_balance)
-                    if updates is None:
-                        continue
+                    if updates is not None:
 
-                    balance = updates['balance']
-                    balance_without_fee = updates['balance_without_fee']
-                    position = {
-                        'trade_id': next_trade_id,
-                        'side': "long",
-                        'entry_price': updates['entry_price'],
-                        'entry_index': i,
-                        'highest_since_entry': max(updates['entry_price'], high_prices[i]),
-                        'lowest_since_entry': min(updates['entry_price'], low_prices[i]),
-                        'position_size': updates['position_size'],
-                        'position_size_no_fee': updates['position_size_no_fee'],
-                        'balance_before_trade': updates['balance_before_trade'],
-                        'balance_before_trade_no_fee': updates['balance_before_trade_no_fee'],
-                        'margin': updates['margin'],
-                        'margin_no_fee': updates['margin_no_fee'],
-                        'leverage': updates['leverage'],
-                        'open_time_value': updates['open_time_value'],
-                        'target_close_price_loss': updates['entry_price'],
-                    }
-                    open_positions.append(position)
-                    next_trade_id += 1
-                    if long_open_points is not None:
-                        long_open_points.append((i, position['entry_price']))
-                        if long_open_reasons is not None:
-                            long_open_reasons[i] = entry_reason_text
-                    # record which cross enabled this trade and init trailing state
-                    last_trade_cross_index = last_cross_index
+                        balance = updates['balance']
+                        balance_without_fee = updates['balance_without_fee']
+                        position = {
+                            'trade_id': next_trade_id,
+                            'side': "long",
+                            'entry_price': updates['entry_price'],
+                            'entry_index': i,
+                            'highest_since_entry': max(updates['entry_price'], high_prices[i]),
+                            'lowest_since_entry': min(updates['entry_price'], low_prices[i]),
+                            'position_size': updates['position_size'],
+                            'position_size_no_fee': updates['position_size_no_fee'],
+                            'balance_before_trade': updates['balance_before_trade'],
+                            'balance_before_trade_no_fee': updates['balance_before_trade_no_fee'],
+                            'margin': updates['margin'],
+                            'margin_no_fee': updates['margin_no_fee'],
+                            'leverage': updates['leverage'],
+                            'open_time_value': updates['open_time_value'],
+                            'target_close_price_loss': updates['entry_price'],
+                        }
+                        open_positions.append(position)
+                        next_trade_id += 1
+                        if long_open_points is not None:
+                            long_open_points.append((i, position['entry_price']))
+                            if long_open_reasons is not None:
+                                long_open_reasons[i] = entry_reason_text
+                        # record which cross enabled this trade and init trailing state
+                        last_trade_cross_index = last_cross_index
 
-                    updates = None
+                        updates = None
 
         # ===================== SCALE ENTRY LONG =====================
         if scale_in_enabled and len(open_positions) < max_open_trades and _count_open("short") == 0 and _count_open("long") > 0 and i >= cooldown_until_index:
@@ -1380,38 +1379,37 @@ def ma_strategy(tune: dict = None):
                         balance_without_fee,
                         trade_amount_percent,
                         margin_balance)
-                    if updates is None:
-                        continue
+                    if updates is not None:
+                        
+                        balance = updates['balance']
+                        balance_without_fee = updates['balance_without_fee']
+                        position = {
+                            'trade_id': next_trade_id,
+                            'side': "short",
+                            'entry_price': updates['entry_price'],
+                            'entry_index': i,
+                            'highest_since_entry': max(updates['entry_price'], high_prices[i]),
+                            'lowest_since_entry': min(updates['entry_price'], low_prices[i]),
+                            'position_size': updates['position_size'],
+                            'position_size_no_fee': updates['position_size_no_fee'],
+                            'balance_before_trade': updates['balance_before_trade'],
+                            'balance_before_trade_no_fee': updates['balance_before_trade_no_fee'],
+                            'margin': updates['margin'],
+                            'margin_no_fee': updates['margin_no_fee'],
+                            'leverage': updates['leverage'],
+                            'open_time_value': updates['open_time_value'],
+                            'target_close_price_loss': updates['entry_price'],
+                        }
+                        open_positions.append(position)
+                        next_trade_id += 1
+                        if short_open_points is not None:
+                            short_open_points.append((i, position['entry_price']))
+                            if short_open_reasons is not None:
+                                short_open_reasons[i] = entry_reason_text
+                        # record which cross enabled this trade and init trailing state
+                        last_trade_cross_index = last_cross_index
 
-                    balance = updates['balance']
-                    balance_without_fee = updates['balance_without_fee']
-                    position = {
-                        'trade_id': next_trade_id,
-                        'side': "short",
-                        'entry_price': updates['entry_price'],
-                        'entry_index': i,
-                        'highest_since_entry': max(updates['entry_price'], high_prices[i]),
-                        'lowest_since_entry': min(updates['entry_price'], low_prices[i]),
-                        'position_size': updates['position_size'],
-                        'position_size_no_fee': updates['position_size_no_fee'],
-                        'balance_before_trade': updates['balance_before_trade'],
-                        'balance_before_trade_no_fee': updates['balance_before_trade_no_fee'],
-                        'margin': updates['margin'],
-                        'margin_no_fee': updates['margin_no_fee'],
-                        'leverage': updates['leverage'],
-                        'open_time_value': updates['open_time_value'],
-                        'target_close_price_loss': updates['entry_price'],
-                    }
-                    open_positions.append(position)
-                    next_trade_id += 1
-                    if short_open_points is not None:
-                        short_open_points.append((i, position['entry_price']))
-                        if short_open_reasons is not None:
-                            short_open_reasons[i] = entry_reason_text
-                    # record which cross enabled this trade and init trailing state
-                    last_trade_cross_index = last_cross_index
-
-                    updates = None
+                        updates = None
 
         # ===================== SCALE ENTRY SHORT =====================
         if scale_in_enabled and len(open_positions) < max_open_trades and _count_open("long") == 0 and _count_open("short") > 0 and i >= cooldown_until_index:
