@@ -197,3 +197,68 @@ class Indicator:
             vol_avg.append(sum(window) / len(window))
 
         return vol_avg
+
+
+    # Calculate Relative Strength Index (RSI - Wilder's Method)
+    def get_RSI(self, close_prices: list, period=14):
+        """
+        Calculate RSI using Wilder's Smoothing method (industry standard)
+        
+        Parameters:
+            period: RSI calculation period (default = 14)
+        
+        Returns:
+            List of RSI values (float or None) with same length as close_prices
+            - First 'period' values are None (insufficient data)
+            - Then RSI values between 0 and 100
+        """
+        rsi_lst = []
+
+        # Check if we have enough data
+        if len(close_prices) < period + 1:
+            return [None] * len(close_prices)
+        
+        # Calculate daily price changes
+        changes = []
+        for i in range(1, len(close_prices)):
+            changes.append(close_prices[i] - close_prices[i - 1])
+        
+        # Initial averages - simple average for first period
+        initial_gains = [max(0, c) for c in changes[:period]]
+        initial_losses = [max(0, -c) for c in changes[:period]]
+        
+        avg_gain = sum(initial_gains) / period
+        avg_loss = sum(initial_losses) / period
+        
+        # Calculate initial RSI
+        if avg_loss == 0:
+            current_rsi = 100
+        else:
+            current_rsi = 100 - (100 / (1 + (avg_gain / avg_loss)))
+        
+        # Append None for the initial period (insufficient data)
+        for i in range(period):
+            rsi_lst.append(None)
+        
+        rsi_lst.append(round(current_rsi, 2))
+        
+        # Calculate RSI for remaining values using Wilder's smoothing method
+        for i in range(period, len(changes)):
+            change = changes[i]
+            
+            gain = max(0, change)
+            loss = max(0, -change)
+            
+            # Wilder's smoothing formula
+            avg_gain = ((avg_gain * (period - 1)) + gain) / period
+            avg_loss = ((avg_loss * (period - 1)) + loss) / period
+            
+            if avg_loss == 0:
+                rsi = 100
+            else:
+                rs = avg_gain / avg_loss
+                rsi = 100 - (100 / (1 + rs))
+            
+            rsi_lst.append(round(rsi, 2))
+        
+        return rsi_lst
