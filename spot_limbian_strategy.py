@@ -78,6 +78,7 @@ def spot_limbian_strategy(tune: dict = None):
     more_symbol_change_pct = 0.06
     max_open_trades = 5  # 1 = single-position mode, >1 allows multiple concurrent positions
     max_trade_change_pct = 0.06
+    static_dynamic_money_pct = 0.90 
 
     # Safe leverage levels
     safe_leverage_low = 1
@@ -483,6 +484,9 @@ def spot_limbian_strategy(tune: dict = None):
         
         if 'max_trade_change_pct' in tune:
             max_trade_change_pct = float(tune['max_trade_change_pct'])
+
+        if 'static_dynamic_money_pct' in tune:
+            static_dynamic_money_pct = float(tune['static_dynamic_money_pct'])
 
 
     # ---- setting end ----
@@ -905,7 +909,7 @@ def spot_limbian_strategy(tune: dict = None):
         # ===================== CLOSE LONG =====================
         long_positions_to_close = [p for p in open_positions if p['side'] == "long"]
         for p in long_positions_to_close:
-            if (p['entry_price'] * (1 + symbol_change_pct + more_symbol_change_pct) <= close_prices[i]) or (total_money_static * 0.90 >= total_money_dynamic):
+            if (p['entry_price'] * (1 + symbol_change_pct + more_symbol_change_pct) <= close_prices[i]) or (total_money_static * static_dynamic_money_pct >= total_money_dynamic):
                 updates = trade_manager.close_long(
                     i,
                     close_prices,
