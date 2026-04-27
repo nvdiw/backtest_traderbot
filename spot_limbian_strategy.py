@@ -78,7 +78,7 @@ def spot_limbian_strategy(tune: dict = None):
     more_symbol_change_pct = 0.06
     max_open_trades = 5  # 1 = single-position mode, >1 allows multiple concurrent positions
     max_trade_change_pct = 0.06
-    static_dynamic_money_pct = 0.90 
+    static_dynamic_money_pct = 0.81
 
     # Safe leverage levels
     safe_leverage_low = 1
@@ -631,24 +631,25 @@ def spot_limbian_strategy(tune: dict = None):
     for i in range(len(close_prices)):
         # print(start+i)
 
+        
+        # margin static
+        total_open_margin_static = sum(p['margin'] for p in open_positions)
+
+        # margin dynamic
+        lst_open_margin_dynamic = []
+        for p in open_positions:
+            if p['side'] == "long":
+                profit_open_positions_pct = ((close_prices[i] - p['entry_price']) / p['entry_price']) * 100
+            if p['side'] == "short":
+                profit_open_positions_pct = ((p['entry_price'] - close_prices[i]) / p['entry_price']) * 100
+            profit_open_positions_pct_leverage = profit_open_positions_pct * p['leverage']
+            lst_open_margin_dynamic.append(p['margin'] + p['margin'] * profit_open_positions_pct_leverage / 100)
+        total_open_margin_dynamic = sum(lst_open_margin_dynamic)
+        
+        total_money_static = balance + total_open_margin_static + save_money
+        total_money_dynamic = balance + total_open_margin_dynamic + save_money
+        
         if chart_data is not None:
-            # margin static
-            total_open_margin_static = sum(p['margin'] for p in open_positions)
-
-            # margin dynamic
-            lst_open_margin_dynamic = []
-            for p in open_positions:
-                if p['side'] == "long":
-                    profit_open_positions_pct = ((close_prices[i] - p['entry_price']) / p['entry_price']) * 100
-                if p['side'] == "short":
-                    profit_open_positions_pct = ((p['entry_price'] - close_prices[i]) / p['entry_price']) * 100
-                profit_open_positions_pct_leverage = profit_open_positions_pct * p['leverage']
-                lst_open_margin_dynamic.append(p['margin'] + p['margin'] * profit_open_positions_pct_leverage / 100)
-            total_open_margin_dynamic = sum(lst_open_margin_dynamic)
-            
-            total_money_static = balance + total_open_margin_static + save_money
-            total_money_dynamic = balance + total_open_margin_dynamic + save_money
-
             chart_data.append([i, total_money_static, total_money_dynamic])
 
         if ema_16[i] is None or ma_50[i] is None or ma_100[i] is None or ma_200[i] is None:
