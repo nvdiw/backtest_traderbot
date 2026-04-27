@@ -50,6 +50,7 @@ _INDICATOR_CACHE = {
     "atr": {},
     "atr_ma": {},
     "vol_avg": {},
+    "rsi": {},
 }
 
 
@@ -147,6 +148,7 @@ def spot_limbian_strategy(tune: dict = None):
     period_atr = 14
     period_atr_ma = 21
     period_vol_avg = 12
+    period_rsi = 14
     volume_spike_multiplier = 1.24
 
     # Matplot setting
@@ -622,6 +624,13 @@ def spot_limbian_strategy(tune: dict = None):
         "vol_avg",
         period_vol_avg,
         lambda: indicator.get_volume_avg(volume_prices, period=period_vol_avg),
+    )
+
+    # ---- get RSI ----
+    rsi_list = _cached_indicator(
+        "rsi",
+        period_rsi,
+        lambda: indicator.get_RSI(close_prices, period=period_rsi),
     )
 
     def _count_open(side):
