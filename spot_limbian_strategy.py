@@ -106,6 +106,7 @@ def spot_limbian_strategy(tune: dict = None):
     atr_filter = False
     consecutive_losses_month_stop_filter = False
     skip_logic = False
+    add_remove_maxtrades_power = True
     original_max_open_trades = max_open_trades
 
     # Cooldown
@@ -861,15 +862,16 @@ def spot_limbian_strategy(tune: dict = None):
         if last_price_entry <= close_prices[i]:
             last_price_entry = close_prices[i]
 
-        if (last_price_entry * (1 - max_trade_change_pct) > close_prices[i]) and len(open_positions) == max_open_trades:
-            max_open_trades += original_max_open_trades
+        if add_remove_maxtrades_power:
+            if (last_price_entry * (1 - max_trade_change_pct) > close_prices[i]) and len(open_positions) == max_open_trades:
+                max_open_trades += original_max_open_trades
 
-        if len(open_positions) == max_open_trades:
-            was_high_len_positions = True
+            if len(open_positions) == max_open_trades:
+                was_high_len_positions = True
 
-        if (len(open_positions) <= max_open_trades - original_max_open_trades) and (was_high_len_positions is True):
-            max_open_trades = max(original_max_open_trades, max_open_trades - original_max_open_trades)
-            was_high_len_positions = False
+            if (len(open_positions) <= max_open_trades - original_max_open_trades) and (was_high_len_positions is True):
+                max_open_trades = max(original_max_open_trades, max_open_trades - original_max_open_trades)
+                was_high_len_positions = False
 
         # ===================== OPEN LONG =====================
         if (close_prices[i] <= last_price_entry * (1 - symbol_change_pct)) and (len(open_positions) < max_open_trades):
@@ -984,7 +986,7 @@ def spot_limbian_strategy(tune: dict = None):
                         if len(long_positions_to_close) > 1:
                             long_close_reasons[i] = f"close ID: {p['trade_id']} for moving upper than {round((symbol_change_pct + more_symbol_change_pct) * 100, 2)}%"
                         else:
-                            long_close_reasons[i] = "None"
+                            long_close_reasons[i] = "Any Thing You Can Write"
 
                             
     # ===================== BACKTEST SUMMARY =====================
@@ -1058,6 +1060,7 @@ def spot_limbian_strategy(tune: dict = None):
             ma_50=ma_50,
             ma_100=ma_100,
             ma_200=ma_200,
+            rsi_values=rsi_list,
             long_open_points=long_open_points,
             long_close_points=long_close_points,
             short_open_points=short_open_points,
