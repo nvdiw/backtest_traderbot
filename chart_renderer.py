@@ -19,6 +19,7 @@ def render_backtest_chart(
     ma_50,
     ma_100,
     ma_200,
+    rsi_values,
     long_open_points,
     long_close_points,
     short_open_points,
@@ -81,6 +82,10 @@ def render_backtest_chart(
         "ma50": "#66C7FF",
         "ma100": "#FFC774",
         "ma200": "#FFC774",
+        "rsi": "#E84393",
+        "rsi_oversold": "#4CD47A",
+        "rsi_overbought": "#FF6B7A",
+        "rsi_mid": "#A7B4C8",
         "mark": "#5FA2D9",
         "long_open": "#7FE0B0",
         "long_close": "#2FCF82",
@@ -127,11 +132,12 @@ def render_backtest_chart(
     window_size_base = max(1, window_size_base)
     step_candles = max(1, int(plot_step_candles))
     
-    fig = plt.figure(figsize=(14.5, 8.2), facecolor=chart_palette["bg"])
-    grid = fig.add_gridspec(2, 1, height_ratios=[3, 1], hspace=0.04)
+    fig = plt.figure(figsize=(14.5, 10.2), facecolor=chart_palette["bg"])
+    grid = fig.add_gridspec(3, 1, height_ratios=[3, 1, 0.8], hspace=0.04)
     ax_price = fig.add_subplot(grid[0])
     ax_equity = fig.add_subplot(grid[1], sharex=ax_price)
-    
+    ax_rsi = fig.add_subplot(grid[2], sharex=ax_price)
+
     def set_figure_fullscreen():
         """Resize to a near-fullscreen window without forcing true fullscreen."""
         try:
@@ -220,8 +226,10 @@ def render_backtest_chart(
         "vline_equity": None,
         "hline_price": None,
         "hline_equity": None,
+        "hline_rsi": None,
         "price_label": None,
         "balance_label": None,
+        "rsi_label": None,
         "time_label": None,
         "marker_hover_points": [],
         "visible_times": None,
@@ -355,6 +363,7 @@ def render_backtest_chart(
             full_ma200 = np.asarray(ma_200[plot_start:plot_end], dtype=float)
             full_equity_static = np.asarray(ypoints_total_balance[plot_start:plot_end], dtype=float)
             full_equity_dynamic = np.asarray(zpoints_total_balance[plot_start:plot_end], dtype=float)
+            full_rsi = np.asarray(rsi_values[plot_start:plot_end], dtype=float)
             n_full = len(full_close)
             if n_full == 0:
                 return
@@ -405,6 +414,14 @@ def render_backtest_chart(
                 target_render = min(max_render, max(200, int(n_full * 0.33)))
             render_step = max(1, int(np.ceil(n_full / max(1, target_render))))
     
+            # For RSI, use a smaller step to keep the line smooth
+            if nav_state.get("preview_mode"):
+                # During drag, still keep RSI smooth (use half the normal step)
+                rsi_step = max(1, render_step // 2)
+            else:
+                # Normal mode: RSI can use same step as candles
+                rsi_step = render_step
+
             ds_open, ds_high, ds_low, ds_close, ds_times = downsample_ohlc(
                 full_open, full_high, full_low, full_close, full_close_times, render_step
             )
@@ -415,6 +432,7 @@ def render_backtest_chart(
             ds_equity = downsample_last(full_equity_static, render_step)
             dd_equity = downsample_last(full_equity_dynamic, render_step)
             ds_mark = downsample_last_valid(mark_arr, render_step)
+            ds_rsi = downsample_last_valid(full_rsi, rsi_step)
             ds_long_open, ds_long_open_marker_idx = downsample_last_valid_with_index(long_open_arr, render_step)
             ds_long_close, ds_long_close_marker_idx = downsample_last_valid_with_index(long_close_arr, render_step)
             ds_short_open, ds_short_open_marker_idx = downsample_last_valid_with_index(short_open_arr, render_step)
@@ -441,6 +459,7 @@ def render_backtest_chart(
             ma200_series = pd.Series(ds_ma200, index=time_index)
             equity_series_static = pd.Series(ds_equity, index=time_index)
             equity_series_dynamic = pd.Series(dd_equity, index=time_index)
+            rsi_series = pd.Series(ds_rsi, index=time_index)
             mark_series = pd.Series(ds_mark, index=time_index)
             long_open_series = pd.Series(ds_long_open, index=time_index)
             long_close_series = pd.Series(ds_long_close, index=time_index)
@@ -451,6 +470,7 @@ def render_backtest_chart(
     
             ax_price.cla()
             ax_equity.cla()
+            ax_rsi.cla()
             nav_state["marker_hover_points"] = []
     
             preview_mode = bool(nav_state.get("preview_mode"))
@@ -577,6 +597,32 @@ def render_backtest_chart(
                     mpf.make_addplot(equity_series_dynamic, ax=ax_equity, color=chart_palette["equity_d"], width=1.2)
                 )
 
+            if has_finite(rsi_series):
+                add_plots.append(
+                    mpf.make_addplot(rsi_series, ax=ax_rsi, color=chart_palette["rsi"], width=1.2)
+                )
+                
+                # line 30 (oversold)
+                oversold_line = pd.Series([30] * len(time_index), index=time_index)
+                add_plots.append(
+                    mpf.make_addplot(oversold_line, ax=ax_rsi, color=chart_palette["rsi_oversold"], 
+                                    width=0.8, linestyle="--", alpha=0.7)
+                )
+                
+                # line 70 (overbought)
+                overbought_line = pd.Series([70] * len(time_index), index=time_index)
+                add_plots.append(
+                    mpf.make_addplot(overbought_line, ax=ax_rsi, color=chart_palette["rsi_overbought"], 
+                                    width=0.8, linestyle="--", alpha=0.7)
+                )
+                
+                # line 50 (mid)
+                mid_line = pd.Series([50] * len(time_index), index=time_index)
+                add_plots.append(
+                    mpf.make_addplot(mid_line, ax=ax_rsi, color=chart_palette["rsi_mid"], 
+                                    width=0.5, linestyle=":", alpha=0.5)
+                )
+
             last_close_price = float(ds_close[-1])
             plot_kwargs = {}
             if len(time_index) > 1:
@@ -623,6 +669,22 @@ def render_backtest_chart(
                 color=chart_palette["grid"],
                 alpha=0.30,
             )
+                        
+            ax_rsi.set_facecolor(chart_palette["panel_bg"])
+            ax_rsi.yaxis.label.set_color(chart_palette["text"])
+            ax_rsi.tick_params(axis="x", colors=chart_palette["muted"])
+            ax_rsi.tick_params(axis="y", colors=chart_palette["muted"])
+            ax_rsi.set_axisbelow(True)
+            ax_rsi.grid(
+                True,
+                which="major",
+                axis="both",
+                linestyle="--",
+                linewidth=0.55,
+                color=chart_palette["grid"],
+                alpha=0.30,
+            )
+
     
             fixed_price_ylim = nav_state.get("fixed_ylim_price")
             if valid_ylim(fixed_price_ylim):
@@ -638,7 +700,15 @@ def render_backtest_chart(
             ax_price.set_ylabel("BTC Price")
             ax_equity.set_ylabel("Balance ($)")
             ax_price.tick_params(labelbottom=False)
-    
+
+            ax_rsi.set_ylabel("RSI", color=chart_palette["text"], fontsize=10)
+            ax_rsi.set_ylim(0, 100)
+
+            ax_rsi.axhspan(0, 30, alpha=0.08, color=chart_palette["rsi_oversold"], zorder=0)
+            ax_rsi.axhspan(70, 100, alpha=0.08, color=chart_palette["rsi_overbought"], zorder=0)
+
+            ax_rsi.tick_params(labelbottom=False)
+
             # visual separator between price panel and equity panel
             ax_price.spines["bottom"].set_visible(True)
             ax_price.spines["bottom"].set_color(chart_palette["divider"])
@@ -646,7 +716,9 @@ def render_backtest_chart(
             ax_equity.spines["top"].set_visible(True)
             ax_equity.spines["top"].set_color(chart_palette["divider"])
             ax_equity.spines["top"].set_linewidth(1.4)
-    
+            ax_rsi.spines["top"].set_visible(True)
+            ax_rsi.spines["top"].set_color(chart_palette["divider"])
+            ax_rsi.spines["top"].set_linewidth(1.2)
             # Crosshair (TradingView-like): vertical + horizontal + end labels on both panels.
             x_left, x_right = ax_price.get_xlim()
             y_bottom, y_top = ax_price.get_ylim()
@@ -661,12 +733,40 @@ def render_backtest_chart(
             nav_state["vline_equity"] = ax_equity.axvline(
                 x_mid, color=cross_color, linewidth=0.8, linestyle="--", alpha=0.75, visible=False, zorder=30
             )
+            nav_state["vline_rsi"] = ax_rsi.axvline(
+                x_mid, color=cross_color, linewidth=0.8, linestyle="--", alpha=0.75, visible=False, zorder=30
+            )
             nav_state["hline_price"] = ax_price.axhline(
                 y_mid, color=cross_color, linewidth=0.8, linestyle="--", alpha=0.9, visible=False, zorder=30
             )
             nav_state["hline_equity"] = ax_equity.axhline(
                 y_eq_mid, color=cross_color, linewidth=0.8, linestyle="--", alpha=0.85, visible=False, zorder=30
             )
+
+            # Create RSI horizontal line and label
+            y_rsi_bottom, y_rsi_top = ax_rsi.get_ylim()
+            y_rsi_mid = (y_rsi_bottom + y_rsi_top) / 2.0
+
+            nav_state["hline_rsi"] = ax_rsi.axhline(
+                y_rsi_mid, color=cross_color, linewidth=0.8, linestyle="--", alpha=0.85, visible=False, zorder=30
+            )
+
+            # Create label for RSI values
+            rsi_label_transform = mtransforms.blended_transform_factory(ax_rsi.transAxes, ax_rsi.transData)
+            nav_state["rsi_label"] = ax_rsi.text(
+                0.002, y_rsi_mid, "",
+                transform=rsi_label_transform,
+                ha="left", va="center",
+                fontsize=8, color=chart_palette["label_fg"],
+                bbox=dict(
+                    boxstyle="round,pad=0.18",
+                    facecolor=chart_palette["label_bg"],
+                    edgecolor=chart_palette["label_edge"],
+                    linewidth=0.8,
+                ),
+                visible=False, zorder=31
+            )
+
             label_transform = mtransforms.blended_transform_factory(ax_price.transAxes, ax_price.transData)
             nav_state["price_label"] = ax_price.text(
                 0.002,
@@ -839,11 +939,14 @@ def render_backtest_chart(
         for key in (
             "vline_price",
             "vline_equity",
+            "vline_rsi",
             "hline_price",
             "hline_equity",
+            "hline_rsi",
             "price_label",
             "balance_label",
             "time_label",
+            "rsi_label",
             "marker_tooltip_artist",
         ):
             artist = nav_state.get(key)
@@ -941,7 +1044,11 @@ def render_backtest_chart(
         return False
     
     def calculate_auto_range_for_visible_data():
-        """Calculate y-range based on min/max of visible price and equity data."""
+        """
+        Calculate y-range based on min/max of visible price and equity data
+        Considers both static AND dynamic balance curves
+        """
+        
         # Get visible candle indices
         old_size = int(nav_state["window_size"])
         old_size = max(1, min(total_candles, old_size))
@@ -952,7 +1059,7 @@ def render_backtest_chart(
         if start_idx < 0 or end_idx <= start_idx:
             return None, None
         
-        # Calculate price range (high/low of visible candles)
+        # ============ Calculate price range ============
         visible_high = np.nanmax(high_prices[start_idx:end_idx]) if np.isfinite(high_prices[start_idx:end_idx]).any() else None
         visible_low = np.nanmin(low_prices[start_idx:end_idx]) if np.isfinite(low_prices[start_idx:end_idx]).any() else None
         
@@ -964,18 +1071,28 @@ def render_backtest_chart(
         else:
             price_ylim = None
         
-        # Calculate equity range (min/max balance of visible period)
+        # ============ Calculate equity range (BOTH static AND dynamic) ============
+        all_balance_values = []
+        
+        # Add static balance values (closed positions only)
         if ypoints_total_balance and len(ypoints_total_balance) >= end_idx:
-            visible_balance = ypoints_total_balance[start_idx:end_idx]
-            visible_balance_max = np.nanmax(visible_balance) if visible_balance else None
-            visible_balance_min = np.nanmin(visible_balance) if visible_balance else None
-            
-            if visible_balance_max is not None and visible_balance_min is not None and np.isfinite([visible_balance_max, visible_balance_min]).all():
-                balance_range = visible_balance_max - visible_balance_min
-                padding = balance_range * 0.01 if balance_range > 0 else visible_balance_min * 0.01
-                equity_ylim = (visible_balance_min - padding, visible_balance_max + padding)
-            else:
-                equity_ylim = None
+            for val in ypoints_total_balance[start_idx:end_idx]:
+                if val is not None and np.isfinite(val):
+                    all_balance_values.append(val)
+        
+        # Add dynamic balance values (includes open positions)
+        if zpoints_total_balance and len(zpoints_total_balance) >= end_idx:
+            for val in zpoints_total_balance[start_idx:end_idx]:
+                if val is not None and np.isfinite(val):
+                    all_balance_values.append(val)
+        
+        if all_balance_values:
+            max_balance = max(all_balance_values)
+            min_balance = min(all_balance_values)
+            balance_range = max_balance - min_balance
+            # Use 2% padding for better visualization (dynamic curve has more volatility)
+            padding = balance_range * 0.02 if balance_range > 0 else min_balance * 0.01
+            equity_ylim = (min_balance - padding, max_balance + padding)
         else:
             equity_ylim = None
         
@@ -1086,7 +1203,47 @@ def render_backtest_chart(
         cursor_x = ax_price.transData.inverted().transform((event.x, event.y))[0]
         cursor_y_on_price = ax_price.transData.inverted().transform((event.x, event.y))[1]
         cursor_y_on_equity = ax_equity.transData.inverted().transform((event.x, event.y))[1]
-    
+
+        # ============ RSI Panel Hover ============
+        # Get cursor position on RSI panel
+        cursor_y_on_rsi = None
+        if ax_rsi.bbox.contains(event.x, event.y):
+            cursor_y_on_rsi = ax_rsi.transData.inverted().transform((event.x, event.y))[1]
+        
+        # Show/hide RSI crosshair
+        hline_rsi = nav_state.get("hline_rsi")
+        rsi_label = nav_state.get("rsi_label")
+        vline_rsi = nav_state.get("vline_rsi")
+        
+        # Update vertical line for RSI
+        if vline_rsi is not None:
+            vline_rsi.set_xdata([cursor_x, cursor_x])
+            vline_rsi.set_visible(True)
+        
+        if ax_rsi.bbox.contains(event.x, event.y) and cursor_y_on_rsi is not None:
+            # Check if within valid RSI range (0-100)
+            if 0 <= cursor_y_on_rsi <= 100:
+                if hline_rsi is not None:
+                    hline_rsi.set_ydata([cursor_y_on_rsi, cursor_y_on_rsi])
+                    hline_rsi.set_visible(True)
+                
+                if rsi_label is not None:
+                    rsi_label.set_y(cursor_y_on_rsi)
+                    rsi_label.set_text(f"RSI: {cursor_y_on_rsi:.1f}")
+                    rsi_label.set_visible(True)
+            else:
+                # Outside RSI range (0-100), hide crosshair
+                if hline_rsi is not None:
+                    hline_rsi.set_visible(False)
+                if rsi_label is not None:
+                    rsi_label.set_visible(False)
+        else:
+            # Not hovering over RSI panel
+            if hline_rsi is not None:
+                hline_rsi.set_visible(False)
+            if rsi_label is not None:
+                rsi_label.set_visible(False)
+
         vline_price.set_xdata([cursor_x, cursor_x])
         vline_equity.set_xdata([cursor_x, cursor_x])
         vline_price.set_visible(True)
@@ -1185,17 +1342,25 @@ def render_backtest_chart(
         nav_state["last_drag_update_ts"] = 0.0
     
     def on_double_click(event):
-        # Only handle double-click on price or equity panels
+        """Handle double click on price or equity panels to auto-fit y-axis"""
         if event.inaxes not in (ax_price, ax_equity):
             return
+        
         price_ylim, equity_ylim = calculate_auto_range_for_visible_data()
+        
         if event.inaxes == ax_price and price_ylim is not None:
             nav_state["fixed_ylim_price"] = price_ylim
             ax_price.set_ylim(price_ylim)
             fig.canvas.draw_idle()
+            
         elif event.inaxes == ax_equity and equity_ylim is not None:
             nav_state["fixed_ylim_equity"] = equity_ylim
             ax_equity.set_ylim(equity_ylim)
+            fig.canvas.draw_idle()
+
+        elif event.inaxes == ax_rsi:
+            # Reset RSI to 0-100 range on double click
+            ax_rsi.set_ylim(0, 100)
             fig.canvas.draw_idle()
 
     def on_click(event):

@@ -642,7 +642,7 @@ def ma_strategy(tune: dict = None):
     )
 
     # ---- get RSI ----
-    rsi_14_list = _cached_indicator(
+    rsi_list = _cached_indicator(
         "rsi",
         period_rsi,
         lambda: indicator.get_RSI(close_prices, period=period_rsi),
@@ -1774,6 +1774,7 @@ def ma_strategy(tune: dict = None):
             ma_50=ma_50,
             ma_100=ma_100,
             ma_200=ma_200,
+            rsi_values=rsi_list,
             long_open_points=long_open_points,
             long_close_points=long_close_points,
             short_open_points=short_open_points,
