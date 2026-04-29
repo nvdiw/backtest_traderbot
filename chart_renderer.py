@@ -432,7 +432,7 @@ def render_backtest_chart(
             ds_equity = downsample_last(full_equity_static, render_step)
             dd_equity = downsample_last(full_equity_dynamic, render_step)
             ds_mark = downsample_last_valid(mark_arr, render_step)
-            ds_rsi = downsample_last_valid(full_rsi, rsi_step)
+            ds_rsi = downsample_last_valid(full_rsi, render_step)
             ds_long_open, ds_long_open_marker_idx = downsample_last_valid_with_index(long_open_arr, render_step)
             ds_long_close, ds_long_close_marker_idx = downsample_last_valid_with_index(long_close_arr, render_step)
             ds_short_open, ds_short_open_marker_idx = downsample_last_valid_with_index(short_open_arr, render_step)
