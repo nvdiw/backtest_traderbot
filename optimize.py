@@ -120,6 +120,8 @@ param_grid = {
     'static_dynamic_money_pct': [0.85, 0.90, 0.95],
     'period_rsi': [i for i in range(6, 30)],
     'rsi_buy_value': [20, 25, 30],
+    'rsi_symbol_change_pct': [i/100 for i in range(1, 11)],
+    'rsi_value_close_positions': [i for i in range(70, 96)],
 }
 
 param_grid = {     
@@ -127,10 +129,12 @@ param_grid = {
     # 'max_open_trades': [i for i in range(2, 21)],
     # 'symbol_change_pct': [i/100 for i in range(0, 11)],
     # 'more_symbol_change_pct': [i/100 for i in range(1, 8)],
-    'max_trade_change_pct': [i/100 for i in range(0, 41)],
+    # 'max_trade_change_pct': [i/100 for i in range(0, 41)],
     # 'static_dynamic_money_pct': [i/100 for i in range(0, 100)],
     # 'period_rsi': [i for i in range(6, 21)],
     # 'rsi_buy_value': [i for i in range(20, 31)],
+    'rsi_symbol_change_pct': [i/100 for i in range(1, 11)],
+    'rsi_value_close_positions': [i for i in range(70, 96)],
  }
 
 # strategies setting only one of them should be True

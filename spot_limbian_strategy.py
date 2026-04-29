@@ -491,6 +491,17 @@ def spot_limbian_strategy(tune: dict = None):
         if 'static_dynamic_money_pct' in tune:
             static_dynamic_money_pct = float(tune['static_dynamic_money_pct'])
 
+        if 'period_rsi' in tune:
+            period_rsi = int(tune['period_rsi'])
+
+        if 'rsi_buy_value' in tune:
+            rsi_buy_value = int(tune['rsi_buy_value'])
+
+        if 'rsi_symbol_change_pct' in tune:
+            rsi_symbol_change_pct = float(tune['rsi_symbol_change_pct'])
+
+        if 'rsi_value_close_positions' in tune:
+            rsi_value_close_positions = float(tune['rsi_value_close_positions'])
 
     # ---- setting end ----
     multi_position_enabled = max_open_trades > 1
@@ -911,7 +922,7 @@ def spot_limbian_strategy(tune: dict = None):
                 if long_open_points is not None:
                     long_open_points.append((i, position['entry_price']))
                     if long_open_reasons is not None:
-                        entry_reason_text = f"open this order because from last entry come down {symbol_change_pct * 100}%"
+                        entry_reason_text = f"open this order because from last entry come down {symbol_change_pct * 100}% \n len opened orders: {len(open_positions)}"
                         long_open_reasons[i] = entry_reason_text
                 # record which cross enabled this trade and init trailing state
                 last_trade_cross_index = last_cross_index
