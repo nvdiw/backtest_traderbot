@@ -19,6 +19,7 @@ import argparse
 import os
 from ma_strategy import ma_strategy
 from spot_limbian_strategy import spot_limbian_strategy
+from rsi_strategy import rsi_strategy
 
 # Grid to search (kept reasonable to limit runtime)
 param_grid = {
@@ -96,6 +97,7 @@ param_grid = {
     'consecutive_losses_month_stop_filter': [True, False],
     'adx_filter': [True, False],
     'volume_filter': [True, False],
+    'scale_in_enabled': [True, False],
     'leverage': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     'safe_leverage_low': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     'safe_leverage_med': [2, 3, 4, 5, 6, 7, 8, 9, 10],
@@ -110,27 +112,31 @@ param_grid = {
     'ma_100': [100, 110, 120, 130, 140, 150],
     'ma_200': [180, 190, 200, 210, 220, 230],
     'max_open_trades': [i for i in range(1, 21)],
-    
+
     # ==== spot_limbian_strategy variables ====
     'symbol_change_pct': [i/100 for i in range(0, 11)],
     'more_symbol_change_pct': [i/100 for i in range(1, 11)],
     'max_trade_change_pct': [i/100 for i in range(5, 21)],
     'static_dynamic_money_pct': [0.85, 0.90, 0.95],
+    'period_rsi': [i for i in range(6, 30)],
+    'rsi_buy_value': [20, 25, 30],
 }
 
 param_grid = {     
     # 'trade_amount_percent': [0.05, 0.1, 0.2, 0.3, 0.4],
     # 'max_open_trades': [i for i in range(2, 21)],
     # 'symbol_change_pct': [i/100 for i in range(0, 11)],
-    # 'more_symbol_change_pct': [i/100 for i in range(1, 11)]
-    # 'max_trade_change_pct': [i/100 for i in range(5, 21)]
-    'static_dynamic_money_pct': [i/100 for i in range(80, 96)],
+    # 'more_symbol_change_pct': [i/100 for i in range(1, 8)],
+    'max_trade_change_pct': [i/100 for i in range(0, 41)],
+    # 'static_dynamic_money_pct': [i/100 for i in range(0, 100)],
+    # 'period_rsi': [i for i in range(6, 21)],
+    # 'rsi_buy_value': [i for i in range(20, 31)],
  }
 
 # strategies setting only one of them should be True
 ma = False
-spot_limbian = True
-
+spot_limbian = False
+rsi = True
 
 keys = list(param_grid.keys())
 combos = list(itertools.product(*(param_grid[k] for k in keys)))
@@ -176,6 +182,14 @@ def _evaluate_pair(pair):
             res = None
             err = e
 
+    elif rsi:
+        try:
+            res = rsi_strategy(tune=tune)
+            err = None
+        except Exception as e:
+            res = None
+            err = e
+    
     duration = time.time() - t0
     return idx, tune, res, duration, err
 
