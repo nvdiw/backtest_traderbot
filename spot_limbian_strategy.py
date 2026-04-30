@@ -1030,6 +1030,7 @@ def spot_limbian_strategy(tune: dict = None):
         print("Total Losses:", total_losses)
         print("Final Balance:", round(balance, 2), "$")
         print("Final Balance (No Fee):", round(balance_without_fee, 2), "$")
+        print("Final balance with close, open orders in last candle:", round(total_money_dynamic, 2), "$")
         print("Total Fees Paid:", round(deducting_fee_total, 2), "$")
         print("Fee Compounding Impact:",
               round(balance_without_fee - balance - deducting_fee_total, 2), "$")
@@ -1121,7 +1122,8 @@ def spot_limbian_strategy(tune: dict = None):
 
     # return summary metrics for programmatic use
     return {
-        'final_balance': balance,
+        'final_balance_static': total_money_static,
+        "final_balance_dynamic": total_money_dynamic,
         'total_profit': round(sum(profits_lst), 6),
         'total_profit_percent': round(t_profit_percent, 6),
         'closed_trades': count_closed_orders,

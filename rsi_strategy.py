@@ -75,16 +75,16 @@ def rsi_strategy(tune: dict = None):
     trade_amount_percent = 0.10      # 10% of balance per trade
 
     save_money = 0
-    symbol_change_pct = 0.01
+    symbol_change_pct = 0.0
     more_symbol_change_pct = 0.05
     rsi_symbol_change_pct = 0.02
-    rsi_value_close_positions = 90
     max_open_trades = 5  # 1 = single-position mode, >1 allows multiple concurrent positions
     max_trade_change_pct = 0.0
     static_dynamic_money_pct = 0.90
 
     # rsi sets
-    rsi_buy_value = 30
+    rsi_open_value = 35
+    rsi_close_value = 90
 
     # Safe leverage levels
     safe_leverage_low = 1
@@ -499,14 +499,14 @@ def rsi_strategy(tune: dict = None):
         if 'period_rsi' in tune:
             period_rsi = int(tune['period_rsi'])
 
-        if 'rsi_buy_value' in tune:
-            rsi_buy_value = int(tune['rsi_buy_value'])
+        if 'rsi_open_value' in tune:
+            rsi_open_value = int(tune['rsi_open_value'])
 
         if 'rsi_symbol_change_pct' in tune:
             rsi_symbol_change_pct = float(tune['rsi_symbol_change_pct'])
 
-        if 'rsi_value_close_positions' in tune:
-            rsi_value_close_positions = float(tune['rsi_value_close_positions'])
+        if 'rsi_close_value' in tune:
+            rsi_close_value = float(tune['rsi_close_value'])
 
     # ---- setting end ----
     multi_position_enabled = max_open_trades > 1
@@ -890,7 +890,7 @@ def rsi_strategy(tune: dict = None):
                 was_high_len_positions = False
 
         # ===================== OPEN LONG =====================
-        if (close_prices[i] <= last_price_entry * (1 - symbol_change_pct)) and (len(open_positions) < max_open_trades) and rsi_list[i] <= rsi_buy_value:
+        if (close_prices[i] <= last_price_entry * (1 - symbol_change_pct)) and (len(open_positions) < max_open_trades) and rsi_list[i] <= rsi_open_value:
             # ---- open long ----
             updates = trade_manager.open_long(
                 i,
@@ -923,12 +923,14 @@ def rsi_strategy(tune: dict = None):
                 }
                 open_positions.append(position)
                 last_price_entry = close_prices[i]
-                next_trade_id += 1
+                
                 if long_open_points is not None:
                     long_open_points.append((i, position['entry_price']))
                     if long_open_reasons is not None:
                         entry_reason_text = f"open this order because from last entry come down {symbol_change_pct * 100}% \n len opened orders: {len(open_positions)}"
                         long_open_reasons[i] = entry_reason_text
+                
+                next_trade_id += 1
                 # record which cross enabled this trade and init trailing state
                 last_trade_cross_index = last_cross_index
 
@@ -938,7 +940,7 @@ def rsi_strategy(tune: dict = None):
         long_positions_to_close = [p for p in open_positions if p['side'] == "long"]
         for p in long_positions_to_close:
             close_reason1 = p['entry_price'] * (1 + more_symbol_change_pct) <= close_prices[i]
-            close_reason2 = rsi_list[i] >= rsi_value_close_positions and p['entry_price'] * (1 + rsi_symbol_change_pct) <= close_prices[i]
+            close_reason2 = rsi_list[i] >= rsi_close_value and p['entry_price'] * (1 + rsi_symbol_change_pct) <= close_prices[i]
             if close_reason1 or close_reason2:
                 updates = trade_manager.close_long(
                     i,
@@ -1004,7 +1006,7 @@ def rsi_strategy(tune: dict = None):
                         if close_reason1:
                             long_close_reasons[i] = f"close ID: {p['trade_id']} for moving upper than {round((symbol_change_pct + more_symbol_change_pct) * 100, 2)}%\n"
                         if close_reason2:
-                            long_close_reasons[i] = f"rsi is more than {rsi_value_close_positions}({rsi_list[i]})\n and we got more than {rsi_value_close_positions}%"
+                            long_close_reasons[i] = f"rsi is more than {rsi_close_value}({rsi_list[i]})\n and we got more than {rsi_close_value}%"
 
                             
     # ===================== BACKTEST SUMMARY =====================
@@ -1037,6 +1039,7 @@ def rsi_strategy(tune: dict = None):
         print("Total Losses:", total_losses)
         print("Final Balance:", round(balance, 2), "$")
         print("Final Balance (No Fee):", round(balance_without_fee, 2), "$")
+        print("Final balance with close, open orders in last candle:", round(total_money_dynamic, 2), "$")
         print("Total Fees Paid:", round(deducting_fee_total, 2), "$")
         print("Fee Compounding Impact:",
               round(balance_without_fee - balance - deducting_fee_total, 2), "$")
@@ -1128,7 +1131,8 @@ def rsi_strategy(tune: dict = None):
 
     # return summary metrics for programmatic use
     return {
-        'final_balance': balance,
+        'final_balance_static': total_money_static,
+        "final_balance_dynamic": total_money_dynamic,
         'total_profit': round(sum(profits_lst), 6),
         'total_profit_percent': round(t_profit_percent, 6),
         'closed_trades': count_closed_orders,

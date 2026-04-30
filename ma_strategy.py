@@ -18,7 +18,7 @@ from fetch_calculate_data import fetch_all_data, trade_duration
 # end = get_candle_index("2026-02-23")     ----> 285070
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2025-01-01","2026-02-23"))
+start, end = get_candle_index(("2023-01-01","2026-02-23"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 all_data = fetch_all_data(start, end)
@@ -666,22 +666,25 @@ def ma_strategy(tune: dict = None):
     for i in range(len(close_prices)):
         # print(start+i)
 
+        # margin static
+        total_open_margin_static = sum(p['margin'] for p in open_positions)
+
+        # margin dynamic
+        lst_open_margin_dynamic = []
+        for p in open_positions:
+            if p['side'] == "long":
+                profit_open_positions_pct = ((close_prices[i] - p['entry_price']) / p['entry_price']) * 100
+            if p['side'] == "short":
+                profit_open_positions_pct = ((p['entry_price'] - close_prices[i]) / p['entry_price']) * 100
+            profit_open_positions_pct_leverage = profit_open_positions_pct * p['leverage']
+            lst_open_margin_dynamic.append(p['margin'] + p['margin'] * profit_open_positions_pct_leverage / 100)
+        total_open_margin_dynamic = sum(lst_open_margin_dynamic)
+
+        total_money_static = balance + total_open_margin_static + save_money
+        total_money_dynamic = balance + total_open_margin_dynamic + save_money
+
         if chart_data is not None:
-            # margin static
-            total_open_margin_static = sum(p['margin'] for p in open_positions)
-
-            # margin dynamic
-            lst_open_margin_dynamic = []
-            for p in open_positions:
-                if p['side'] == "long":
-                    profit_open_positions_pct = ((close_prices[i] - p['entry_price']) / p['entry_price']) * 100
-                if p['side'] == "short":
-                    profit_open_positions_pct = ((p['entry_price'] - close_prices[i]) / p['entry_price']) * 100
-                profit_open_positions_pct_leverage = profit_open_positions_pct * p['leverage']
-                lst_open_margin_dynamic.append(p['margin'] + p['margin'] * profit_open_positions_pct_leverage / 100)
-            total_open_margin_dynamic = sum(lst_open_margin_dynamic)
-
-            chart_data.append([i, balance + total_open_margin_static + save_money, balance + total_open_margin_dynamic + save_money])
+            chart_data.append([i, total_money_static, total_money_dynamic])
 
         if ema_16[i] is None or ma_50[i] is None or ma_100[i] is None or ma_200[i] is None:
             continue
@@ -1729,10 +1732,12 @@ def ma_strategy(tune: dict = None):
     if verbose:
         print("✅ BACKTEST FINISHED")
         print("Closed Trades:", count_closed_orders, "( Longs:", total_long, "| Shorts:", total_short, ")")
+        print("Count open Trades:", len(open_positions))
         print("Total Wins:", total_wins, "| Total Wins Long:", total_wins_long, "| Total Wins Short:", total_wins_short)
         print("Total Losses:", total_losses)
         print("Final Balance:", round(balance, 2), "$")
         print("Final Balance (No Fee):", round(balance_without_fee, 2), "$")
+        print("Final balance with close, open orders in last candle:", round(total_money_dynamic, 2), "$")
         print("Total Fees Paid:", round(deducting_fee_total, 2), "$")
         print("Fee Compounding Impact:",
               round(balance_without_fee - balance - deducting_fee_total, 2), "$")
@@ -1824,7 +1829,8 @@ def ma_strategy(tune: dict = None):
 
     # return summary metrics for programmatic use
     return {
-        'final_balance': balance,
+        'final_balance_static': total_money_static,
+        "final_balance_dynamic": total_money_dynamic,
         'total_profit': round(sum(profits_lst), 6),
         'total_profit_percent': round(t_profit_percent, 6),
         'closed_trades': count_closed_orders,

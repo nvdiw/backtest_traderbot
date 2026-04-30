@@ -119,22 +119,22 @@ param_grid = {
     'max_trade_change_pct': [i/100 for i in range(5, 21)],
     'static_dynamic_money_pct': [0.85, 0.90, 0.95],
     'period_rsi': [i for i in range(6, 30)],
-    'rsi_buy_value': [20, 25, 30],
+    'rsi_open_value': [20, 25, 30],
     'rsi_symbol_change_pct': [i/100 for i in range(1, 11)],
-    'rsi_value_close_positions': [i for i in range(70, 96)],
+    'rsi_close_value': [i for i in range(70, 96)],
 }
 
 param_grid = {     
-    # 'trade_amount_percent': [0.05, 0.1, 0.2, 0.3, 0.4],
-    # 'max_open_trades': [i for i in range(2, 21)],
-    # 'symbol_change_pct': [i/100 for i in range(0, 11)],
-    # 'more_symbol_change_pct': [i/100 for i in range(1, 8)],
+    'trade_amount_percent': [0.05, 0.1, 0.2, 0.3, 0.4],
+    'max_open_trades': [i for i in range(2, 21)],
+    'symbol_change_pct': [i/100 for i in range(0, 4)],
+    # 'more_symbol_change_pct': [i/100 for i in range(0, 16)],
     # 'max_trade_change_pct': [i/100 for i in range(0, 41)],
     # 'static_dynamic_money_pct': [i/100 for i in range(0, 100)],
     # 'period_rsi': [i for i in range(6, 21)],
-    # 'rsi_buy_value': [i for i in range(20, 31)],
-    'rsi_symbol_change_pct': [i/100 for i in range(1, 11)],
-    'rsi_value_close_positions': [i for i in range(70, 96)],
+    # 'rsi_open_value': [i for i in range(20, 51)],
+    # 'rsi_symbol_change_pct': [i/100 for i in range(1, 11)],
+    # 'rsi_close_value': [i for i in range(70, 96)],
  }
 
 # strategies setting only one of them should be True
@@ -153,7 +153,7 @@ while True:
     try:
         with open(out_file, 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(keys + ['final_balance', 'total_profit', 'total_profit_percent', 'closed_trades', 'wins', 'losses', 'maximum_drawdown', 'win_rate', 'duration_s', 'profit_months', 'loss_months'])
+            writer.writerow(keys + ['final_balance_static', 'final_balance_dynamic', 'total_profit', 'total_profit_percent', 'closed_trades', 'wins', 'losses', 'maximum_drawdown', 'win_rate', 'duration_s', 'profit_months', 'loss_months'])
         break
 
     except PermissionError:
@@ -200,7 +200,8 @@ def _evaluate_pair(pair):
 
 def _result_to_row(keys, tune, res, duration):
     return [tune[k] for k in keys] + [
-        res.get('final_balance'),
+        res.get('final_balance_static'),
+        res.get('final_balance_dynamic'),
         res.get('total_profit'),
         res.get('total_profit_percent'),
         res.get('closed_trades'),
