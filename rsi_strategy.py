@@ -13,6 +13,7 @@ from trademanager import TradeManager
 from check_monthly_data import write_monthly_summary
 from chart_renderer import render_backtest_chart
 from fetch_calculate_data import fetch_all_data, trade_duration
+from generate_reason_text import generate_entry_reason_text, generate_close_reason_text
 
 
 # start = get_candle_index("2025-01-01")   ----> 244944
@@ -890,7 +891,8 @@ def rsi_strategy(tune: dict = None):
                 was_high_len_positions = False
 
         # ===================== OPEN LONG =====================
-        if (close_prices[i] <= last_price_entry * (1 - symbol_change_pct)) and (len(open_positions) < max_open_trades) and rsi_list[i] <= rsi_open_value:
+        open_reason1 = (close_prices[i] <= last_price_entry * (1 - symbol_change_pct)) and (len(open_positions) < max_open_trades) and (rsi_list[i] <= rsi_open_value)
+        if open_reason1:
             # ---- open long ----
             updates = trade_manager.open_long(
                 i,
@@ -924,16 +926,20 @@ def rsi_strategy(tune: dict = None):
                 open_positions.append(position)
                 last_price_entry = close_prices[i]
                 
+                # open point on chart
                 if long_open_points is not None:
                     long_open_points.append((i, position['entry_price']))
+                    # open reason text
                     if long_open_reasons is not None:
-                        entry_reason_text = f"open this order because from last entry come down {symbol_change_pct * 100}% \n len opened orders: {len(open_positions)}"
+                        # default texts
+                        entry_reason_text = generate_entry_reason_text(trade_id=next_trade_id, updates=updates)
+                        if open_reason1:
+                            entry_reason_text += f"\nrsi is less than {rsi_open_value}({rsi_list[i]}) and price is less than last_entry"
                         long_open_reasons[i] = entry_reason_text
                 
                 next_trade_id += 1
                 # record which cross enabled this trade and init trailing state
                 last_trade_cross_index = last_cross_index
-
                 updates = None
 
         # ===================== CLOSE LONG =====================
@@ -999,16 +1005,22 @@ def rsi_strategy(tune: dict = None):
                     pending_monthly_stop_reason = updates.get('monthly_stop_reason')
                     pending_monthly_stop_value = updates.get('monthly_stop_value')
                 open_positions.remove(p)
-                updates = None
+                
+                # close point on chart
                 if long_close_points is not None:
                     long_close_points.append((i, close_prices[i]))
+                    # close reason text
                     if long_close_reasons is not None:
+                        exit_reason_text = generate_close_reason_text(trade_id=p['trade_id'], updates=updates)
                         if close_reason1:
-                            long_close_reasons[i] = f"close ID: {p['trade_id']} for moving upper than {round((symbol_change_pct + more_symbol_change_pct) * 100, 2)}%\n"
+                            exit_reason_text += f"\nclose ID: {p['trade_id']} for moving upper than {round((symbol_change_pct + more_symbol_change_pct) * 100, 2)}%"
                         if close_reason2:
-                            long_close_reasons[i] = f"rsi is more than {rsi_close_value}({rsi_list[i]})\n and we got more than {rsi_close_value}%"
+                            exit_reason_text += f"\nrsi is more than {rsi_close_value}({rsi_list[i]})\n and we got more than {rsi_symbol_change_pct * 100}%"
+                        
+                        long_close_reasons[i] = exit_reason_text
+                        
+                updates = None
 
-                            
     # ===================== BACKTEST SUMMARY =====================
 
     if open_positions:
