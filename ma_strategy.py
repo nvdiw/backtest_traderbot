@@ -12,6 +12,7 @@ from trademanager import TradeManager
 from check_monthly_data import write_monthly_summary
 from chart_renderer import render_backtest_chart
 from fetch_calculate_data import fetch_all_data, trade_duration
+from generate_reason_text import generate_entry_reason_text, generate_close_reason_text
 
 
 # start = get_candle_index("2025-01-01")   ----> 244944
@@ -210,7 +211,7 @@ def ma_strategy(tune: dict = None):
             lines.append("No score components recorded.")
         lines.append("-" * 20)
         lines.append(f"Total Score: {total_score}")
-        lines.append(f"Threshold: {threshold}")
+        lines.append(f"Threshold: {threshold}\n")
         return "\n".join(lines)
 
     def strongest_directional_moves_pct(prices, start_idx, end_idx):
@@ -1001,14 +1002,19 @@ def ma_strategy(tune: dict = None):
                             'target_close_price_loss': updates['entry_price'],
                         }
                         open_positions.append(position)
-                        next_trade_id += 1
+                        
+                        # open point on chart
                         if long_open_points is not None:
                             long_open_points.append((i, position['entry_price']))
+                            # open reason text
                             if long_open_reasons is not None:
+                                # default texts
+                                entry_reason_text += generate_entry_reason_text(trade_id=next_trade_id, updates=updates)
                                 long_open_reasons[i] = entry_reason_text
+                        
+                        next_trade_id += 1
                         # record which cross enabled this trade and init trailing state
                         last_trade_cross_index = last_cross_index
-
                         updates = None
 
         # ===================== SCALE ENTRY LONG =====================
@@ -1267,14 +1273,19 @@ def ma_strategy(tune: dict = None):
                     pending_monthly_stop_reason = updates.get('monthly_stop_reason')
                     pending_monthly_stop_value = updates.get('monthly_stop_value')
                 open_positions.remove(p)
-                updates = None
+                
+                # close point on chart
                 if long_close_points is not None:
                     long_close_points.append((i, close_price))
+                    # close reason text
                     if long_close_reasons is not None:
+                        long_exit_reason_text += generate_close_reason_text(trade_id=p['trade_id'], updates=updates)
                         if len(long_positions_to_close) > 1:
                             long_close_reasons[i] = f"{long_exit_reason_text}\nBatch close: all open LONG positions closed together."
                         else:
                             long_close_reasons[i] = long_exit_reason_text
+                
+                updates = None
 
                 if profits_lst[-1] < 0:
                     consecutive_losses += 1
@@ -1413,14 +1424,19 @@ def ma_strategy(tune: dict = None):
                             'target_close_price_loss': updates['entry_price'],
                         }
                         open_positions.append(position)
-                        next_trade_id += 1
+                        
+                        # open point on chart
                         if short_open_points is not None:
                             short_open_points.append((i, position['entry_price']))
+                            # open reason text
                             if short_open_reasons is not None:
+                                # default texts
+                                entry_reason_text += generate_entry_reason_text(trade_id=next_trade_id, updates=updates)
                                 short_open_reasons[i] = entry_reason_text
+
+                        next_trade_id += 1
                         # record which cross enabled this trade and init trailing state
                         last_trade_cross_index = last_cross_index
-
                         updates = None
 
         # ===================== SCALE ENTRY SHORT =====================
@@ -1679,14 +1695,19 @@ def ma_strategy(tune: dict = None):
                     pending_monthly_stop_reason = updates.get('monthly_stop_reason')
                     pending_monthly_stop_value = updates.get('monthly_stop_value')
                 open_positions.remove(p)
-                updates = None
+
+                # close point on chart
                 if short_close_points is not None:
                     short_close_points.append((i, close_price))
+                    # close reason text
                     if short_close_reasons is not None:
+                        short_exit_reason_text += generate_close_reason_text(trade_id=p['trade_id'], updates=updates)
                         if len(short_positions_to_close) > 1:
                             short_close_reasons[i] = f"{short_exit_reason_text}\nBatch close: all open SHORT positions closed together."
                         else:
                             short_close_reasons[i] = short_exit_reason_text
+
+                updates = None
 
                 if profits_lst[-1] < 0:
                     consecutive_losses += 1
