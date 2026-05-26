@@ -114,7 +114,7 @@ param_grid = {
     'max_open_trades': [i for i in range(1, 21)],
 
     # ==== spot_limbian_strategy variables ====
-    'symbol_change_pct': [i/100 for i in range(0, 11)],
+    'symbol_change_pct': [i/100 for i in range(-10, 11)],
     'more_symbol_change_pct': [i/100 for i in range(1, 11)],
     'max_trade_change_pct': [i/100 for i in range(5, 21)],
     'static_dynamic_money_pct': [0.85, 0.90, 0.95],
@@ -125,9 +125,9 @@ param_grid = {
 }
 
 param_grid = {     
-    'trade_amount_percent': [0.05, 0.1, 0.2, 0.3, 0.4],
-    'max_open_trades': [i for i in range(2, 21)],
-    'symbol_change_pct': [i/100 for i in range(0, 4)],
+    # 'trade_amount_percent': [0.05, 0.1, 0.2, 0.3, 0.4],
+    # 'max_open_trades': [i for i in range(2, 21)],
+    'symbol_change_pct': [i/100 for i in range(0, 31)],
     # 'more_symbol_change_pct': [i/100 for i in range(0, 16)],
     # 'max_trade_change_pct': [i/100 for i in range(0, 41)],
     # 'static_dynamic_money_pct': [i/100 for i in range(0, 100)],

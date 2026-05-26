@@ -1,0 +1,28 @@
+__pycache__/check_monthly_data.cpython-313.pyc
+*.pyc
+__pycache__/indicators.cpython-313.pyc
+__pycache__/trade_csv_logger.cpython-313.pyc
+best_params.txt
+__pycache__/indicators.cpython-313.pyc
+__pycache__/trade_csv_logger.cpython-313.pyc
+monthly_data_orders.csv
+optimization_results.csv
+terminal.txt
+test.py
+data_orders.csv
+__pycache__/indicators.cpython-313.pyc
+important_optimize_csv/4300 tests for MA EMA.csv
+important_optimize_csv/800 tests for thresh_holds.csv
+important_optimize_csv/10800 tests for leverages.csv
+important_optimize_csv/3200 tests impulse_threshhold 2023 2025.csv
+important_optimize_csv/1000 tests entry scores.csv
+test4.py
+test3.py
+test2.py
+/important_optimize_csv
+__pycache__/indicators.cpython-313.pyc
+__pycache__/trade_csv_logger.cpython-313.pyc
+__pycache__/trade_csv_logger.cpython-313.pyc
+data_candle/btc_15m_data_2025.csv
+outputs/trades/data_orders.xlsx
+test5.py

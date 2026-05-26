@@ -79,7 +79,7 @@ def rsi_strategy(tune: dict = None):
     symbol_change_pct = 0.0
     more_symbol_change_pct = 0.05
     rsi_symbol_change_pct = 0.02
-    max_open_trades = 8  # 1 = single-position mode, >1 allows multiple concurrent positions
+    max_open_trades = 5  # 1 = single-position mode, >1 allows multiple concurrent positions
     max_trade_change_pct = 0.0
     static_dynamic_money_pct = 0.90
 
@@ -112,7 +112,7 @@ def rsi_strategy(tune: dict = None):
     atr_filter = False
     consecutive_losses_month_stop_filter = False
     skip_logic = False
-    add_remove_maxtrades_power = False
+    add_remove_maxtrades_power = True
     original_max_open_trades = max_open_trades
 
     # Cooldown
@@ -892,7 +892,7 @@ def rsi_strategy(tune: dict = None):
 
         # ===================== OPEN LONG =====================
         open_reason1 = (close_prices[i] <= last_price_entry * (1 - symbol_change_pct)) and (len(open_positions) < max_open_trades) and (rsi_list[i] <= rsi_open_value)
-        open_reason2 = (rsi_list[i] <= 15) and (len(open_positions) < max_open_trades + 2)
+        open_reason2 = (rsi_list[i] <= 20) and (len(open_positions) < max_open_trades + 2)
         if open_reason1 or open_reason2:
             # ---- open long ----
             updates = trade_manager.open_long(
