@@ -13,6 +13,7 @@ from check_monthly_data import write_monthly_summary
 from chart_renderer import render_backtest_chart
 from fetch_calculate_data import fetch_all_data, trade_duration
 from generate_reason_text import generate_entry_reason_text, generate_close_reason_text
+from strategy_config import build_ma_strategy_config
 
 
 # start = get_candle_index("2025-01-01")   ----> 244944
@@ -69,137 +70,103 @@ def ma_strategy(tune: dict = None):
     csv_logger = TradeCSVLogger(optimize=optimize)
 
     # ---- settings ----
-    # Capital & position sizing
-    balance = 1000                  # base balance
-    leverage = 10                   # default leverage
-    trade_amount_percent = 0.5      # 50% of balance per trade
-    scale_entry_amount_percent = 0.2        # order size for the extra (second) entry
-    scale_entry_profit_trigger_pct = 0.039  # favorable move trigger from first entry (e.g. 0.04 = 4%) 0.052 is good
-    scale_entry_loss_trigger_pct = 0.03     # adverse move trigger from first entry (e.g. 0.04 = 4%)
-    save_money = 0
-
-    # Safe leverage levels
-    safe_leverage_low = 2
-    safe_leverage_med = 3
-    safe_leverage_high = 4
-
-    # Safe leverage activation thresholds (% of tactical balance)
-    safe_leverage_balance_pct_low = 80
-    safe_leverage_balance_pct_med = 80
-    safe_leverage_balance_pct_high = 90
-    # Save-money recovery (recover amount = 100 - trigger)
-    save_money_recover_trigger_pct = 75
-
-    # Monthly control
-    monthly_profit_percent_stop_trade = 8  # stop trading month after reaching this profit %
-    monthly_loss_percent_stop_trade = 19   # stop trading month after reaching this loss %
-    monthly_compound = 3                   # raise tactical balance by this % for next month
-    monthly_profit_close_filter = True
-    monthly_loss_close_filter = False
-
-    # second entry enable/disable
-    scale_entry_on_profit_enabled = True  # open second entry only after favorable move
-    scale_entry_on_loss_enabled = False    # open second entry after adverse move (same distance)
-
-    # second entry filters
-    scale_in_enabled = True
-    loss_scale_entry_filter_enabled = True
-    loss_scale_entry_min_score = 2         # minimum quality score required for loss-based scale entry
-    loss_scale_entry_atr_ratio_min = 1.0   # ATR/ATR_MA threshold for loss-based scale entry (LONG & SHORT)
-
-    # Filters & behavior switches
-    adx_filter = True
-    volume_filter = True
-    atr_filter = True
-    consecutive_losses_month_stop_filter = False
-    skip_logic = False
-    max_open_trades = 2  # 1 = single-position mode, >1 allows multiple concurrent positions
-
-    # Cooldown
-    cooldown_after_big_pnl = 4 * 3
+    cfg = build_ma_strategy_config(tune)
+    balance = cfg.balance
+    leverage = cfg.leverage
+    trade_amount_percent = cfg.trade_amount_percent
+    scale_entry_amount_percent = cfg.scale_entry_amount_percent
+    scale_entry_profit_trigger_pct = cfg.scale_entry_profit_trigger_pct
+    scale_entry_loss_trigger_pct = cfg.scale_entry_loss_trigger_pct
+    save_money = cfg.save_money
+    safe_leverage_low = cfg.safe_leverage_low
+    safe_leverage_med = cfg.safe_leverage_med
+    safe_leverage_high = cfg.safe_leverage_high
+    safe_leverage_balance_pct_low = cfg.safe_leverage_balance_pct_low
+    safe_leverage_balance_pct_med = cfg.safe_leverage_balance_pct_med
+    safe_leverage_balance_pct_high = cfg.safe_leverage_balance_pct_high
+    save_money_recover_trigger_pct = cfg.save_money_recover_trigger_pct
+    monthly_profit_percent_stop_trade = cfg.monthly_profit_percent_stop_trade
+    monthly_loss_percent_stop_trade = cfg.monthly_loss_percent_stop_trade
+    monthly_compound = cfg.monthly_compound
+    monthly_profit_close_filter = cfg.monthly_profit_close_filter
+    monthly_loss_close_filter = cfg.monthly_loss_close_filter
+    scale_entry_on_profit_enabled = cfg.scale_entry_on_profit_enabled
+    scale_entry_on_loss_enabled = cfg.scale_entry_on_loss_enabled
+    scale_in_enabled = cfg.scale_in_enabled
+    loss_scale_entry_filter_enabled = cfg.loss_scale_entry_filter_enabled
+    loss_scale_entry_min_score = cfg.loss_scale_entry_min_score
+    loss_scale_entry_atr_ratio_min = cfg.loss_scale_entry_atr_ratio_min
+    adx_filter = cfg.adx_filter
+    volume_filter = cfg.volume_filter
+    atr_filter = cfg.atr_filter
+    consecutive_losses_month_stop_filter = cfg.consecutive_losses_month_stop_filter
+    skip_logic = cfg.skip_logic
+    max_open_trades = cfg.max_open_trades
+    cooldown_after_big_pnl = cfg.cooldown_after_big_pnl
     cooldown_until_index = -1
-
-    # Entry context thresholds
-    ma_distance_threshold = 0.00159
-    candle_move_threshold = 0.008
-    impulse_move_threshold_pct = 1.5
-    impulse_lookback = 5
-    late_entry_atr_mult = 0.8
-    late_entry_body_ratio = 0.8
-    late_entry_ema_pct = 0.005
-
-    # Entry/exit controls
-    entry_score_threshold = 9
-    exit_score_threshold = 6
-
-    slope_window = 5
-    trail_activate_pct = 0.007
-    trail_retrace_pct = 0.003
-    loss_exit_pct_1 = 0.05  # 5% loss threshold
-    loss_exit_pct_2 = 0.04  # 4% loss threshold
-    profit_exit_pct_1 = 0.15  # 15% profit threshold
-    profit_exit_pct_2 = 0.10  # 7% profit threshold
-    loss_lock_step_pct = 0.01  # step % for locking in losses (trailing loss target)
-    adx_exit_threshold = 15.0
-    adx_exit_lookback = 1
-    entry_adx_threshold = 20.5
-    entry_atr_threshold = 1.2
-    opposite_atr_body_mult = 0.6
-    sharp_move_threshold_pct = 12.0
-    sharp_move_lookback_candles = 600
-    post_cross_penalty_candles = 15
-    consecutive_losses_stop_until_month = 5
-
-    # Indicator periods
-    period_adx = 14
-    period_atr = 14
-    period_atr_ma = 21
-    period_vol_avg = 12
-    period_rsi = 14
-    volume_spike_multiplier = 1.24
-
-    # Matplot setting
-    plot_max_candles = 1200   # chart render limit to keep plotting fast (set <=0 for full range)
-    plot_end_offset = 0       # drop latest N candles from chart to inspect older windows
-    plot_step_candles = 300   # navigation step for loading older/newer windows
-    plot_min_zoom_candles = 80       # minimum window size for zoom-in
-    plot_max_render_candles = 1600   # when zoomed out, aggregate to this many candles for smoother rendering
-    plot_zoom_in_factor = 0.8        # wheel zoom-in multiplier
-    plot_zoom_out_factor = 1.6       # wheel zoom-out multiplier (higher = faster reach to full history)
-    plot_window_width_scale = 0.94   # near-fullscreen width without forcing true fullscreen
-    plot_window_height_scale = 0.90  # near-fullscreen height without forcing true fullscreen
-    plot_drag_preview_factor = 0.42  # render fewer candles while dragging for smoother live updates
-    plot_drag_update_interval_ms = 16  # target drag refresh cadence (~60Hz upper bound)
-    plot_yscale_drag_sensitivity = 0.0030  # right-drag vertical zoom sensitivity
-
-    plot_post_cross_penalty_markers = True  # show yellow markers where post-cross penalty is applied
-
-
-    # ---- score weights (entry/exit) ----
-    # entry positive
-    entry_score_cross = 1
-    entry_score_ema_vs_ma50 = 3
-    entry_score_ma_trend = 1
-    entry_score_ma_distance_or_candle = 1
-    entry_score_adx = 1
-    entry_score_volume = 2
-    # entry negative
-    entry_late_penalty = 1  # applied as a subtraction
-
-
-    # exit positive
-    exit_score_loss_guard_1 = 3
-    exit_score_loss_guard_2 = 1
-    exit_score_profit_guard_1 = 3
-    exit_score_profit_guard_2 = 3
-    exit_score_ema_slope = 1
-    exit_score_ema_cross = 3
-    exit_score_ma_trend = 1
-    exit_score_trailing = 1
-    exit_score_adx = 1
-    exit_score_opposite_candle = 1
-    # exit negative
-    post_cross_penalty_score = 3
+    ma_distance_threshold = cfg.ma_distance_threshold
+    candle_move_threshold = cfg.candle_move_threshold
+    impulse_move_threshold_pct = cfg.impulse_move_threshold_pct
+    impulse_lookback = cfg.impulse_lookback
+    late_entry_atr_mult = cfg.late_entry_atr_mult
+    late_entry_body_ratio = cfg.late_entry_body_ratio
+    late_entry_ema_pct = cfg.late_entry_ema_pct
+    entry_score_threshold = cfg.entry_score_threshold
+    exit_score_threshold = cfg.exit_score_threshold
+    slope_window = cfg.slope_window
+    trail_activate_pct = cfg.trail_activate_pct
+    trail_retrace_pct = cfg.trail_retrace_pct
+    loss_exit_pct_1 = cfg.loss_exit_pct_1
+    loss_exit_pct_2 = cfg.loss_exit_pct_2
+    profit_exit_pct_1 = cfg.profit_exit_pct_1
+    profit_exit_pct_2 = cfg.profit_exit_pct_2
+    loss_lock_step_pct = cfg.loss_lock_step_pct
+    adx_exit_threshold = cfg.adx_exit_threshold
+    adx_exit_lookback = cfg.adx_exit_lookback
+    entry_adx_threshold = cfg.entry_adx_threshold
+    entry_atr_threshold = cfg.entry_atr_threshold
+    opposite_atr_body_mult = cfg.opposite_atr_body_mult
+    sharp_move_threshold_pct = cfg.sharp_move_threshold_pct
+    sharp_move_lookback_candles = cfg.sharp_move_lookback_candles
+    post_cross_penalty_candles = cfg.post_cross_penalty_candles
+    consecutive_losses_stop_until_month = cfg.consecutive_losses_stop_until_month
+    period_adx = cfg.period_adx
+    period_atr = cfg.period_atr
+    period_atr_ma = cfg.period_atr_ma
+    period_vol_avg = cfg.period_vol_avg
+    period_rsi = cfg.period_rsi
+    volume_spike_multiplier = cfg.volume_spike_multiplier
+    plot_max_candles = cfg.plot_max_candles
+    plot_end_offset = cfg.plot_end_offset
+    plot_step_candles = cfg.plot_step_candles
+    plot_min_zoom_candles = cfg.plot_min_zoom_candles
+    plot_max_render_candles = cfg.plot_max_render_candles
+    plot_zoom_in_factor = cfg.plot_zoom_in_factor
+    plot_zoom_out_factor = cfg.plot_zoom_out_factor
+    plot_window_width_scale = cfg.plot_window_width_scale
+    plot_window_height_scale = cfg.plot_window_height_scale
+    plot_drag_preview_factor = cfg.plot_drag_preview_factor
+    plot_drag_update_interval_ms = cfg.plot_drag_update_interval_ms
+    plot_yscale_drag_sensitivity = cfg.plot_yscale_drag_sensitivity
+    plot_post_cross_penalty_markers = cfg.plot_post_cross_penalty_markers
+    entry_score_cross = cfg.entry_score_cross
+    entry_score_ema_vs_ma50 = cfg.entry_score_ema_vs_ma50
+    entry_score_ma_trend = cfg.entry_score_ma_trend
+    entry_score_ma_distance_or_candle = cfg.entry_score_ma_distance_or_candle
+    entry_score_adx = cfg.entry_score_adx
+    entry_score_volume = cfg.entry_score_volume
+    entry_late_penalty = cfg.entry_late_penalty
+    exit_score_loss_guard_1 = cfg.exit_score_loss_guard_1
+    exit_score_loss_guard_2 = cfg.exit_score_loss_guard_2
+    exit_score_profit_guard_1 = cfg.exit_score_profit_guard_1
+    exit_score_profit_guard_2 = cfg.exit_score_profit_guard_2
+    exit_score_ema_slope = cfg.exit_score_ema_slope
+    exit_score_ema_cross = cfg.exit_score_ema_cross
+    exit_score_ma_trend = cfg.exit_score_ma_trend
+    exit_score_trailing = cfg.exit_score_trailing
+    exit_score_adx = cfg.exit_score_adx
+    exit_score_opposite_candle = cfg.exit_score_opposite_candle
+    post_cross_penalty_score = cfg.post_cross_penalty_score
 
     def build_score_reason_text(title, reasons, total_score, threshold):
         lines = [title]
@@ -245,272 +212,6 @@ def ma_strategy(tune: dict = None):
                 peak = price
 
         return max_up_move_pct, max_down_move_pct
-
-    # Apply tune overrides (explicit assignments to avoid relying on locals())
-    if tune:
-        if 'loss_exit_pct_1' in tune:
-            loss_exit_pct_1 = float(tune['loss_exit_pct_1'])
-
-        if 'loss_exit_pct_2' in tune:
-            loss_exit_pct_2 = float(tune['loss_exit_pct_2'])
-
-        if 'exit_score_loss_guard_1' in tune:
-            exit_score_loss_guard_1 = int(tune['exit_score_loss_guard_1'])
-
-        if 'exit_score_loss_guard_2' in tune:
-            exit_score_loss_guard_2 = int(tune['exit_score_loss_guard_2'])
-
-        if 'profit_exit_pct_1' in tune:
-            profit_exit_pct_1 = float(tune['profit_exit_pct_1'])
-
-        if 'profit_exit_pct_2' in tune:
-            profit_exit_pct_2 = float(tune['profit_exit_pct_2'])
-
-        if 'exit_score_profit_guard_1' in tune:
-            exit_score_profit_guard_1 = int(tune['exit_score_profit_guard_1'])
-
-        if 'exit_score_profit_guard_2' in tune:
-            exit_score_profit_guard_2 = int(tune['exit_score_profit_guard_2'])   
-
-        if 'slope_window' in tune:
-            slope_window = int(tune['slope_window'])
-
-        if 'entry_score_threshold' in tune:
-            entry_score_threshold = int(tune['entry_score_threshold'])
-
-        if 'exit_score_threshold' in tune:
-            exit_score_threshold = int(tune['exit_score_threshold'])
-
-        if 'entry_atr_threshold' in tune:
-            entry_atr_threshold = float(tune['entry_atr_threshold'])
-
-        if 'period_atr_ma' in tune:
-            period_atr_ma = int(tune['period_atr_ma'])
-
-        if 'period_adx' in tune:
-            period_adx = int(tune['period_adx'])
-
-        if 'period_atr' in tune:
-            period_atr = int(tune['period_atr'])
-
-        if 'period_vol_avg' in tune:
-            period_vol_avg = int(tune['period_vol_avg'])
-
-        if 'volume_spike_multiplier' in tune:
-            volume_spike_multiplier = float(tune['volume_spike_multiplier'])
-
-        if 'ma_distance_threshold' in tune:
-            ma_distance_threshold = float(tune['ma_distance_threshold'])
-
-        if 'candle_move_threshold' in tune:
-            candle_move_threshold = float(tune['candle_move_threshold'])
-
-        if 'impulse_move_threshold_pct' in tune:
-            impulse_move_threshold_pct = float(tune['impulse_move_threshold_pct'])
-
-        if 'impulse_lookback' in tune:
-            impulse_lookback = int(tune['impulse_lookback'])
-
-        if 'late_entry_atr_mult' in tune:
-            late_entry_atr_mult = float(tune['late_entry_atr_mult'])
-
-        if 'late_entry_body_ratio' in tune:
-            late_entry_body_ratio = float(tune['late_entry_body_ratio'])
-
-        if 'late_entry_ema_pct' in tune:
-            late_entry_ema_pct = float(tune['late_entry_ema_pct'])
-
-        if 'trail_activate_pct' in tune:
-            trail_activate_pct = float(tune['trail_activate_pct'])
-
-        if 'trail_retrace_pct' in tune:
-            trail_retrace_pct = float(tune['trail_retrace_pct'])
-
-        if 'loss_exit_pct' in tune:
-            loss_exit_pct = float(tune['loss_exit_pct'])
-
-        if 'profit_exit_pct' in tune:
-            profit_exit_pct = float(tune['profit_exit_pct'])
-
-        if 'adx_exit_threshold' in tune:
-            adx_exit_threshold = float(tune['adx_exit_threshold'])
-
-        if 'adx_exit_lookback' in tune:
-            adx_exit_lookback = int(tune['adx_exit_lookback'])
-
-        if 'entry_adx_threshold' in tune:
-            entry_adx_threshold = float(tune['entry_adx_threshold'])
-
-        if 'opposite_atr_body_mult' in tune:
-            opposite_atr_body_mult = float(tune['opposite_atr_body_mult'])
-
-        if 'sharp_move_threshold_pct' in tune:
-            sharp_move_threshold_pct = float(tune['sharp_move_threshold_pct'])
-
-        if 'sharp_move_lookback_candles' in tune:
-            sharp_move_lookback_candles = int(tune['sharp_move_lookback_candles'])
-
-        if 'post_cross_penalty_candles' in tune:
-            post_cross_penalty_candles = int(tune['post_cross_penalty_candles'])
-
-        if 'consecutive_losses_stop_until_month' in tune:
-            consecutive_losses_stop_until_month = int(tune['consecutive_losses_stop_until_month'])
-
-        if 'loss_lock_step_pct' in tune:
-            loss_lock_step_pct = float(tune['loss_lock_step_pct'])
-
-        if 'post_cross_penalty_score' in tune:
-            post_cross_penalty_score = int(tune['post_cross_penalty_score'])
-
-        if 'entry_score_cross' in tune:
-            entry_score_cross = int(tune['entry_score_cross'])
-
-        if 'entry_score_ema_vs_ma50' in tune:
-            entry_score_ema_vs_ma50 = int(tune['entry_score_ema_vs_ma50'])
-
-
-        if 'entry_score_ma_trend' in tune:
-            entry_score_ma_trend = int(tune['entry_score_ma_trend'])
-
-        if 'entry_score_ma_distance_or_candle' in tune:
-            entry_score_ma_distance_or_candle = int(tune['entry_score_ma_distance_or_candle'])
-
-        if 'entry_score_adx' in tune:
-            entry_score_adx = int(tune['entry_score_adx'])
-
-        if 'entry_score_volume' in tune:
-            entry_score_volume = int(tune['entry_score_volume'])
-
-        if 'entry_late_penalty' in tune:
-            entry_late_penalty = int(tune['entry_late_penalty'])
-
-        if 'exit_score_loss_guard' in tune:
-            exit_score_loss_guard = int(tune['exit_score_loss_guard'])
-
-        if 'exit_score_profit_guard' in tune:
-            exit_score_profit_guard = int(tune['exit_score_profit_guard'])
-
-        if 'exit_score_ema_slope' in tune:
-            exit_score_ema_slope = int(tune['exit_score_ema_slope'])
-
-        if 'exit_score_ema_cross' in tune:
-            exit_score_ema_cross = int(tune['exit_score_ema_cross'])
-
-        if 'exit_score_ma_trend' in tune:
-            exit_score_ma_trend = int(tune['exit_score_ma_trend'])
-
-        if 'exit_score_trailing' in tune:
-            exit_score_trailing = int(tune['exit_score_trailing'])
-
-        if 'exit_score_adx' in tune:
-            exit_score_adx = int(tune['exit_score_adx'])
-
-        if 'exit_score_opposite_candle' in tune:
-            exit_score_opposite_candle = int(tune['exit_score_opposite_candle'])
-
-        if 'trade_amount_percent' in tune:
-            trade_amount_percent = float(tune['trade_amount_percent'])
-
-        if 'scale_entry_amount_percent' in tune:
-            scale_entry_amount_percent = float(tune['scale_entry_amount_percent'])
-        elif 'trade_amount_percent_neworder' in tune:
-            # backward compatibility with previous parameter name
-            scale_entry_amount_percent = float(tune['trade_amount_percent_neworder'])
-
-        if 'scale_entry_profit_trigger_pct' in tune:
-            scale_entry_profit_trigger_pct = float(tune['scale_entry_profit_trigger_pct'])
-
-        if 'scale_entry_loss_trigger_pct' in tune:
-            scale_entry_loss_trigger_pct = float(tune['scale_entry_loss_trigger_pct'])
-
-        if 'scale_entry_trigger_pct' in tune:
-            # backward compatibility with shared trigger parameter
-            shared_scale_entry_trigger_pct = float(tune['scale_entry_trigger_pct'])
-            scale_entry_profit_trigger_pct = shared_scale_entry_trigger_pct
-            scale_entry_loss_trigger_pct = shared_scale_entry_trigger_pct
-        elif 'scale_in_trigger_move_pct' in tune:
-            # backward compatibility with previous parameter name
-            legacy_scale_entry_trigger_pct = float(tune['scale_in_trigger_move_pct'])
-            scale_entry_profit_trigger_pct = legacy_scale_entry_trigger_pct
-            scale_entry_loss_trigger_pct = legacy_scale_entry_trigger_pct
-
-        if 'monthly_profit_percent_stop_trade' in tune:
-            monthly_profit_percent_stop_trade = int(tune['monthly_profit_percent_stop_trade'])
-
-        if 'monthly_loss_percent_stop_trade' in tune:
-            monthly_loss_percent_stop_trade = int(tune['monthly_loss_percent_stop_trade'])
-
-        if 'monthly_profit_close_filter' in tune:
-            monthly_profit_close_filter = bool(tune['monthly_profit_close_filter'])
-
-        if 'monthly_loss_close_filter' in tune:
-            monthly_loss_close_filter = bool(tune['monthly_loss_close_filter'])
-
-        if 'adx_filter' in tune:
-            adx_filter = bool(tune['adx_filter'])
-
-        if 'volume_filter' in tune:
-            volume_filter = bool(tune['volume_filter'])
-
-        if 'scale_in_enabled' in tune:
-            scale_in_enabled = bool(tune['scale_in_enabled'])
-
-        if 'scale_entry_on_profit_enabled' in tune:
-            scale_entry_on_profit_enabled = bool(tune['scale_entry_on_profit_enabled'])
-
-        if 'scale_entry_on_loss_enabled' in tune:
-            scale_entry_on_loss_enabled = bool(tune['scale_entry_on_loss_enabled'])
-
-        if 'loss_scale_entry_filter_enabled' in tune:
-            loss_scale_entry_filter_enabled = bool(tune['loss_scale_entry_filter_enabled'])
-
-        if 'loss_scale_entry_min_score' in tune:
-            loss_scale_entry_min_score = int(tune['loss_scale_entry_min_score'])
-
-        if 'loss_scale_entry_atr_ratio_min' in tune:
-            loss_scale_entry_atr_ratio_min = float(tune['loss_scale_entry_atr_ratio_min'])
-        else:
-            # backward compatibility with older split params
-            if 'loss_scale_entry_long_atr_ratio_min' in tune:
-                loss_scale_entry_atr_ratio_min = float(tune['loss_scale_entry_long_atr_ratio_min'])
-            if 'loss_scale_entry_short_atr_ratio_min' in tune:
-                loss_scale_entry_atr_ratio_min = float(tune['loss_scale_entry_short_atr_ratio_min'])
-
-        if 'consecutive_losses_month_stop_filter' in tune:
-            consecutive_losses_month_stop_filter = bool(tune['consecutive_losses_month_stop_filter'])
-
-        if 'skip_logic' in tune:
-            skip_logic = bool(tune['skip_logic'])
-
-        if 'leverage' in tune:
-            leverage = float(tune['leverage'])
-
-        if 'safe_leverage_low' in tune:
-            safe_leverage_low = float(tune['safe_leverage_low'])
-
-        if 'safe_leverage_med' in tune:
-            safe_leverage_med = float(tune['safe_leverage_med'])
-
-        if 'safe_leverage_high' in tune:
-            safe_leverage_high = float(tune['safe_leverage_high'])
-
-        if 'safe_leverage_balance_pct_low' in tune:
-            safe_leverage_balance_pct_low = float(tune['safe_leverage_balance_pct_low'])
-
-        if 'safe_leverage_balance_pct_med' in tune:
-            safe_leverage_balance_pct_med = float(tune['safe_leverage_balance_pct_med'])
-
-        if 'safe_leverage_balance_pct_high' in tune:
-            safe_leverage_balance_pct_high = float(tune['safe_leverage_balance_pct_high'])
-
-        if 'save_money_recover_trigger_pct' in tune:
-            save_money_recover_trigger_pct = float(tune['save_money_recover_trigger_pct'])
-            
-        if 'cooldown_after_big_pnl' in tune:
-            cooldown_after_big_pnl = int(tune['cooldown_after_big_pnl'])
-
-        if 'max_open_trades' in tune:
-            max_open_trades = max(1, int(tune['max_open_trades']))
 
     # ---- setting end ----
     multi_position_enabled = max_open_trades > 1
@@ -583,22 +284,10 @@ def ma_strategy(tune: dict = None):
     indicator = Indicator(close_prices, period=None)
 
     # MA/EMA
-    ema_16_period = 16
-    ma_50_period = 50
-    ma_100_period = 102
-    ma_200_period = 198
-    
-
-    # Optimize: MA, EMA
-    if tune:
-        if 'ema_16' in tune:
-            ema_16_period = int(tune['ema_16'])
-        if 'ma_50' in tune:
-            ma_50_period = int(tune['ma_50'])
-        if 'ma_100' in tune:
-            ma_100_period = int(tune['ma_100'])
-        if 'ma_200' in tune:
-            ma_200_period = int(tune['ma_200'])
+    ema_16_period = cfg.ema_16_period
+    ma_50_period = cfg.ma_50_period
+    ma_100_period = cfg.ma_100_period
+    ma_200_period = cfg.ma_200_period
 
     ema_16 = _cached_indicator("ema", ema_16_period, lambda: indicator.get_EMA(ema_16_period))
     ma_50 = _cached_indicator("ma", ma_50_period, lambda: indicator.get_MA(ma_50_period))
