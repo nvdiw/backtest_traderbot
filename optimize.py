@@ -127,7 +127,7 @@ param_grid = {
 param_grid = {     
     # 'trade_amount_percent': [0.05, 0.1, 0.2, 0.3, 0.4],
     # 'max_open_trades': [i for i in range(2, 21)],
-    'symbol_change_pct': [i/100 for i in range(0, 31)],
+    # 'symbol_change_pct': [i/100 for i in range(0, 31)],
     # 'more_symbol_change_pct': [i/100 for i in range(0, 16)],
     # 'max_trade_change_pct': [i/100 for i in range(0, 41)],
     # 'static_dynamic_money_pct': [i/100 for i in range(0, 100)],
@@ -138,9 +138,9 @@ param_grid = {
  }
 
 # strategies setting only one of them should be True
-ma = False
+ma = True
 spot_limbian = False
-rsi = True
+rsi = False
 
 keys = list(param_grid.keys())
 combos = list(itertools.product(*(param_grid[k] for k in keys)))
