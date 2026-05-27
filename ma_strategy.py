@@ -798,6 +798,7 @@ def ma_strategy(tune: dict = None):
                     total_liquids,
                     p['trade_id'],
                     remaining_open_margin,
+                    tactical_balance,
                     balance_before_close_batch,
                     balance_before_close_batch_no_fee,
                     balance_before_close_batch_total
@@ -851,6 +852,7 @@ def ma_strategy(tune: dict = None):
                     total_liquids,
                     p['trade_id'],
                     remaining_open_margin,
+                    tactical_balance,
                     balance_before_close_batch,
                     balance_before_close_batch_no_fee,
                     balance_before_close_batch_total
@@ -979,7 +981,8 @@ def ma_strategy(tune: dict = None):
                         balance,
                         balance_without_fee,
                         trade_amount_percent,
-                        margin_balance)
+                        margin_balance,
+                        tactical_balance)
                     if updates is not None:
 
                         balance = updates['balance']
@@ -1058,7 +1061,8 @@ def ma_strategy(tune: dict = None):
                         balance,
                         balance_without_fee,
                         scale_entry_amount_percent,
-                        margin_balance)
+                        margin_balance,
+                        tactical_balance)
                     if updates is not None:
                         balance = updates['balance']
                         balance_without_fee = updates['balance_without_fee']
@@ -1249,6 +1253,7 @@ def ma_strategy(tune: dict = None):
                     trade_power,
                     p['trade_id'],
                     remaining_open_margin,
+                    tactical_balance,
                     balance_before_close_batch,
                     balance_before_close_batch_no_fee,
                     balance_before_close_batch_total)
@@ -1269,9 +1274,7 @@ def ma_strategy(tune: dict = None):
                 profit_percent_per_month = updates['profit_percent_per_month']
                 save_money = updates['save_money']
                 trade_power = updates['trade_power']
-                if updates.get('monthly_stop_reason') is not None:
-                    pending_monthly_stop_reason = updates.get('monthly_stop_reason')
-                    pending_monthly_stop_value = updates.get('monthly_stop_value')
+                # remove position
                 open_positions.remove(p)
                 
                 # close point on chart
@@ -1305,6 +1308,60 @@ def ma_strategy(tune: dict = None):
                 if consecutive_losses >= 2:
                     skip_trades_left = 2
                     consecutive_losses = 0
+
+                used_save_money_for_monthly_loss = False
+                monthly_stop_reason = None
+                monthly_stop_value = None
+                log_tactical_balance = tactical_balance
+
+                # stop trade if we got monthly target profit
+                # Apply monthly actions only after the last close in a batch.
+                if trade_power and remaining_open_margin <= 0 and monthly_profit_close_filter == True :
+                    if profit_percent_per_month >= monthly_profit_percent_stop_trade:
+                        monthly_stop_reason = "profit"
+                        monthly_stop_value = profit_percent_per_month
+                        tactical_balance = tactical_balance + (tactical_balance * monthly_compound / 100)
+                        monthly_surplus = balance - tactical_balance
+                        if monthly_surplus > 0:
+                            save_money += monthly_surplus
+                        balance = tactical_balance
+                        cooldown_until_index = i
+                        trade_power = False    # off
+
+                # stop trade if we got monthly max loss
+                if trade_power and remaining_open_margin <= 0 and monthly_loss_close_filter == True:
+                    if profit_percent_per_month <= -monthly_loss_percent_stop_trade:
+                        monthly_stop_reason = "loss"
+                        monthly_stop_value = profit_percent_per_month
+                        needed_to_tactical = tactical_balance - balance
+                        if needed_to_tactical > 0 and save_money >= needed_to_tactical:
+                            balance += needed_to_tactical
+                            save_money -= needed_to_tactical
+                            used_save_money_for_monthly_loss = True
+
+                    if profit_percent_per_month <= -monthly_loss_percent_stop_trade:
+                        cooldown_until_index = i
+                        trade_power = False    # off
+
+                if monthly_profit_close_filter == False and monthly_loss_close_filter == False:
+                    if balance >= tactical_balance * 1.08:
+                        tactical_balance = balance
+
+                # ---- save money ----
+                # Recovery trigger must use active portfolio capital (free balance + other open margins),
+                # not only free balance; otherwise multi-position mode withdraws too early.
+                if trade_power and (not used_save_money_for_monthly_loss):
+                    save_money_recover_amount_pct = 100 - save_money_recover_trigger_pct
+                    active_capital = balance + remaining_open_margin
+                    recover_trigger_capital = tactical_balance * save_money_recover_trigger_pct / 100
+                    recover_amount = tactical_balance * save_money_recover_amount_pct / 100
+                    if active_capital < recover_trigger_capital:
+                        if save_money >= recover_amount:
+                            balance += recover_amount
+                            save_money -= recover_amount
+
+                pending_monthly_stop_reason = monthly_stop_reason
+                pending_monthly_stop_value = monthly_stop_value
 
         # ===================== OPEN SHORT =====================
         # Require that EMA/MA50 have crossed and the last cross was bearish,
@@ -1401,7 +1458,8 @@ def ma_strategy(tune: dict = None):
                         balance,
                         balance_without_fee,
                         trade_amount_percent,
-                        margin_balance)
+                        margin_balance,
+                        tactical_balance)
                     if updates is not None:
                         
                         balance = updates['balance']
@@ -1480,7 +1538,8 @@ def ma_strategy(tune: dict = None):
                         balance,
                         balance_without_fee,
                         scale_entry_amount_percent,
-                        margin_balance)
+                        margin_balance,
+                        tactical_balance)
                     if updates is not None:
                         balance = updates['balance']
                         balance_without_fee = updates['balance_without_fee']
@@ -1670,6 +1729,7 @@ def ma_strategy(tune: dict = None):
                     trade_power,
                     p['trade_id'],
                     remaining_open_margin,
+                    tactical_balance,
                     balance_before_close_batch,
                     balance_before_close_batch_no_fee,
                     balance_before_close_batch_total
@@ -1691,9 +1751,7 @@ def ma_strategy(tune: dict = None):
                 profit_percent_per_month = updates['profit_percent_per_month']
                 save_money = updates['save_money']
                 trade_power = updates['trade_power']
-                if updates.get('monthly_stop_reason') is not None:
-                    pending_monthly_stop_reason = updates.get('monthly_stop_reason')
-                    pending_monthly_stop_value = updates.get('monthly_stop_value')
+                # remove position
                 open_positions.remove(p)
 
                 # close point on chart
@@ -1728,6 +1786,60 @@ def ma_strategy(tune: dict = None):
                     skip_trades_left = 2
                     consecutive_losses = 0
 
+                used_save_money_for_monthly_loss = False
+                monthly_stop_reason = None
+                monthly_stop_value = None
+                log_tactical_balance = tactical_balance
+
+                # stop trade if we got monthly target profit
+                # Apply monthly actions only after the last close in a batch.
+                if trade_power and remaining_open_margin <= 0 and monthly_profit_close_filter == True :
+                    if profit_percent_per_month >= monthly_profit_percent_stop_trade:
+                        monthly_stop_reason = "profit"
+                        monthly_stop_value = profit_percent_per_month
+                        tactical_balance = tactical_balance + (tactical_balance * monthly_compound / 100)
+                        monthly_surplus = balance - tactical_balance
+                        if monthly_surplus > 0:
+                            save_money += monthly_surplus
+                        balance = tactical_balance
+                        cooldown_until_index = i
+                        trade_power = False    # off
+
+                # stop trade if we got monthly max loss
+                if trade_power and remaining_open_margin <= 0 and monthly_loss_close_filter == True:
+                    if profit_percent_per_month <= -monthly_loss_percent_stop_trade:
+                        monthly_stop_reason = "loss"
+                        monthly_stop_value = profit_percent_per_month
+                        needed_to_tactical = tactical_balance - balance
+                        if needed_to_tactical > 0 and save_money >= needed_to_tactical:
+                            balance += needed_to_tactical
+                            save_money -= needed_to_tactical
+                            used_save_money_for_monthly_loss = True
+
+                    if profit_percent_per_month <= -monthly_loss_percent_stop_trade:
+                        cooldown_until_index = i
+                        trade_power = False    # off
+
+                if monthly_profit_close_filter == False and monthly_loss_close_filter == False:
+                    if balance >= tactical_balance * 1.08:
+                        tactical_balance = balance
+
+                # ---- save money ----
+                # Recovery trigger must use active portfolio capital (free balance + other open margins),
+                # not only free balance; otherwise multi-position mode withdraws too early.
+                if trade_power and (not used_save_money_for_monthly_loss):
+                    save_money_recover_amount_pct = 100 - save_money_recover_trigger_pct
+                    active_capital = balance + remaining_open_margin
+                    recover_trigger_capital = tactical_balance * save_money_recover_trigger_pct / 100
+                    recover_amount = tactical_balance * save_money_recover_amount_pct / 100
+                    if active_capital < recover_trigger_capital:
+                        if save_money >= recover_amount:
+                            balance += recover_amount
+                            save_money -= recover_amount
+
+                pending_monthly_stop_reason = monthly_stop_reason
+                pending_monthly_stop_value = monthly_stop_value
+                
     # ===================== BACKTEST SUMMARY =====================
 
     if open_positions:
@@ -1758,7 +1870,7 @@ def ma_strategy(tune: dict = None):
         print("Total Losses:", total_losses)
         print("Final Balance:", round(balance, 2), "$")
         print("Final Balance (No Fee):", round(balance_without_fee, 2), "$")
-        print("Final balance with close, open orders in last candle:", round(total_money_dynamic, 2), "$")
+        print("Final balance if close, open orders:", round(total_money_dynamic, 2), "$")
         print("Total Fees Paid:", round(deducting_fee_total, 2), "$")
         print("Fee Compounding Impact:",
               round(balance_without_fee - balance - deducting_fee_total, 2), "$")

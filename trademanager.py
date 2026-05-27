@@ -74,7 +74,7 @@ class TradeManager:
     # open long processes
     def open_long(self, i, open_prices, open_times,
                     balance, balance_without_fee,
-                    trade_amount_percent, margin_balance):
+                    trade_amount_percent, margin_balance, tactical_balance):
 
         entry_price = open_prices[i]
 
@@ -82,8 +82,8 @@ class TradeManager:
         free_balance_before_open_no_fee = balance_without_fee
 
         # ---------- Margin ----------
-        if balance >= trade_amount_percent * self.tactical_balance:
-            margin = trade_amount_percent * self.tactical_balance
+        if balance >= trade_amount_percent * tactical_balance:
+            margin = trade_amount_percent * tactical_balance
         else:
             margin = balance
         margin = max(0.0, min(margin, balance))
@@ -91,8 +91,8 @@ class TradeManager:
             return None
 
         # ---------- Margin No Fee ----------
-        if balance_without_fee >= trade_amount_percent * self.tactical_balance:
-            margin_no_fee = trade_amount_percent * self.tactical_balance
+        if balance_without_fee >= trade_amount_percent * tactical_balance:
+            margin_no_fee = trade_amount_percent * tactical_balance
         else:
             margin_no_fee = balance_without_fee
         margin_no_fee = max(0.0, min(margin_no_fee, balance_without_fee))
@@ -102,11 +102,11 @@ class TradeManager:
         # Use total active capital (free + locked margin) for leverage safety tiers.
         leverage_ref_balance = margin_balance if margin_balance is not None else balance
         leverage_ref_balance = max(0.0, leverage_ref_balance)
-        if leverage_ref_balance <= self.tactical_balance * self.safe_leverage_balance_pct_low / 100:
+        if leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_low / 100:
             leverage = self.safe_leverage_low
-        elif leverage_ref_balance <= self.tactical_balance * self.safe_leverage_balance_pct_med / 100:
+        elif leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_med / 100:
             leverage = self.safe_leverage_med
-        elif leverage_ref_balance <= self.tactical_balance * self.safe_leverage_balance_pct_high / 100:
+        elif leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_high / 100:
             leverage =  self.safe_leverage_high
         else:
             leverage = self.leverage    # = 10
@@ -157,6 +157,7 @@ class TradeManager:
                 total_long, cooldown_after_big_pnl, leverage,
                 cooldown_until_index, open_time_value, csv_logger, trade_amount_percent, 
                 profit_percent_per_month, save_money, trade_power, trade_id, remaining_open_margin,
+                tactical_balance,
                 balance_before_close_snapshot=None, balance_before_close_no_fee_snapshot=None,
                 balance_before_log_override=None):
 
@@ -188,7 +189,7 @@ class TradeManager:
         capital_before_trade = free_balance_before_close + margin
         profit_percent = self._safe_percent(profit, capital_before_trade)
         total_assets = balance + remaining_open_margin + save_money
-        profit_percent_per_month = (((total_assets - save_money) * 100) / self.tactical_balance) - 100
+        profit_percent_per_month = (((total_assets - save_money) * 100) / tactical_balance) - 100
         pnl_percent = self._safe_percent(pnl, margin)
 
         deducting_fee_total += total_fee
@@ -241,62 +242,6 @@ class TradeManager:
             print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
             print("-" * 90)
 
-        used_save_money_for_monthly_loss = False
-        monthly_stop_reason = None
-        monthly_stop_value = None
-        log_tactical_balance = self.tactical_balance
-
-        # stop trade if we got monthly target profit
-        # Apply monthly actions only after the last close in a batch.
-        if trade_power and remaining_open_margin <= 0 and self.monthly_profit_close_filter == True :
-            if profit_percent_per_month >= self.monthly_profit_percent_stop_trade:
-                monthly_stop_reason = "profit"
-                monthly_stop_value = profit_percent_per_month
-                self.tactical_balance = self.tactical_balance + (self.tactical_balance * self.monthly_compound / 100)
-                monthly_surplus = balance - self.tactical_balance
-                if monthly_surplus > 0:
-                    save_money += monthly_surplus
-                balance = self.tactical_balance
-                cooldown_until_index = i
-                trade_power = False    # off
-
-        # stop trade if we got monthly max loss
-        if trade_power and remaining_open_margin <= 0 and self.monthly_loss_close_filter == True:
-            if profit_percent_per_month <= -self.monthly_loss_percent_stop_trade:
-                monthly_stop_reason = "loss"
-                monthly_stop_value = profit_percent_per_month
-                needed_to_tactical = self.tactical_balance - balance
-                if needed_to_tactical > 0 and save_money >= needed_to_tactical:
-                    balance += needed_to_tactical
-                    save_money -= needed_to_tactical
-                    used_save_money_for_monthly_loss = True
-
-            if profit_percent_per_month <= -self.monthly_loss_percent_stop_trade:
-                cooldown_until_index = i
-                trade_power = False    # off
-
-            #     self.just_one_time = True
-            # if you want to make cooldown for a time
-            # elif profit_percent_per_month < -10:
-            #     if self.just_one_time == True:
-            #         cooldown_until_index = i + 4 * 24 * 10
-            #         self.just_one_time = False
-        if self.monthly_profit_close_filter == False and self.monthly_loss_close_filter == False:
-            if balance >= self.tactical_balance * 1.08:
-                self.tactical_balance = balance
-
-        # ---- save money ----
-        # Recovery trigger must use active portfolio capital (free balance + other open margins),
-        # not only free balance; otherwise multi-position mode withdraws too early.
-        if trade_power and (not used_save_money_for_monthly_loss):
-            save_money_recover_amount_pct = 100 - self.save_money_recover_trigger_pct
-            active_capital = balance + remaining_open_margin
-            recover_trigger_capital = self.tactical_balance * self.save_money_recover_trigger_pct / 100
-            recover_amount = self.tactical_balance * save_money_recover_amount_pct / 100
-            if active_capital < recover_trigger_capital:
-                if save_money >= recover_amount:
-                    balance += recover_amount
-                    save_money -= recover_amount
 
         logged_balance_before, logged_balance_after = self._resolve_csv_balances(
             free_balance_before_close,
@@ -306,7 +251,7 @@ class TradeManager:
         )
         has_other_open_positions_at_close = remaining_open_margin > 0
         log_total_assets = balance + remaining_open_margin + save_money
-        log_profit_percent_per_month = (((log_total_assets - save_money) * 100) / log_tactical_balance) - 100
+        log_profit_percent_per_month = (((log_total_assets - save_money) * 100) / tactical_balance) - 100
         csv_logger.log_trade(
             trade_id,
             "LONG",
@@ -314,7 +259,7 @@ class TradeManager:
             close_time_value,
             entry_price,
             close_price,
-            round(log_tactical_balance, 2),
+            round(tactical_balance, 2),
             round(log_total_assets, 2),
             round(logged_balance_before, 2),
             round(logged_balance_after, 2),
@@ -363,8 +308,6 @@ class TradeManager:
             'trade_power': trade_power,
             'profit_percent_per_month': profit_percent_per_month,
             'save_money' : save_money,
-            'monthly_stop_reason': monthly_stop_reason,
-            'monthly_stop_value': monthly_stop_value,
             'logged_balance_before': logged_balance_before,
             'logged_balance_after': logged_balance_after,
             'days': days,
@@ -376,7 +319,7 @@ class TradeManager:
     # open short processes
     def open_short(self, i, open_prices, open_times,
                     balance, balance_without_fee,
-                    trade_amount_percent, margin_balance):
+                    trade_amount_percent, margin_balance, tactical_balance):
 
         entry_price = open_prices[i]
 
@@ -384,8 +327,8 @@ class TradeManager:
         free_balance_before_open_no_fee = balance_without_fee
 
         # ---------- Margin ----------
-        if balance >= trade_amount_percent * self.tactical_balance:
-            margin = trade_amount_percent * self.tactical_balance
+        if balance >= trade_amount_percent * tactical_balance:
+            margin = trade_amount_percent * tactical_balance
         else:
             margin = balance
         margin = max(0.0, min(margin, balance))
@@ -393,8 +336,8 @@ class TradeManager:
             return None
 
         # ---------- Margin No Fee ----------
-        if balance_without_fee >= trade_amount_percent * self.tactical_balance:
-            margin_no_fee = trade_amount_percent * self.tactical_balance
+        if balance_without_fee >= trade_amount_percent * tactical_balance:
+            margin_no_fee = trade_amount_percent * tactical_balance
         else:
             margin_no_fee = balance_without_fee
         margin_no_fee = max(0.0, min(margin_no_fee, balance_without_fee))
@@ -404,11 +347,11 @@ class TradeManager:
         # Use total active capital (free + locked margin) for leverage safety tiers.
         leverage_ref_balance = margin_balance if margin_balance is not None else balance
         leverage_ref_balance = max(0.0, leverage_ref_balance)
-        if leverage_ref_balance <= self.tactical_balance * self.safe_leverage_balance_pct_low / 100:
+        if leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_low / 100:
             leverage = self.safe_leverage_low  # 2 low
-        elif leverage_ref_balance <= self.tactical_balance * self.safe_leverage_balance_pct_med / 100:
+        elif leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_med / 100:
             leverage = self.safe_leverage_med  # 3 med
-        elif leverage_ref_balance <= self.tactical_balance * self.safe_leverage_balance_pct_high / 100:
+        elif leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_high / 100:
             leverage = self.safe_leverage_high # 4 high
         else:
             leverage = self.leverage    # = 10
@@ -459,6 +402,7 @@ class TradeManager:
             total_short, cooldown_after_big_pnl, leverage,
             cooldown_until_index, open_time_value, csv_logger, trade_amount_percent, 
             profit_percent_per_month, save_money, trade_power, trade_id, remaining_open_margin,
+            tactical_balance,
             balance_before_close_snapshot=None, balance_before_close_no_fee_snapshot=None,
             balance_before_log_override=None):
 
@@ -490,7 +434,7 @@ class TradeManager:
         capital_before_trade = free_balance_before_close + margin
         profit_percent = self._safe_percent(profit, capital_before_trade)
         total_assets = balance + remaining_open_margin + save_money
-        profit_percent_per_month = (((total_assets - save_money) * 100) / self.tactical_balance) - 100
+        profit_percent_per_month = (((total_assets - save_money) * 100) / tactical_balance) - 100
         pnl_percent = self._safe_percent(pnl, margin)
 
         deducting_fee_total += total_fee
@@ -543,63 +487,6 @@ class TradeManager:
             print(f"Trade Duration: {days} days, {hours} hours, {minutes} minutes")
             print("-" * 90)
 
-        used_save_money_for_monthly_loss = False
-        monthly_stop_reason = None
-        monthly_stop_value = None
-        log_tactical_balance = self.tactical_balance
-
-        # stop trade if we got monthly target profit
-        # Apply monthly actions only after the last close in a batch.
-        if trade_power and remaining_open_margin <= 0 and self.monthly_profit_close_filter == True :
-            if profit_percent_per_month >= self.monthly_profit_percent_stop_trade:
-                monthly_stop_reason = "profit"
-                monthly_stop_value = profit_percent_per_month
-                self.tactical_balance = self.tactical_balance + (self.tactical_balance * self.monthly_compound / 100)
-                monthly_surplus = balance - self.tactical_balance
-                if monthly_surplus > 0:
-                    save_money += monthly_surplus
-                balance = self.tactical_balance
-                cooldown_until_index = i
-                trade_power = False    # off
-
-        # stop trade if we got monthly max loss
-        if trade_power and remaining_open_margin <= 0 and self.monthly_loss_close_filter == True:
-            if profit_percent_per_month <= -self.monthly_loss_percent_stop_trade:
-                monthly_stop_reason = "loss"
-                monthly_stop_value = profit_percent_per_month
-                needed_to_tactical = self.tactical_balance - balance
-                if needed_to_tactical > 0 and save_money >= needed_to_tactical:
-                    balance += needed_to_tactical
-                    save_money -= needed_to_tactical
-                    used_save_money_for_monthly_loss = True
-
-            if profit_percent_per_month <= -self.monthly_loss_percent_stop_trade:
-                cooldown_until_index = i
-                trade_power = False    # off
-
-            #     self.just_one_time = True
-            # if you want to make cooldown for a time
-            # elif profit_percent_per_month < -10:
-            #     if self.just_one_time == True:
-            #         cooldown_until_index = i + 4 * 24 * 10
-            #         self.just_one_time = False
-
-        if self.monthly_profit_close_filter == False and self.monthly_loss_close_filter == False:
-            if balance >= self.tactical_balance * 1.08:
-                self.tactical_balance = balance
-
-        # ---- save money ----
-        # Recovery trigger must use active portfolio capital (free balance + other open margins),
-        # not only free balance; otherwise multi-position mode withdraws too early.
-        if trade_power and (not used_save_money_for_monthly_loss):
-            save_money_recover_amount_pct = 100 - self.save_money_recover_trigger_pct
-            active_capital = balance + remaining_open_margin
-            recover_trigger_capital = self.tactical_balance * self.save_money_recover_trigger_pct / 100
-            recover_amount = self.tactical_balance * save_money_recover_amount_pct / 100
-            if active_capital < recover_trigger_capital:
-                if save_money >= recover_amount:
-                    balance += recover_amount
-                    save_money -= recover_amount
 
         logged_balance_before, logged_balance_after = self._resolve_csv_balances(
             free_balance_before_close,
@@ -609,7 +496,7 @@ class TradeManager:
         )
         has_other_open_positions_at_close = remaining_open_margin > 0
         log_total_assets = balance + remaining_open_margin + save_money
-        log_profit_percent_per_month = (((log_total_assets - save_money) * 100) / log_tactical_balance) - 100
+        log_profit_percent_per_month = (((log_total_assets - save_money) * 100) / tactical_balance) - 100
         csv_logger.log_trade(
             trade_id,
             "SHORT",
@@ -617,7 +504,7 @@ class TradeManager:
             close_time_value,
             entry_price,
             close_price,
-            round(log_tactical_balance, 2),
+            round(tactical_balance, 2),
             round(log_total_assets, 2),
             round(logged_balance_before, 2),
             round(logged_balance_after, 2),
@@ -667,8 +554,6 @@ class TradeManager:
             'trade_power': trade_power,
             'profit_percent_per_month': profit_percent_per_month,
             'save_money' : save_money,
-            'monthly_stop_reason': monthly_stop_reason,
-            'monthly_stop_value': monthly_stop_value,
             'logged_balance_before': logged_balance_before,
             'logged_balance_after': logged_balance_after,
             'days': days,
@@ -687,6 +572,7 @@ class TradeManager:
         save_money, max_drawdown, open_time_value,
         csv_logger, trade_amount_percent,
         total_liquids, trade_id, remaining_open_margin,
+        tactical_balance,
         balance_before_close_snapshot=None, balance_before_close_no_fee_snapshot=None,
         balance_before_log_override=None
     ):
@@ -736,7 +622,7 @@ class TradeManager:
         total_liquids += 1
 
         total_assets = balance + remaining_open_margin + save_money
-        profit_percent_per_month = (((total_assets - save_money) * 100) / self.tactical_balance) - 100
+        profit_percent_per_month = (((total_assets - save_money) * 100) / tactical_balance) - 100
         equity_curve.append(total_assets)
         peak = max(equity_curve)
         drawdown = (total_assets - peak) / peak * 100
@@ -763,7 +649,7 @@ class TradeManager:
             close_time_value,            # Close Time
             entry_price,                 # Entry Price
             close_price,                 # Close Price
-            round(self.tactical_balance, 2),
+            round(tactical_balance, 2),
             round(total_assets, 2),
             round(logged_balance_before, 2),  # Balance before close
             round(logged_balance_after, 2),            # Balance after trade
@@ -808,6 +694,7 @@ class TradeManager:
         save_money, max_drawdown, open_time_value,
         csv_logger, trade_amount_percent,
         total_liquids, trade_id, remaining_open_margin,
+        tactical_balance,
         balance_before_close_snapshot=None, balance_before_close_no_fee_snapshot=None,
         balance_before_log_override=None
     ):
@@ -857,7 +744,7 @@ class TradeManager:
         total_liquids += 1
 
         total_assets = balance + remaining_open_margin + save_money
-        profit_percent_per_month = (((total_assets - save_money) * 100) / self.tactical_balance) - 100
+        profit_percent_per_month = (((total_assets - save_money) * 100) / tactical_balance) - 100
         equity_curve.append(total_assets)
         peak = max(equity_curve)
         drawdown = (total_assets - peak) / peak * 100
@@ -884,7 +771,7 @@ class TradeManager:
             close_time_value,            # Close Time
             entry_price,                 # Entry Price
             close_price,                 # Close Price
-            round(self.tactical_balance, 2),
+            round(tactical_balance, 2),
             round(total_assets, 2),
             round(logged_balance_before, 2),  # Balance before close
             round(logged_balance_after, 2),            # Balance after trade
