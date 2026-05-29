@@ -167,6 +167,10 @@ def ma_strategy(tune: dict = None):
     exit_score_adx = cfg.exit_score_adx
     exit_score_opposite_candle = cfg.exit_score_opposite_candle
     post_cross_penalty_score = cfg.post_cross_penalty_score
+    scale_entry_long_rsi = cfg.scale_entry_long_rsi
+    scale_entry_short_rsi = cfg.scale_entry_short_rsi
+    scale_exit_long_rsi = cfg.scale_exit_long_rsi
+    scale_exit_short_rsi = cfg.scale_exit_short_rsi
 
     def build_score_reason_text(title, reasons, total_score, threshold):
         lines = [title]
@@ -692,6 +696,7 @@ def ma_strategy(tune: dict = None):
                             'leverage': updates['leverage'],
                             'open_time_value': updates['open_time_value'],
                             'target_close_price_loss': updates['entry_price'],
+                            'reason': "ma_strategy_entry",
                         }
                         open_positions.append(position)
                         
@@ -718,31 +723,7 @@ def ma_strategy(tune: dict = None):
             )
             if first_long_position is not None:
                 first_long_entry_price = first_long_position['entry_price']
-                long_scale_entry_profit_trigger_price = first_long_entry_price * (1 + scale_entry_profit_trigger_pct)
-                long_scale_entry_loss_trigger_price = first_long_entry_price * (1 - scale_entry_loss_trigger_pct)
-                long_scale_entry_reason = None
-                if scale_entry_on_profit_enabled and close_prices[i] >= long_scale_entry_profit_trigger_price:
-                    long_scale_entry_reason = "profit"
-                elif scale_entry_on_loss_enabled and close_prices[i] <= long_scale_entry_loss_trigger_price:
-                    long_scale_entry_reason = "loss"
-
-                long_loss_scale_entry_score = 0
-                if long_scale_entry_reason == "loss" and loss_scale_entry_filter_enabled:
-                    # loss-based scale entry is allowed only when trend and momentum still support LONG.
-                    if ema_16[i] > ma_50[i]:
-                        long_loss_scale_entry_score += 1
-                    if ma_100[i] >= ma_200[i]:
-                        long_loss_scale_entry_score += 1
-                    if i > 0 and close_prices[i] > open_prices[i] and close_prices[i] > close_prices[i - 1]:
-                        long_loss_scale_entry_score += 1
-                    if atr[i] is not None and atr_ma[i] is not None and atr_ma[i] > 0:
-                        long_scale_entry_atr_ratio = atr[i] / atr_ma[i]
-                        if long_scale_entry_atr_ratio >= loss_scale_entry_atr_ratio_min:
-                            long_loss_scale_entry_score += 1
-                    if long_loss_scale_entry_score < loss_scale_entry_min_score:
-                        long_scale_entry_reason = None
-
-                if long_scale_entry_reason is not None:
+                if rsi_list[i] <= scale_entry_long_rsi and first_long_entry_price >= close_prices[i]:
                     updates = trade_manager.open_long(
                         i,
                         close_prices,
@@ -752,6 +733,7 @@ def ma_strategy(tune: dict = None):
                         scale_entry_amount_percent,
                         margin_balance,
                         tactical_balance)
+                    
                     if updates is not None:
                         balance = updates['balance']
                         balance_without_fee = updates['balance_without_fee']
@@ -771,6 +753,7 @@ def ma_strategy(tune: dict = None):
                             'leverage': updates['leverage'],
                             'open_time_value': updates['open_time_value'],
                             'target_close_price_loss': updates['entry_price'],
+                            'reason': "rsi",
                         }
                         open_positions.append(position)
                         next_trade_id += 1
@@ -780,22 +763,9 @@ def ma_strategy(tune: dict = None):
                                 long_scale_entry_text = (
                                     f"LONG SCALE ENTRY\n"
                                     f"Order size: {scale_entry_amount_percent*100:.2f}%\n"
+                                    f"Rsi is Lower than: {scale_entry_long_rsi}"
                                 )
-                                if long_scale_entry_reason == "profit":
-                                    long_scale_entry_text += (
-                                        f"Price moved +{scale_entry_profit_trigger_pct*100:.2f}% from first LONG entry."
-                                    )
-                                else:
-                                    long_scale_entry_text += (
-                                        f"Price moved -{scale_entry_loss_trigger_pct*100:.2f}% from first LONG entry."
-                                    )
-                                    if loss_scale_entry_filter_enabled:
-                                        long_scale_entry_text += (
-                                            f"\nLoss filter score: {long_loss_scale_entry_score}/{loss_scale_entry_min_score}"
-                                        )
-                                long_open_reasons[i] = (
-                                    long_scale_entry_text
-                                )
+                                long_open_reasons[i] = (long_scale_entry_text)
                     updates = None
 
 
@@ -903,6 +873,79 @@ def ma_strategy(tune: dict = None):
                 )
                 close_all_longs = True
                 break
+            
+            if rsi_list[i] >= scale_exit_long_rsi:
+                rsi_long_positions_to_close = [p for p in open_positions[:] if p['side'] == "long" and p['reason'] ==  "rsi"]
+                for p in rsi_long_positions_to_close:
+                    remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
+                    close_price = close_prices[i]
+                    updates = trade_manager.close_long(
+                        i,
+                        close_prices,
+                        close_times,
+                        p['entry_price'],
+                        p['position_size'],
+                        p['position_size_no_fee'],
+                        fee_rate,
+                        p['margin'],
+                        p['margin_no_fee'],
+                        balance,
+                        balance_without_fee,
+                        deducting_fee_total,
+                        profits_lst,
+                        total_profit_percent,
+                        count_closed_orders,
+                        equity_curve,
+                        max_drawdown,
+                        total_wins,
+                        total_wins_long,
+                        total_losses,
+                        total_long,
+                        cooldown_after_big_pnl,
+                        p['leverage'],
+                        cooldown_until_index,
+                        p['open_time_value'],
+                        csv_logger,
+                        trade_amount_percent,
+                        profit_percent_per_month,
+                        save_money,
+                        trade_power,
+                        p['trade_id'],
+                        remaining_open_margin,
+                        tactical_balance,
+                        balance_before_close_batch,
+                        balance_before_close_batch_no_fee,
+                        balance_before_close_batch_total)
+
+                    balance = updates['balance']
+                    balance_without_fee = updates['balance_without_fee']
+                    deducting_fee_total = updates['deducting_fee_total']
+                    profits_lst = updates['profits_lst']
+                    total_profit_percent = updates['total_profit_percent']
+                    count_closed_orders = updates['count_closed_orders']
+                    equity_curve = updates['equity_curve']
+                    max_drawdown = updates['max_drawdown']
+                    total_wins = updates['total_wins']
+                    total_wins_long = updates['total_wins_long']
+                    total_losses = updates['total_losses']
+                    total_long = updates['total_long']
+                    cooldown_until_index = updates['cooldown_until_index']
+                    profit_percent_per_month = updates['profit_percent_per_month']
+                    save_money = updates['save_money']
+                    trade_power = updates['trade_power']
+                    # remove position
+                    open_positions.remove(p)
+                    
+                    # close point on chart
+                    if long_close_points is not None:
+                        long_close_points.append((i, close_price))
+                        # close reason text
+                        if long_close_reasons is not None:
+                            long_exit_reason_text = ""
+                            long_exit_reason_text += generate_close_reason_text(trade_id=p['trade_id'], updates=updates)
+                            long_close_reasons[i] = f"{long_exit_reason_text}\nclosed beacause: RSI is upper than: {scale_exit_long_rsi}"
+                    
+                    updates = None
 
         if close_all_longs:
             long_positions_to_close = [p for p in open_positions[:] if p['side'] == "long"]
@@ -1169,6 +1212,7 @@ def ma_strategy(tune: dict = None):
                             'leverage': updates['leverage'],
                             'open_time_value': updates['open_time_value'],
                             'target_close_price_loss': updates['entry_price'],
+                            'reason': "ma_strategy_entry",
                         }
                         open_positions.append(position)
                         
@@ -1193,33 +1237,10 @@ def ma_strategy(tune: dict = None):
                 key=lambda x: x['entry_index'],
                 default=None
             )
+
             if first_short_position is not None:
                 first_short_entry_price = first_short_position['entry_price']
-                short_scale_entry_profit_trigger_price = first_short_entry_price * (1 - scale_entry_profit_trigger_pct)
-                short_scale_entry_loss_trigger_price = first_short_entry_price * (1 + scale_entry_loss_trigger_pct)
-                short_scale_entry_reason = None
-                if scale_entry_on_profit_enabled and close_prices[i] <= short_scale_entry_profit_trigger_price:
-                    short_scale_entry_reason = "profit"
-                elif scale_entry_on_loss_enabled and close_prices[i] >= short_scale_entry_loss_trigger_price:
-                    short_scale_entry_reason = "loss"
-
-                short_loss_scale_entry_score = 0
-                if short_scale_entry_reason == "loss" and loss_scale_entry_filter_enabled:
-                    # loss-based scale entry is allowed only when trend and momentum still support SHORT.
-                    if ema_16[i] <= ma_50[i]:
-                        short_loss_scale_entry_score += 1
-                    if ma_100[i] < ma_200[i]:
-                        short_loss_scale_entry_score += 1
-                    if i > 0 and close_prices[i] < open_prices[i] and close_prices[i] < close_prices[i - 1]:
-                        short_loss_scale_entry_score += 1
-                    if atr[i] is not None and atr_ma[i] is not None and atr_ma[i] > 0:
-                        short_scale_entry_atr_ratio = atr[i] / atr_ma[i]
-                        if short_scale_entry_atr_ratio >= loss_scale_entry_atr_ratio_min:
-                            short_loss_scale_entry_score += 1
-                    if short_loss_scale_entry_score < loss_scale_entry_min_score:
-                        short_scale_entry_reason = None
-
-                if short_scale_entry_reason is not None:
+                if rsi_list[i] >= scale_entry_short_rsi and first_short_entry_price <= close_prices[i]:
                     updates = trade_manager.open_short(
                         i,
                         close_prices,
@@ -1229,6 +1250,7 @@ def ma_strategy(tune: dict = None):
                         scale_entry_amount_percent,
                         margin_balance,
                         tactical_balance)
+                    
                     if updates is not None:
                         balance = updates['balance']
                         balance_without_fee = updates['balance_without_fee']
@@ -1248,6 +1270,7 @@ def ma_strategy(tune: dict = None):
                             'leverage': updates['leverage'],
                             'open_time_value': updates['open_time_value'],
                             'target_close_price_loss': updates['entry_price'],
+                            'reason': "rsi",
                         }
                         open_positions.append(position)
                         next_trade_id += 1
@@ -1257,22 +1280,9 @@ def ma_strategy(tune: dict = None):
                                 short_scale_entry_text = (
                                     f"SHORT SCALE ENTRY\n"
                                     f"Order size: {scale_entry_amount_percent*100:.2f}%\n"
+                                    f"Rsi is upper than: {scale_entry_short_rsi}"
                                 )
-                                if short_scale_entry_reason == "profit":
-                                    short_scale_entry_text += (
-                                        f"Price moved -{scale_entry_profit_trigger_pct*100:.2f}% from first SHORT entry."
-                                    )
-                                else:
-                                    short_scale_entry_text += (
-                                        f"Price moved +{scale_entry_loss_trigger_pct*100:.2f}% from first SHORT entry."
-                                    )
-                                    if loss_scale_entry_filter_enabled:
-                                        short_scale_entry_text += (
-                                            f"\nLoss filter score: {short_loss_scale_entry_score}/{loss_scale_entry_min_score}"
-                                        )
-                                short_open_reasons[i] = (
-                                    short_scale_entry_text
-                                )
+                                short_open_reasons[i] = (short_scale_entry_text)
                     updates = None
 
 
@@ -1379,6 +1389,81 @@ def ma_strategy(tune: dict = None):
                 )
                 close_all_shorts = True
                 break
+
+            if rsi_list[i] <= scale_exit_short_rsi:
+                rsi_short_positions_to_close = [p for p in open_positions[:] if p['side'] == "short" and p['reason'] ==  "rsi"]
+                for p in rsi_short_positions_to_close:
+                    remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
+                    close_price = close_prices[i]
+                    updates = trade_manager.close_short(
+                        i,
+                        close_prices,
+                        close_times,
+                        p['entry_price'],
+                        p['position_size'],
+                        p['position_size_no_fee'],
+                        fee_rate,
+                        p['margin'],
+                        p['margin_no_fee'],
+                        balance,
+                        balance_without_fee,
+                        deducting_fee_total,
+                        profits_lst,
+                        total_profit_percent,
+                        count_closed_orders,
+                        equity_curve,
+                        max_drawdown,
+                        total_wins,
+                        total_wins_short,
+                        total_losses,
+                        total_short,
+                        cooldown_after_big_pnl,
+                        p['leverage'],
+                        cooldown_until_index,
+                        p['open_time_value'],
+                        csv_logger,
+                        trade_amount_percent,
+                        profit_percent_per_month,
+                        save_money,
+                        trade_power,
+                        p['trade_id'],
+                        remaining_open_margin,
+                        tactical_balance,
+                        balance_before_close_batch,
+                        balance_before_close_batch_no_fee,
+                        balance_before_close_batch_total
+                        )
+
+                    balance = updates['balance']
+                    balance_without_fee = updates['balance_without_fee']
+                    deducting_fee_total = updates['deducting_fee_total']
+                    profits_lst = updates['profits_lst']
+                    total_profit_percent = updates['total_profit_percent']
+                    count_closed_orders = updates['count_closed_orders']
+                    equity_curve = updates['equity_curve']
+                    max_drawdown = updates['max_drawdown']
+                    total_wins = updates['total_wins']
+                    total_wins_short = updates['total_wins_short']
+                    total_losses = updates['total_losses']
+                    total_short = updates['total_short']
+                    cooldown_until_index = updates['cooldown_until_index']
+                    profit_percent_per_month = updates['profit_percent_per_month']
+                    save_money = updates['save_money']
+                    trade_power = updates['trade_power']
+                    # remove position
+                    open_positions.remove(p)
+
+                    # close point on chart
+                    if short_close_points is not None:
+                        short_close_points.append((i, close_price))
+                        # close reason text
+                        if short_close_reasons is not None:
+                            short_exit_reason_text = ""
+                            short_exit_reason_text += generate_close_reason_text(trade_id=p['trade_id'], updates=updates)
+                            short_close_reasons[i] = f"{short_exit_reason_text}\nclosed beacause: RSI is upper than: {scale_exit_short_rsi}"
+
+
+                    updates = None
 
         if close_all_shorts:
             short_positions_to_close = [p for p in open_positions[:] if p['side'] == "short"]

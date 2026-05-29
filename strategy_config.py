@@ -119,6 +119,10 @@ class ScaleEntryConfig:
     # Minimum ATR/ATR_MA ratio for loss-side scale-in entries.
     loss_scale_entry_atr_ratio_min: float = 1.0
 
+    scale_entry_long_rsi: int = 20
+    scale_entry_short_rsi: int = 70
+    scale_exit_long_rsi: int = 70 
+    scale_exit_short_rsi: int = 30
 
 @dataclass
 class TradeFilterConfig:
