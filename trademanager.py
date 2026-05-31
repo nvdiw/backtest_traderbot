@@ -74,7 +74,7 @@ class TradeManager:
     # open long processes
     def open_long(self, i, open_prices, open_times,
                     balance, balance_without_fee,
-                    trade_amount_percent, margin_balance, tactical_balance):
+                    trade_amount_percent, margin_balance, tactical_balance, leverage = None):
 
         entry_price = open_prices[i]
 
@@ -102,14 +102,17 @@ class TradeManager:
         # Use total active capital (free + locked margin) for leverage safety tiers.
         leverage_ref_balance = margin_balance if margin_balance is not None else balance
         leverage_ref_balance = max(0.0, leverage_ref_balance)
-        if leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_low / 100:
-            leverage = self.safe_leverage_low
-        elif leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_med / 100:
-            leverage = self.safe_leverage_med
-        elif leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_high / 100:
-            leverage =  self.safe_leverage_high
+        if leverage == None:
+            if leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_low / 100:
+                leverage = self.safe_leverage_low
+            elif leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_med / 100:
+                leverage = self.safe_leverage_med
+            elif leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_high / 100:
+                leverage =  self.safe_leverage_high
+            else:
+                leverage = self.leverage    # = 10
         else:
-            leverage = self.leverage    # = 10
+            leverage = leverage
 
         position_value = margin * leverage
         position_size = position_value / entry_price
@@ -135,6 +138,7 @@ class TradeManager:
             'balance_before_trade': free_balance_before_open,
             'balance_before_trade_no_fee': free_balance_before_open_no_fee,
             'margin': margin,
+            'trade_amount_percent': trade_amount_percent,
             'leverage': leverage,
             'position_value': position_value,
             'position_size': position_size,
@@ -319,7 +323,7 @@ class TradeManager:
     # open short processes
     def open_short(self, i, open_prices, open_times,
                     balance, balance_without_fee,
-                    trade_amount_percent, margin_balance, tactical_balance):
+                    trade_amount_percent, margin_balance, tactical_balance, leverage = None):
 
         entry_price = open_prices[i]
 
@@ -347,14 +351,17 @@ class TradeManager:
         # Use total active capital (free + locked margin) for leverage safety tiers.
         leverage_ref_balance = margin_balance if margin_balance is not None else balance
         leverage_ref_balance = max(0.0, leverage_ref_balance)
-        if leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_low / 100:
-            leverage = self.safe_leverage_low  # 2 low
-        elif leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_med / 100:
-            leverage = self.safe_leverage_med  # 3 med
-        elif leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_high / 100:
-            leverage = self.safe_leverage_high # 4 high
+        if leverage == None:
+            if leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_low / 100:
+                leverage = self.safe_leverage_low  # 2 low
+            elif leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_med / 100:
+                leverage = self.safe_leverage_med  # 3 med
+            elif leverage_ref_balance <= tactical_balance * self.safe_leverage_balance_pct_high / 100:
+                leverage = self.safe_leverage_high # 4 high
+            else:
+                leverage = self.leverage    # = 10
         else:
-            leverage = self.leverage    # = 10
+            leverage = leverage
 
         position_value = margin * leverage
         position_size = position_value / entry_price
@@ -380,6 +387,7 @@ class TradeManager:
             'balance_before_trade': free_balance_before_open,
             'balance_before_trade_no_fee': free_balance_before_open_no_fee,
             'margin': margin,
+            'trade_amount_percent': trade_amount_percent,
             'leverage': leverage,
             'position_value': position_value,
             'position_size': position_size,

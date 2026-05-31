@@ -16,8 +16,8 @@ from generate_reason_text import generate_entry_reason_text, generate_close_reas
 from strategy_config import build_ma_strategy_config
 
 
-# start = get_candle_index("2025-01-01")   ----> 244944
-# end = get_candle_index("2026-02-23")     ----> 285070
+# start = get_candle_index("2025-01-01")   ----> 244944 on CSV
+# end = get_candle_index("2026-04-30")     ----> 291406 on CSV
 
 # get (index or ID) of start, end of csv
 start, end = get_candle_index(("2023-01-01","2026-02-23"))
@@ -167,6 +167,19 @@ def ma_strategy(tune: dict = None):
     exit_score_adx = cfg.exit_score_adx
     exit_score_opposite_candle = cfg.exit_score_opposite_candle
     post_cross_penalty_score = cfg.post_cross_penalty_score
+    fee_rate = cfg.fee_rate
+    rsi_trade_monthly_filter_on = cfg.rsi_trade_monthly_filter_on
+    rsi_long_open_monthly_profit = cfg.rsi_long_open_monthly_profit
+    rsi_long_close_monthly_profit = cfg.rsi_long_close_monthly_profit
+    rsi_short_open_monthly_profit = cfg.rsi_short_open_monthly_profit
+    rsi_short_close_monthly_profit = cfg.rsi_short_close_monthly_profit
+    rsi_long_tp_pct = cfg.rsi_long_tp_pct
+    rsi_long_sl_pct = cfg.rsi_long_sl_pct
+    rsi_short_tp_pct = cfg.rsi_short_tp_pct
+    rsi_short_sl_pct = cfg.rsi_short_sl_pct
+    rsi_max_open_trades = cfg.rsi_max_open_trades
+    rsi_trade_amount_percent = cfg.rsi_trade_amount_percent
+    rsi_leverage = cfg.rsi_leverage
 
     def build_score_reason_text(title, reasons, total_score, threshold):
         lines = [title]
@@ -218,8 +231,6 @@ def ma_strategy(tune: dict = None):
     if multi_position_enabled and verbose:
         print(f"ℹ️ Multi-position mode enabled (max_open_trades={max_open_trades}).")
 
-    # ---- fee rate ----
-    fee_rate = 0.0005  # 0.05% per trade (entry or exit)
 
     total_wins = 0
     total_liquids = 0
@@ -420,46 +431,6 @@ def ma_strategy(tune: dict = None):
             elif len(open_positions) == 0:
                 continue
         
-        # monthly filter if profit/loss monthly stop toggles are active
-        if monthly_profit_close_filter or monthly_loss_close_filter:
-            if trade_power == False:
-                if int(start+i) in lst_month_starts:
-                    if pending_monthly_stop_reason == "profit":
-                        stop_val = pending_monthly_stop_value if pending_monthly_stop_value is not None else profit_percent_per_month
-                        lst_profit_percent_per_month.append(abs(stop_val))
-                        monthly_stop_reasons.append("profit")
-                    elif pending_monthly_stop_reason == "loss":
-                        stop_val = pending_monthly_stop_value if pending_monthly_stop_value is not None else profit_percent_per_month
-                        lst_profit_percent_per_month.append(-abs(stop_val))
-                        monthly_stop_reasons.append("loss")
-                    else:
-                        lst_profit_percent_per_month.append(profit_percent_per_month)
-                    profit_percent_per_month = 0
-                    pending_monthly_stop_reason = None
-                    pending_monthly_stop_value = 0.0
-                    trade_power = True 
-                elif len(open_positions) == 0:
-                    continue
-        
-        # cooldown after good profit
-        if i < cooldown_until_index and len(open_positions) == 0:
-            continue
-        
-        # Calculate MA Distance
-        ma_distance = abs(ema_16[i] - ma_50[i]) / ma_50[i]
-
-        # Calculate Distance New Candle Move and Last Candle Move
-        if i > 0:
-            last_candle_move = abs(close_prices[i] - open_prices[i]) / open_prices[i]
-        else:
-            last_candle_move = 0
-
-        # Calculate total balance (if we have order we have: margin + balance)
-        margin_balance = balance + sum(p['margin'] for p in open_positions)
-        balance_before_close_batch = balance
-        balance_before_close_batch_no_fee = balance_without_fee
-        balance_before_close_batch_total = balance_before_close_batch + sum(p['margin'] for p in open_positions)
-
         # ===================== CHECK LIQUIDATION =====================
         liquidated_any = False
         for p in open_positions[:]:
@@ -483,7 +454,7 @@ def ma_strategy(tune: dict = None):
                     max_drawdown,
                     p['open_time_value'],
                     csv_logger,
-                    trade_amount_percent,
+                    p['trade_amount_percent'],
                     total_liquids,
                     p['trade_id'],
                     remaining_open_margin,
@@ -537,7 +508,7 @@ def ma_strategy(tune: dict = None):
                     max_drawdown,
                     p['open_time_value'],
                     csv_logger,
-                    trade_amount_percent,
+                    p['trade_amount_percent'],
                     total_liquids,
                     p['trade_id'],
                     remaining_open_margin,
@@ -573,6 +544,306 @@ def ma_strategy(tune: dict = None):
                             short_close_reasons[i] = liq_reason_text
         if liquidated_any:
             continue
+
+
+        # monthly filter if profit/loss monthly stop toggles are active
+        if monthly_profit_close_filter or monthly_loss_close_filter:
+            if trade_power == False:
+                if int(start+i) in lst_month_starts:
+                    if pending_monthly_stop_reason == "profit":
+                        stop_val = pending_monthly_stop_value if pending_monthly_stop_value is not None else profit_percent_per_month
+                        lst_profit_percent_per_month.append(abs(stop_val))
+                        monthly_stop_reasons.append("profit")
+                    elif pending_monthly_stop_reason == "loss":
+                        stop_val = pending_monthly_stop_value if pending_monthly_stop_value is not None else profit_percent_per_month
+                        lst_profit_percent_per_month.append(-abs(stop_val))
+                        monthly_stop_reasons.append("loss")
+                    else:
+                        lst_profit_percent_per_month.append(profit_percent_per_month)
+                    profit_percent_per_month = 0
+                    pending_monthly_stop_reason = None
+                    pending_monthly_stop_value = 0.0
+                    trade_power = True 
+
+                if rsi_trade_monthly_filter_on:
+                    # safety open long when monthly filter is on
+                    if rsi_list[i] <= rsi_long_open_monthly_profit and len(open_positions) < rsi_max_open_trades:
+                        # ---- open long ----
+                        updates = trade_manager.open_long(
+                            i,
+                            close_prices,
+                            close_times,
+                            balance,
+                            balance_without_fee,
+                            rsi_trade_amount_percent,
+                            margin_balance,
+                            tactical_balance,
+                            leverage = rsi_leverage,)
+                        if updates is not None:
+
+                            balance = updates['balance']
+                            balance_without_fee = updates['balance_without_fee']
+                            position = {
+                                'trade_id': next_trade_id,
+                                'side': "long",
+                                'entry_price': updates['entry_price'],
+                                'entry_index': i,
+                                'highest_since_entry': max(updates['entry_price'], high_prices[i]),
+                                'lowest_since_entry': min(updates['entry_price'], low_prices[i]),
+                                'position_size': updates['position_size'],
+                                'position_size_no_fee': updates['position_size_no_fee'],
+                                'balance_before_trade': updates['balance_before_trade'],
+                                'balance_before_trade_no_fee': updates['balance_before_trade_no_fee'],
+                                'margin': updates['margin'],
+                                'margin_no_fee': updates['margin_no_fee'],
+                                'trade_amount_percent': updates['trade_amount_percent'],
+                                'leverage': updates['leverage'],
+                                'open_time_value': updates['open_time_value'],
+                                'target_close_price_loss': updates['entry_price'],
+                                'reason': 'rsi_monthly_filter_strategy'
+                            }
+                            open_positions.append(position)
+                            
+                            # open point on chart
+                            if long_open_points is not None:
+                                long_open_points.append((i, position['entry_price']))
+                                # open reason text
+                                if long_open_reasons is not None:
+                                    # default texts
+                                    entry_reason_text = f"opened long when monthly filter is on and rsi is lower than: {rsi_long_open_monthly_profit}\n"
+                                    entry_reason_text += generate_entry_reason_text(trade_id=next_trade_id, updates=updates)
+                                    long_open_reasons[i] = entry_reason_text
+                            
+                            next_trade_id += 1
+                            # record which cross enabled this trade and init trailing state
+                            last_trade_cross_index = last_cross_index
+                            updates = None
+
+                    # ---- close long when monthly filter is on
+                    long_positions_to_close = [p for p in open_positions[:] if p['side'] == "long" and p['reason'] == 'rsi_monthly_filter_strategy']
+                    for p in long_positions_to_close:
+                        if rsi_list[i] >= rsi_long_close_monthly_profit or close_prices[i] >= p['entry_price'] * (1 + rsi_long_tp_pct) or close_prices[i] <= p['entry_price'] * (1 - rsi_long_sl_pct):
+                            remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
+                            close_price = close_prices[i]
+                            # ---- close long ----
+                            updates = trade_manager.close_long(
+                                i,
+                                close_prices,
+                                close_times,
+                                p['entry_price'],
+                                p['position_size'],
+                                p['position_size_no_fee'],
+                                fee_rate,
+                                p['margin'],
+                                p['margin_no_fee'],
+                                balance,
+                                balance_without_fee,
+                                deducting_fee_total,
+                                profits_lst,
+                                total_profit_percent,
+                                count_closed_orders,
+                                equity_curve,
+                                max_drawdown,
+                                total_wins,
+                                total_wins_long,
+                                total_losses,
+                                total_long,
+                                cooldown_after_big_pnl,
+                                p['leverage'],
+                                cooldown_until_index,
+                                p['open_time_value'],
+                                csv_logger,
+                                p['trade_amount_percent'],
+                                profit_percent_per_month,
+                                save_money,
+                                trade_power,
+                                p['trade_id'],
+                                remaining_open_margin,
+                                tactical_balance,
+                                balance_before_close_batch,
+                                balance_before_close_batch_no_fee,
+                                balance_before_close_batch_total)
+
+                            balance = updates['balance']
+                            balance_without_fee = updates['balance_without_fee']
+                            deducting_fee_total = updates['deducting_fee_total']
+                            profits_lst = updates['profits_lst']
+                            total_profit_percent = updates['total_profit_percent']
+                            count_closed_orders = updates['count_closed_orders']
+                            equity_curve = updates['equity_curve']
+                            max_drawdown = updates['max_drawdown']
+                            total_wins = updates['total_wins']
+                            total_wins_long = updates['total_wins_long']
+                            total_losses = updates['total_losses']
+                            total_long = updates['total_long']
+                            cooldown_until_index = updates['cooldown_until_index']
+                            profit_percent_per_month = updates['profit_percent_per_month']
+                            save_money = updates['save_money']
+                            trade_power = updates['trade_power']
+                            # remove position
+                            open_positions.remove(p)
+                            
+                            # close point on chart
+                            if long_close_points is not None:
+                                long_close_points.append((i, close_price))
+                                # close reason text
+                                if long_close_reasons is not None:
+                                    long_exit_reason_text = f"closed long when monthly filter is on and rsi is upper than: {rsi_long_close_monthly_profit}\n"
+                                    long_exit_reason_text += generate_close_reason_text(trade_id=p['trade_id'], updates=updates)
+                                    long_close_reasons[i] = long_exit_reason_text
+                            updates = None
+
+                    # safety open short when monthly filter is on
+                    if rsi_list[i] >= rsi_short_open_monthly_profit and len(open_positions) < rsi_max_open_trades:
+                        # ---- open short ----
+                        updates = trade_manager.open_short(
+                            i,
+                            close_prices,
+                            close_times,
+                            balance,
+                            balance_without_fee,
+                            rsi_trade_amount_percent,
+                            margin_balance,
+                            tactical_balance,
+                            leverage = rsi_leverage,)
+                        if updates is not None:
+                            
+                            balance = updates['balance']
+                            balance_without_fee = updates['balance_without_fee']
+                            position = {
+                                'trade_id': next_trade_id,
+                                'side': "short",
+                                'entry_price': updates['entry_price'],
+                                'entry_index': i,
+                                'highest_since_entry': max(updates['entry_price'], high_prices[i]),
+                                'lowest_since_entry': min(updates['entry_price'], low_prices[i]),
+                                'position_size': updates['position_size'],
+                                'position_size_no_fee': updates['position_size_no_fee'],
+                                'balance_before_trade': updates['balance_before_trade'],
+                                'balance_before_trade_no_fee': updates['balance_before_trade_no_fee'],
+                                'margin': updates['margin'],
+                                'margin_no_fee': updates['margin_no_fee'],
+                                'trade_amount_percent': updates['trade_amount_percent'],
+                                'leverage': updates['leverage'],
+                                'open_time_value': updates['open_time_value'],
+                                'target_close_price_loss': updates['entry_price'],
+                                'reason': 'rsi_monthly_filter_strategy'
+                            }
+                            open_positions.append(position)
+                            
+                            # open point on chart
+                            if short_open_points is not None:
+                                short_open_points.append((i, position['entry_price']))
+                                # open reason text
+                                if short_open_reasons is not None:
+                                    # default texts
+                                    entry_reason_text = f"opened short when monthly filter is on and rsi is upper than: {rsi_short_open_monthly_profit}\n"
+                                    entry_reason_text += generate_entry_reason_text(trade_id=next_trade_id, updates=updates)
+                                    entry_reason_text += generate_entry_reason_text(trade_id=next_trade_id, updates=updates)
+                                    short_open_reasons[i] = entry_reason_text
+
+                            next_trade_id += 1
+                            # record which cross enabled this trade and init trailing state
+                            last_trade_cross_index = last_cross_index
+                            updates = None
+
+                    # ---- close short when monthly filter is on
+                    short_positions_to_close = [p for p in open_positions[:] if p['side'] == "short" and p['reason'] == 'rsi_monthly_filter_strategy']
+                    for p in short_positions_to_close:
+                        if rsi_list[i] <= rsi_short_close_monthly_profit or close_prices[i] <= p['entry_price'] * (1 - rsi_short_tp_pct) or close_prices[i] >= p['entry_price'] * (1 + rsi_short_sl_pct):
+                            remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
+                            close_price = close_prices[i]
+                            # ---- close short ----
+                            updates = trade_manager.close_short(
+                                i,
+                                close_prices,
+                                close_times,
+                                p['entry_price'],
+                                p['position_size'],
+                                p['position_size_no_fee'],
+                                fee_rate,
+                                p['margin'],
+                                p['margin_no_fee'],
+                                balance,
+                                balance_without_fee,
+                                deducting_fee_total,
+                                profits_lst,
+                                total_profit_percent,
+                                count_closed_orders,
+                                equity_curve,
+                                max_drawdown,
+                                total_wins,
+                                total_wins_short,
+                                total_losses,
+                                total_short,
+                                cooldown_after_big_pnl,
+                                p['leverage'],
+                                cooldown_until_index,
+                                p['open_time_value'],
+                                csv_logger,
+                                p['trade_amount_percent'],
+                                profit_percent_per_month,
+                                save_money,
+                                trade_power,
+                                p['trade_id'],
+                                remaining_open_margin,
+                                tactical_balance,
+                                balance_before_close_batch,
+                                balance_before_close_batch_no_fee,
+                                balance_before_close_batch_total
+                                )
+
+                            balance = updates['balance']
+                            balance_without_fee = updates['balance_without_fee']
+                            deducting_fee_total = updates['deducting_fee_total']
+                            profits_lst = updates['profits_lst']
+                            total_profit_percent = updates['total_profit_percent']
+                            count_closed_orders = updates['count_closed_orders']
+                            equity_curve = updates['equity_curve']
+                            max_drawdown = updates['max_drawdown']
+                            total_wins = updates['total_wins']
+                            total_wins_short = updates['total_wins_short']
+                            total_losses = updates['total_losses']
+                            total_short = updates['total_short']
+                            cooldown_until_index = updates['cooldown_until_index']
+                            profit_percent_per_month = updates['profit_percent_per_month']
+                            save_money = updates['save_money']
+                            trade_power = updates['trade_power']
+                            # remove position
+                            open_positions.remove(p)
+
+                            # close point on chart
+                            if short_close_points is not None:
+                                short_close_points.append((i, close_price))
+                                # close reason text
+                                if short_close_reasons is not None:
+                                    short_exit_reason_text = f"closed short when monthly filter is on and rsi is lower than: {rsi_short_close_monthly_profit}\n"
+                                    short_exit_reason_text += generate_close_reason_text(trade_id=p['trade_id'], updates=updates)
+                                    short_close_reasons[i] = short_exit_reason_text
+                            updates = None
+
+                if len([p for p in open_positions if p['reason'] != "rsi_monthly_filter_strategy"]) == 0:
+                    continue
+        
+        # cooldown after good profit
+        if i < cooldown_until_index and len(open_positions) == 0:
+            continue
+        
+        # Calculate MA Distance
+        ma_distance = abs(ema_16[i] - ma_50[i]) / ma_50[i]
+
+        # Calculate Distance New Candle Move and Last Candle Move
+        if i > 0:
+            last_candle_move = abs(close_prices[i] - open_prices[i]) / open_prices[i]
+        else:
+            last_candle_move = 0
+
+        # Calculate total balance (if we have order we have: margin + balance)
+        margin_balance = balance + sum(p['margin'] for p in open_positions)
+        balance_before_close_batch = balance
+        balance_before_close_batch_no_fee = balance_without_fee
+        balance_before_close_batch_total = balance_before_close_batch + sum(p['margin'] for p in open_positions)
+
 
 
         # ===================== OPEN LONG =====================
@@ -689,9 +960,11 @@ def ma_strategy(tune: dict = None):
                             'balance_before_trade_no_fee': updates['balance_before_trade_no_fee'],
                             'margin': updates['margin'],
                             'margin_no_fee': updates['margin_no_fee'],
+                            'trade_amount_percent': updates['trade_amount_percent'],
                             'leverage': updates['leverage'],
                             'open_time_value': updates['open_time_value'],
                             'target_close_price_loss': updates['entry_price'],
+                            'reason': 'ma_strategy'
                         }
                         open_positions.append(position)
                         
@@ -768,9 +1041,11 @@ def ma_strategy(tune: dict = None):
                             'balance_before_trade_no_fee': updates['balance_before_trade_no_fee'],
                             'margin': updates['margin'],
                             'margin_no_fee': updates['margin_no_fee'],
+                            'trade_amount_percent': updates['trade_amount_percent'],
                             'leverage': updates['leverage'],
                             'open_time_value': updates['open_time_value'],
                             'target_close_price_loss': updates['entry_price'],
+                            'reason': 'scale_ma_strategy'
                         }
                         open_positions.append(position)
                         next_trade_id += 1
@@ -936,7 +1211,7 @@ def ma_strategy(tune: dict = None):
                     cooldown_until_index,
                     p['open_time_value'],
                     csv_logger,
-                    trade_amount_percent,
+                    p['trade_amount_percent'],
                     profit_percent_per_month,
                     save_money,
                     trade_power,
@@ -1166,9 +1441,11 @@ def ma_strategy(tune: dict = None):
                             'balance_before_trade_no_fee': updates['balance_before_trade_no_fee'],
                             'margin': updates['margin'],
                             'margin_no_fee': updates['margin_no_fee'],
+                            'trade_amount_percent': updates['trade_amount_percent'],
                             'leverage': updates['leverage'],
                             'open_time_value': updates['open_time_value'],
                             'target_close_price_loss': updates['entry_price'],
+                            'reason': 'ma_strategy'
                         }
                         open_positions.append(position)
                         
@@ -1245,9 +1522,11 @@ def ma_strategy(tune: dict = None):
                             'balance_before_trade_no_fee': updates['balance_before_trade_no_fee'],
                             'margin': updates['margin'],
                             'margin_no_fee': updates['margin_no_fee'],
+                            'trade_amount_percent': updates['trade_amount_percent'],
                             'leverage': updates['leverage'],
                             'open_time_value': updates['open_time_value'],
                             'target_close_price_loss': updates['entry_price'],
+                            'reason': 'scale_ma_strategy'
                         }
                         open_positions.append(position)
                         next_trade_id += 1
@@ -1412,7 +1691,7 @@ def ma_strategy(tune: dict = None):
                     cooldown_until_index,
                     p['open_time_value'],
                     csv_logger,
-                    trade_amount_percent,
+                    p['trade_amount_percent'],
                     profit_percent_per_month,
                     save_money,
                     trade_power,

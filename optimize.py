@@ -125,16 +125,17 @@ param_grid = {
 }
 
 param_grid = {     
-    # 'trade_amount_percent': [0.05, 0.1, 0.2, 0.3, 0.4],
-    # 'max_open_trades': [i for i in range(2, 21)],
-    # 'symbol_change_pct': [i/100 for i in range(0, 31)],
-    # 'more_symbol_change_pct': [i/100 for i in range(0, 16)],
-    # 'max_trade_change_pct': [i/100 for i in range(0, 41)],
-    # 'static_dynamic_money_pct': [i/100 for i in range(0, 100)],
-    # 'period_rsi': [i for i in range(6, 21)],
-    # 'rsi_open_value': [i for i in range(20, 51)],
-    # 'rsi_symbol_change_pct': [i/100 for i in range(1, 11)],
-    # 'rsi_close_value': [i for i in range(70, 96)],
+    # 'rsi_long_open_monthly_profit': [i for i in range(10, 31)],
+    # 'rsi_long_close_monthly_profit': [i for i in range(40, 91)],
+    # 'rsi_short_open_monthly_profit': [i for i in range(70, 91)],
+    # 'rsi_short_close_monthly_profit': [i for i in range(10, 61)],
+    'rsi_long_tp_pct': [i/100 for i in range(1, 9)],
+    'rsi_long_sl_pct': [i/100 for i in range(1, 6)],
+    'rsi_short_tp_pct': [i/100 for i in range(1, 9)],
+    'rsi_short_sl_pct': [i/100 for i in range(1, 6)],
+    # 'rsi_max_open_trades': [1],
+    # 'rsi_trade_amount_percent': [i/10 for i in range(1, 5)],
+    # 'rsi_leverage': [i for i in range(1, 11)],
  }
 
 # strategies setting only one of them should be True

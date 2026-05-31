@@ -70,6 +70,8 @@ class CapitalConfig:
     scale_entry_loss_trigger_pct: float = 0.03
     # Reserved capital kept outside active balance.
     save_money: float = 0
+    # fee rate.
+    fee_rate = 0.0005
 
 
 @dataclass
@@ -299,6 +301,20 @@ class ScoreWeightConfig:
     # Exit score penalty after sharp post-cross moves.
     post_cross_penalty_score: int = 3
 
+@dataclass
+class PositionsMonthlyFilter:
+    rsi_trade_monthly_filter_on: bool = True
+    rsi_long_open_monthly_profit: int = 29
+    rsi_long_close_monthly_profit: int = 70
+    rsi_short_open_monthly_profit: int = 86
+    rsi_short_close_monthly_profit: int = 23
+    rsi_long_tp_pct: float = 0.01
+    rsi_long_sl_pct: float = 0.02
+    rsi_short_tp_pct: float = 0.03
+    rsi_short_sl_pct: float = 0.04
+    rsi_max_open_trades: int = 1
+    rsi_trade_amount_percent: float = 0.5
+    rsi_leverage: int = 3
 
 @dataclass
 class BaseStrategyConfig(
@@ -312,6 +328,7 @@ class BaseStrategyConfig(
     IndicatorPeriodConfig,
     ChartConfig,
     ScoreWeightConfig,
+    PositionsMonthlyFilter,
 ):
     """Shared settings used by MA and RSI strategies."""
 
