@@ -112,6 +112,10 @@ param_grid = {
     'ma_100': [100, 110, 120, 130, 140, 150],
     'ma_200': [180, 190, 200, 210, 220, 230],
     'max_open_trades': [i for i in range(1, 21)],
+    'scale_entry_long_rsi': [i for i in range(10, 51)],
+    'scale_entry_short_rsi': [i for i in range(50, 91)],
+    'scale_exit_long_rsi': [i for i in range(70, 91)],
+    'scale_exit_short_rsi': [i for i in range(10, 31)],
 
     # ==== spot_limbian_strategy variables ====
     'symbol_change_pct': [i/100 for i in range(-10, 11)],
