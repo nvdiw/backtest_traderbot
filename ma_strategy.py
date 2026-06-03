@@ -469,7 +469,7 @@ def ma_strategy(tune: dict = None):
                     tactical_balance,
                     balance_before_close_batch,
                     balance_before_close_batch_no_fee,
-                    balance_before_close_batch_total,
+                    p['balance_before_trade'],
                     remaining_open_equity=remaining_open_equity
                 )
                 if liq_updates['liquidated']:
@@ -525,7 +525,7 @@ def ma_strategy(tune: dict = None):
                     tactical_balance,
                     balance_before_close_batch,
                     balance_before_close_batch_no_fee,
-                    balance_before_close_batch_total,
+                    p['balance_before_trade'],
                     remaining_open_equity=remaining_open_equity
                 )
                 if liq_updates['liquidated']:
@@ -601,7 +601,7 @@ def ma_strategy(tune: dict = None):
                         tactical_balance,
                         balance_before_close_batch,
                         balance_before_close_batch_no_fee,
-                        balance_before_close_batch_total,
+                        p['balance_before_trade'],
                         remaining_open_equity=remaining_open_equity)
 
                     balance = updates['balance']
@@ -678,7 +678,7 @@ def ma_strategy(tune: dict = None):
                         tactical_balance,
                         balance_before_close_batch,
                         balance_before_close_batch_no_fee,
-                        balance_before_close_batch_total,
+                        p['balance_before_trade'],
                         remaining_open_equity=remaining_open_equity
                         )
 
@@ -742,7 +742,7 @@ def ma_strategy(tune: dict = None):
                             balance,
                             balance_without_fee,
                             rsi_trade_amount_percent,
-                            margin_balance,
+                            balance + sum(p['margin'] for p in open_positions),
                             tactical_balance,
                             leverage = rsi_leverage,)
                         if updates is not None:
@@ -796,7 +796,7 @@ def ma_strategy(tune: dict = None):
                             balance,
                             balance_without_fee,
                             rsi_trade_amount_percent,
-                            margin_balance,
+                            balance + sum(p['margin'] for p in open_positions),
                             tactical_balance,
                             leverage = rsi_leverage,)
                         if updates is not None:
@@ -960,7 +960,7 @@ def ma_strategy(tune: dict = None):
                         balance,
                         balance_without_fee,
                         trade_amount_percent,
-                        margin_balance,
+                        balance + sum(p['margin'] for p in open_positions),
                         tactical_balance)
                     if updates is not None:
 
@@ -1042,7 +1042,7 @@ def ma_strategy(tune: dict = None):
                         balance,
                         balance_without_fee,
                         scale_entry_amount_percent,
-                        margin_balance,
+                        balance + sum(p['margin'] for p in open_positions),
                         tactical_balance)
                     if updates is not None:
                         balance = updates['balance']
@@ -1240,7 +1240,7 @@ def ma_strategy(tune: dict = None):
                     tactical_balance,
                     balance_before_close_batch,
                     balance_before_close_batch_no_fee,
-                    balance_before_close_batch_total,
+                    p['balance_before_trade'],
                     remaining_open_equity=remaining_open_equity)
 
                 balance = updates['balance']
@@ -1443,7 +1443,7 @@ def ma_strategy(tune: dict = None):
                         balance,
                         balance_without_fee,
                         trade_amount_percent,
-                        margin_balance,
+                        balance + sum(p['margin'] for p in open_positions),
                         tactical_balance)
                     if updates is not None:
                         
@@ -1525,7 +1525,7 @@ def ma_strategy(tune: dict = None):
                         balance,
                         balance_without_fee,
                         scale_entry_amount_percent,
-                        margin_balance,
+                        balance + sum(p['margin'] for p in open_positions),
                         tactical_balance)
                     if updates is not None:
                         balance = updates['balance']
@@ -1722,7 +1722,7 @@ def ma_strategy(tune: dict = None):
                     tactical_balance,
                     balance_before_close_batch,
                     balance_before_close_batch_no_fee,
-                    balance_before_close_batch_total,
+                    p['balance_before_trade'],
                     remaining_open_equity=remaining_open_equity
                     )
 

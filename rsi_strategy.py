@@ -350,6 +350,16 @@ def rsi_strategy(tune: dict = None):
     def _count_open(side):
         return sum(1 for p in open_positions if p['side'] == side)
 
+    def _position_equity(position, price):
+        if position['side'] == "long":
+            pnl_pct = ((price - position['entry_price']) / position['entry_price']) * 100
+        else:
+            pnl_pct = ((position['entry_price'] - price) / position['entry_price']) * 100
+        return position['margin'] + position['margin'] * pnl_pct * position['leverage'] / 100
+
+    def _open_positions_equity(price, exclude_position=None):
+        return sum(_position_equity(p, price) for p in open_positions if p is not exclude_position)
+
     # ---- MAIN ----
     for i in range(len(close_prices)):
         # print(start+i)
@@ -359,18 +369,15 @@ def rsi_strategy(tune: dict = None):
         total_open_margin_static = sum(p['margin'] for p in open_positions)
 
         # margin dynamic
-        lst_open_margin_dynamic = []
-        for p in open_positions:
-            if p['side'] == "long":
-                profit_open_positions_pct = ((close_prices[i] - p['entry_price']) / p['entry_price']) * 100
-            if p['side'] == "short":
-                profit_open_positions_pct = ((p['entry_price'] - close_prices[i]) / p['entry_price']) * 100
-            profit_open_positions_pct_leverage = profit_open_positions_pct * p['leverage']
-            lst_open_margin_dynamic.append(p['margin'] + p['margin'] * profit_open_positions_pct_leverage / 100)
-        total_open_margin_dynamic = sum(lst_open_margin_dynamic)
+        total_open_margin_dynamic = _open_positions_equity(close_prices[i])
         
         total_money_static = balance + total_open_margin_static + save_money
         total_money_dynamic = balance + total_open_margin_dynamic + save_money
+        equity_curve, max_drawdown = trade_manager._update_drawdown(
+            equity_curve,
+            max_drawdown,
+            total_money_dynamic
+        )
         
         if chart_data is not None:
             chart_data.append([i, total_money_static, total_money_dynamic])
@@ -454,16 +461,15 @@ def rsi_strategy(tune: dict = None):
             last_candle_move = 0
 
         # Calculate total balance (if we have order we have: margin + balance)
-        margin_balance = balance + sum(p['margin'] for p in open_positions)
         balance_before_close_batch = balance
         balance_before_close_batch_no_fee = balance_without_fee
-        balance_before_close_batch_total = balance_before_close_batch + sum(p['margin'] for p in open_positions)
 
         # ===================== CHECK LIQUIDATION =====================
         liquidated_any = False
         for p in open_positions[:]:
             if p['side'] == "long":
                 remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
+                remaining_open_equity = _open_positions_equity(close_prices[i], p)
                 liq_updates = trade_manager.check_liquidation_long(
                     i,
                     low_prices,
@@ -486,9 +492,11 @@ def rsi_strategy(tune: dict = None):
                     total_liquids,
                     p['trade_id'],
                     remaining_open_margin,
+                    tactical_balance,
                     balance_before_close_batch,
                     balance_before_close_batch_no_fee,
-                    balance_before_close_batch_total
+                    p['balance_before_trade'],
+                    remaining_open_equity=remaining_open_equity
                 )
                 if liq_updates['liquidated']:
                     liq_reason_text = "LONG EXIT (Liquidation)\nForced close by liquidation rule."
@@ -517,6 +525,7 @@ def rsi_strategy(tune: dict = None):
                             long_close_reasons[i] = liq_reason_text
             elif p['side'] == "short":
                 remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
+                remaining_open_equity = _open_positions_equity(close_prices[i], p)
                 liq_updates = trade_manager.check_liquidation_short(
                     i,
                     high_prices,
@@ -539,9 +548,11 @@ def rsi_strategy(tune: dict = None):
                     total_liquids,
                     p['trade_id'],
                     remaining_open_margin,
+                    tactical_balance,
                     balance_before_close_batch,
                     balance_before_close_batch_no_fee,
-                    balance_before_close_batch_total
+                    p['balance_before_trade'],
+                    remaining_open_equity=remaining_open_equity
                 )
                 if liq_updates['liquidated']:
                     liq_reason_text = "SHORT EXIT (Liquidation)\nForced close by liquidation rule."
@@ -598,7 +609,7 @@ def rsi_strategy(tune: dict = None):
                 balance,
                 balance_without_fee,
                 trade_amount_percent,
-                margin_balance,
+                balance + sum(p['margin'] for p in open_positions),
                 tactical_balance)
 
             if updates is not None:
@@ -646,6 +657,8 @@ def rsi_strategy(tune: dict = None):
             close_reason1 = p['entry_price'] * (1 + more_symbol_change_pct) <= close_prices[i]
             close_reason2 = rsi_list[i] >= rsi_close_value and p['entry_price'] * (1 + rsi_symbol_change_pct) <= close_prices[i]
             if close_reason1 or close_reason2:
+                remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
+                remaining_open_equity = _open_positions_equity(close_prices[i], p)
                 updates = trade_manager.close_long(
                     i,
                     close_prices,
@@ -682,7 +695,8 @@ def rsi_strategy(tune: dict = None):
                     tactical_balance,
                     balance_before_close_batch,
                     balance_before_close_batch_no_fee,
-                    balance_before_close_batch_total)
+                    p['balance_before_trade'],
+                    remaining_open_equity=remaining_open_equity)
 
                 balance = updates['balance']
                 balance_without_fee = updates['balance_without_fee']

@@ -62,10 +62,16 @@ class TradeManager:
         return (value * 100 / base) if base != 0 else 0
 
     @staticmethod
-    def _resolve_csv_balances(balance_before_free, margin, profit, balance_before_override=None):
+    def _resolve_csv_balances(
+        balance_before_free,
+        margin,
+        profit,
+        balance_before_override=None,
+        remaining_open_margin=0,
+    ):
         # CSV balance_before/after are portfolio-level values for readability:
-        # before = total capital before close event, after = before + net profit.
-        balance_before = balance_before_free + margin
+        # before = free capital + current margin + other locked margins, excluding save_money.
+        balance_before = balance_before_free + margin + remaining_open_margin
         if balance_before_override is not None:
             balance_before = balance_before_override
         balance_after = balance_before + profit
@@ -99,6 +105,7 @@ class TradeManager:
 
         free_balance_before_open = balance
         free_balance_before_open_no_fee = balance_without_fee
+        portfolio_balance_before_open = margin_balance if margin_balance is not None else balance
 
         # ---------- Margin ----------
         if balance >= trade_amount_percent * tactical_balance:
@@ -154,7 +161,7 @@ class TradeManager:
             'entry_price': entry_price,
             'balance': balance,
             'balance_without_fee': balance_without_fee,
-            'balance_before_trade': free_balance_before_open,
+            'balance_before_trade': portfolio_balance_before_open,
             'balance_before_trade_no_fee': free_balance_before_open_no_fee,
             'margin': margin,
             'trade_amount_percent': trade_amount_percent,
@@ -248,7 +255,8 @@ class TradeManager:
             logged_balance_before, logged_balance_after = self._resolve_csv_balances(
                 free_balance_before_close,
                 margin,
-                profit
+                profit,
+                remaining_open_margin=remaining_open_margin
             )
             logged_balance_before_no_fee = free_balance_before_close_no_fee + margin_no_fee
             logged_balance_after_no_fee = free_balance_before_close_no_fee + margin_no_fee + pnl_no_fee
@@ -267,7 +275,8 @@ class TradeManager:
             free_balance_before_close,
             margin,
             profit,
-            balance_before_log_override
+            balance_before_override=balance_before_log_override,
+            remaining_open_margin=remaining_open_margin
         )
         has_other_open_positions_at_close = remaining_open_margin > 0
         log_total_assets = total_assets
@@ -345,6 +354,7 @@ class TradeManager:
 
         free_balance_before_open = balance
         free_balance_before_open_no_fee = balance_without_fee
+        portfolio_balance_before_open = margin_balance if margin_balance is not None else balance
 
         # ---------- Margin ----------
         if balance >= trade_amount_percent * tactical_balance:
@@ -400,7 +410,7 @@ class TradeManager:
             'entry_price': entry_price,
             'balance': balance,
             'balance_without_fee': balance_without_fee,
-            'balance_before_trade': free_balance_before_open,
+            'balance_before_trade': portfolio_balance_before_open,
             'balance_before_trade_no_fee': free_balance_before_open_no_fee,
             'margin': margin,
             'trade_amount_percent': trade_amount_percent,
@@ -494,7 +504,8 @@ class TradeManager:
             logged_balance_before, logged_balance_after = self._resolve_csv_balances(
                 free_balance_before_close,
                 margin,
-                profit
+                profit,
+                remaining_open_margin=remaining_open_margin
             )
             logged_balance_before_no_fee = free_balance_before_close_no_fee + margin_no_fee
             logged_balance_after_no_fee = free_balance_before_close_no_fee + margin_no_fee + pnl_no_fee
@@ -513,7 +524,8 @@ class TradeManager:
             free_balance_before_close,
             margin,
             profit,
-            balance_before_log_override
+            balance_before_override=balance_before_log_override,
+            remaining_open_margin=remaining_open_margin
         )
         has_other_open_positions_at_close = remaining_open_margin > 0
         log_total_assets = total_assets
@@ -657,7 +669,8 @@ class TradeManager:
             balance_before_close,
             margin,
             profit,
-            balance_before_log_override
+            balance_before_override=balance_before_log_override,
+            remaining_open_margin=remaining_open_margin
         )
         has_other_open_positions_at_close = remaining_open_margin > 0
         csv_logger.log_trade(
@@ -776,7 +789,8 @@ class TradeManager:
             balance_before_close,
             margin,
             profit,
-            balance_before_log_override
+            balance_before_override=balance_before_log_override,
+            remaining_open_margin=remaining_open_margin
         )
         has_other_open_positions_at_close = remaining_open_margin > 0
         csv_logger.log_trade(
