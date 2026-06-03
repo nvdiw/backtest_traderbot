@@ -117,6 +117,19 @@ param_grid = {
     'scale_exit_long_rsi': [i for i in range(70, 91)],
     'scale_exit_short_rsi': [i for i in range(10, 31)],
 
+    # ==== rsi on ma_strategy monthly filter ====
+    'rsi_long_open_monthly_profit': [i for i in range(10, 31)],
+    'rsi_long_close_monthly_profit': [i for i in range(40, 91)],
+    'rsi_short_open_monthly_profit': [i for i in range(70, 91)],
+    'rsi_short_close_monthly_profit': [i for i in range(10, 61)],
+    'rsi_long_tp_pct': [i/100 for i in range(1, 9)],
+    'rsi_long_sl_pct': [i/100 for i in range(1, 6)],
+    'rsi_short_tp_pct': [i/100 for i in range(1, 9)],
+    'rsi_short_sl_pct': [i/100 for i in range(1, 6)],
+    'rsi_max_open_trades': [1],
+    'rsi_trade_amount_percent': [i/10 for i in range(1, 5)],
+    'rsi_leverage': [i for i in range(1, 11)],
+
     # ==== spot_limbian_strategy variables ====
     'symbol_change_pct': [i/100 for i in range(-10, 11)],
     'more_symbol_change_pct': [i/100 for i in range(1, 11)],
@@ -126,20 +139,21 @@ param_grid = {
     'rsi_open_value': [20, 25, 30],
     'rsi_symbol_change_pct': [i/100 for i in range(1, 11)],
     'rsi_close_value': [i for i in range(70, 96)],
+
 }
 
 param_grid = {     
     # 'rsi_long_open_monthly_profit': [i for i in range(10, 31)],
-    # 'rsi_long_close_monthly_profit': [i for i in range(40, 91)],
+    # 'rsi_long_close_monthly_profit': [i for i in range(30, 81)],
     # 'rsi_short_open_monthly_profit': [i for i in range(70, 91)],
-    # 'rsi_short_close_monthly_profit': [i for i in range(10, 61)],
-    'rsi_long_tp_pct': [i/100 for i in range(1, 9)],
-    'rsi_long_sl_pct': [i/100 for i in range(1, 6)],
-    'rsi_short_tp_pct': [i/100 for i in range(1, 9)],
-    'rsi_short_sl_pct': [i/100 for i in range(1, 6)],
-    # 'rsi_max_open_trades': [1],
+    # 'rsi_short_close_monthly_profit': [i for i in range(20, 71)],
+    # 'rsi_long_tp_pct': [i/100 for i in range(1, 5)],
+    # 'rsi_long_sl_pct': [i/100 for i in range(1, 5)],
+    # 'rsi_short_tp_pct': [i/100 for i in range(1, 5)],
+    # 'rsi_short_sl_pct': [i/100 for i in range(1, 5)],
+    # 'rsi_max_open_trades': [1, 2, 3],
     # 'rsi_trade_amount_percent': [i/10 for i in range(1, 5)],
-    # 'rsi_leverage': [i for i in range(1, 11)],
+    'rsi_leverage': [i for i in range(1, 11)],
  }
 
 # strategies setting only one of them should be True

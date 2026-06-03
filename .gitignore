@@ -26,3 +26,4 @@ __pycache__/trade_csv_logger.cpython-313.pyc
 data_candle/btc_15m_data_2025.csv
 outputs/trades/data_orders.xlsx
 test5.py
+outputs/trades/~$data_orders.xlsx

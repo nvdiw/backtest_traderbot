@@ -54,6 +54,7 @@ class TradeManager:
         self.safe_leverage_balance_pct_high = safe_leverage_balance_pct_high
         self.save_money_recover_trigger_pct = save_money_recover_trigger_pct
         self.verbose = bool(verbose)
+        self.equity_peak = None
         # self.just_one_time = True
 
     @staticmethod
@@ -69,6 +70,24 @@ class TradeManager:
             balance_before = balance_before_override
         balance_after = balance_before + profit
         return balance_before, balance_after
+
+    @staticmethod
+    def _resolve_total_assets(balance, save_money, remaining_open_margin, remaining_open_equity=None):
+        open_position_value = remaining_open_margin if remaining_open_equity is None else remaining_open_equity
+        return balance + open_position_value + save_money
+
+    def _update_drawdown(self, equity_curve, max_drawdown, total_assets):
+        equity_curve.append(total_assets)
+        if self.equity_peak is None:
+            self.equity_peak = max(equity_curve) if equity_curve else total_assets
+        elif total_assets > self.equity_peak:
+            self.equity_peak = total_assets
+
+        peak = self.equity_peak
+        if peak <= 0:
+            return equity_curve, max_drawdown
+        drawdown = (total_assets - peak) / peak * 100
+        return equity_curve, min(max_drawdown, drawdown)
 
 
     # open long processes
@@ -163,7 +182,7 @@ class TradeManager:
                 profit_percent_per_month, save_money, trade_power, trade_id, remaining_open_margin,
                 tactical_balance,
                 balance_before_close_snapshot=None, balance_before_close_no_fee_snapshot=None,
-                balance_before_log_override=None):
+                balance_before_log_override=None, remaining_open_equity=None):
 
         close_price = open_prices[i]
         if balance_before_close_snapshot is None:
@@ -192,7 +211,7 @@ class TradeManager:
         profit = pnl - total_fee
         capital_before_trade = free_balance_before_close + margin
         profit_percent = self._safe_percent(profit, capital_before_trade)
-        total_assets = balance + remaining_open_margin + save_money
+        total_assets = self._resolve_total_assets(balance, save_money, remaining_open_margin, remaining_open_equity)
         profit_percent_per_month = (((total_assets - save_money) * 100) / tactical_balance) - 100
         pnl_percent = self._safe_percent(pnl, margin)
 
@@ -201,11 +220,8 @@ class TradeManager:
         total_profit_percent += profit_percent
         count_closed_orders += 1
 
-        equity_curve.append(total_assets)
         # ---- calculate max drawdown ----
-        peak = max(equity_curve)
-        drawdown = (balance + save_money + remaining_open_margin - peak) / peak * 100
-        max_drawdown = min(max_drawdown, drawdown)
+        equity_curve, max_drawdown = self._update_drawdown(equity_curve, max_drawdown, total_assets)
 
         # ---- count wins and losses ----
         if profit_percent > 0:
@@ -254,7 +270,7 @@ class TradeManager:
             balance_before_log_override
         )
         has_other_open_positions_at_close = remaining_open_margin > 0
-        log_total_assets = balance + remaining_open_margin + save_money
+        log_total_assets = total_assets
         log_profit_percent_per_month = (((log_total_assets - save_money) * 100) / tactical_balance) - 100
         csv_logger.log_trade(
             trade_id,
@@ -412,7 +428,7 @@ class TradeManager:
             profit_percent_per_month, save_money, trade_power, trade_id, remaining_open_margin,
             tactical_balance,
             balance_before_close_snapshot=None, balance_before_close_no_fee_snapshot=None,
-            balance_before_log_override=None):
+            balance_before_log_override=None, remaining_open_equity=None):
 
         close_price = open_prices[i]
         if balance_before_close_snapshot is None:
@@ -441,7 +457,7 @@ class TradeManager:
         profit = pnl - total_fee
         capital_before_trade = free_balance_before_close + margin
         profit_percent = self._safe_percent(profit, capital_before_trade)
-        total_assets = balance + remaining_open_margin + save_money
+        total_assets = self._resolve_total_assets(balance, save_money, remaining_open_margin, remaining_open_equity)
         profit_percent_per_month = (((total_assets - save_money) * 100) / tactical_balance) - 100
         pnl_percent = self._safe_percent(pnl, margin)
 
@@ -450,11 +466,8 @@ class TradeManager:
         total_profit_percent += profit_percent
         count_closed_orders += 1
 
-        equity_curve.append(total_assets)
         # ---- calculate max drawdown ----
-        peak = max(equity_curve)
-        drawdown = (balance + save_money + remaining_open_margin - peak) / peak * 100
-        max_drawdown = min(max_drawdown, drawdown)
+        equity_curve, max_drawdown = self._update_drawdown(equity_curve, max_drawdown, total_assets)
 
         # ---- count wins and losses ----
         if profit_percent > 0:
@@ -503,7 +516,7 @@ class TradeManager:
             balance_before_log_override
         )
         has_other_open_positions_at_close = remaining_open_margin > 0
-        log_total_assets = balance + remaining_open_margin + save_money
+        log_total_assets = total_assets
         log_profit_percent_per_month = (((log_total_assets - save_money) * 100) / tactical_balance) - 100
         csv_logger.log_trade(
             trade_id,
@@ -582,7 +595,7 @@ class TradeManager:
         total_liquids, trade_id, remaining_open_margin,
         tactical_balance,
         balance_before_close_snapshot=None, balance_before_close_no_fee_snapshot=None,
-        balance_before_log_override=None
+        balance_before_log_override=None, remaining_open_equity=None
     ):
 
         liquid_price_long = entry_price * (1 - 1 / leverage)
@@ -629,12 +642,9 @@ class TradeManager:
         total_long += 1
         total_liquids += 1
 
-        total_assets = balance + remaining_open_margin + save_money
+        total_assets = self._resolve_total_assets(balance, save_money, remaining_open_margin, remaining_open_equity)
         profit_percent_per_month = (((total_assets - save_money) * 100) / tactical_balance) - 100
-        equity_curve.append(total_assets)
-        peak = max(equity_curve)
-        drawdown = (total_assets - peak) / peak * 100
-        max_drawdown = min(max_drawdown, drawdown)
+        equity_curve, max_drawdown = self._update_drawdown(equity_curve, max_drawdown, total_assets)
 
         days, hours, minutes = trade_duration(open_time_value, close_time_value)
 
@@ -704,7 +714,7 @@ class TradeManager:
         total_liquids, trade_id, remaining_open_margin,
         tactical_balance,
         balance_before_close_snapshot=None, balance_before_close_no_fee_snapshot=None,
-        balance_before_log_override=None
+        balance_before_log_override=None, remaining_open_equity=None
     ):
 
         liquid_price_short = entry_price * (1 + 1 / leverage)
@@ -751,12 +761,9 @@ class TradeManager:
         total_short += 1
         total_liquids += 1
 
-        total_assets = balance + remaining_open_margin + save_money
+        total_assets = self._resolve_total_assets(balance, save_money, remaining_open_margin, remaining_open_equity)
         profit_percent_per_month = (((total_assets - save_money) * 100) / tactical_balance) - 100
-        equity_curve.append(total_assets)
-        peak = max(equity_curve)
-        drawdown = (total_assets - peak) / peak * 100
-        max_drawdown = min(max_drawdown, drawdown)
+        equity_curve, max_drawdown = self._update_drawdown(equity_curve, max_drawdown, total_assets)
 
         days, hours, minutes = trade_duration(open_time_value, close_time_value)
 
