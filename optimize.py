@@ -20,6 +20,7 @@ import os
 from ma_strategy import ma_strategy
 from spot_limbian_strategy import spot_limbian_strategy
 from rsi_strategy import rsi_strategy
+import json
 
 # Grid to search (kept reasonable to limit runtime)
 param_grid = {
@@ -116,6 +117,7 @@ param_grid = {
     'scale_entry_short_rsi': [i for i in range(50, 91)],
     'scale_exit_long_rsi': [i for i in range(70, 91)],
     'scale_exit_short_rsi': [i for i in range(10, 31)],
+    'monthly_compound': [i for i in range(0, 11)],
 
     # ==== rsi on ma_strategy monthly filter ====
     'rsi_long_open_monthly_profit': [i for i in range(10, 31)],
@@ -153,7 +155,8 @@ param_grid = {
     # 'rsi_short_sl_pct': [i/100 for i in range(1, 5)],
     # 'rsi_max_open_trades': [1, 2, 3],
     # 'rsi_trade_amount_percent': [i/10 for i in range(1, 5)],
-    'rsi_leverage': [i for i in range(1, 11)],
+    # 'rsi_leverage': [i for i in range(1, 11)],
+    'monthly_compound': [i for i in range(0, 11)],
  }
 
 # strategies setting only one of them should be True
@@ -297,7 +300,8 @@ def main(workers: int, chunksize: int, flush_every: int, log_every: int):
     _append_rows(out_file, rows_buffer)
 
     print('Total duration (s):', time.time() - start_time_all)
-    print('Best:', best)
+    print('Best:')
+    print(json.dumps(best, indent=4, ensure_ascii=False))
 
     # Save best to a small file
     best_file = os.path.join(out_dir, 'best_params.txt')
