@@ -99,13 +99,12 @@ class TradeManager:
     # open long processes
     def open_long(self, i, open_prices, open_times,
                     balance, balance_without_fee,
-                    trade_amount_percent, margin_balance, tactical_balance, leverage = None):
+                    trade_amount_percent, margin_balance, margin_balance_no_fee, tactical_balance, leverage = None):
 
         entry_price = open_prices[i]
 
-        free_balance_before_open = balance
-        free_balance_before_open_no_fee = balance_without_fee
         portfolio_balance_before_open = margin_balance if margin_balance is not None else balance
+        portfolio_balance_before_open_no_fee = margin_balance_no_fee if margin_balance_no_fee is not None else balance_without_fee
 
         # ---------- Margin ----------
         if balance >= trade_amount_percent * tactical_balance:
@@ -162,7 +161,7 @@ class TradeManager:
             'balance': balance,
             'balance_without_fee': balance_without_fee,
             'balance_before_trade': portfolio_balance_before_open,
-            'balance_before_trade_no_fee': free_balance_before_open_no_fee,
+            'balance_before_trade_no_fee': portfolio_balance_before_open_no_fee,
             'margin': margin,
             'trade_amount_percent': trade_amount_percent,
             'leverage': leverage,
@@ -187,9 +186,9 @@ class TradeManager:
                 total_long, cooldown_after_big_pnl, leverage,
                 cooldown_until_index, open_time_value, csv_logger, trade_amount_percent, 
                 profit_percent_per_month, save_money, trade_power, trade_id, remaining_open_margin,
-                tactical_balance,
+                remaining_open_margin_no_fee, tactical_balance,
                 balance_before_close_snapshot=None, balance_before_close_no_fee_snapshot=None,
-                balance_before_log_override=None, remaining_open_equity=None):
+                balance_before_log_override=None, balance_before_log_override_no_fee=None, remaining_open_equity=None):
 
         close_price = open_prices[i]
         if balance_before_close_snapshot is None:
@@ -256,10 +255,18 @@ class TradeManager:
                 free_balance_before_close,
                 margin,
                 profit,
+                balance_before_override=balance_before_log_override,
                 remaining_open_margin=remaining_open_margin
             )
-            logged_balance_before_no_fee = free_balance_before_close_no_fee + margin_no_fee
-            logged_balance_after_no_fee = free_balance_before_close_no_fee + margin_no_fee + pnl_no_fee
+
+            logged_balance_before_no_fee, logged_balance_after_no_fee = self._resolve_csv_balances(
+                free_balance_before_close_no_fee,
+                margin_no_fee,
+                pnl_no_fee,
+                balance_before_override=balance_before_log_override_no_fee,
+                remaining_open_margin=remaining_open_margin_no_fee
+            )
+
             print("Close LONG at price:", close_price, "$", "| Close Time:", close_time_value, "| leverage:", leverage)
             print("Balance:", round(logged_balance_before, 2), "$", "→", round(logged_balance_after, 2), "$", "| Save Money:", round(save_money, 2), "$")
             print("Balance (no fee):",
@@ -348,13 +355,12 @@ class TradeManager:
     # open short processes
     def open_short(self, i, open_prices, open_times,
                     balance, balance_without_fee,
-                    trade_amount_percent, margin_balance, tactical_balance, leverage = None):
+                    trade_amount_percent, margin_balance, margin_balance_no_fee, tactical_balance, leverage = None):
 
         entry_price = open_prices[i]
 
-        free_balance_before_open = balance
-        free_balance_before_open_no_fee = balance_without_fee
         portfolio_balance_before_open = margin_balance if margin_balance is not None else balance
+        portfolio_balance_before_open_no_fee = margin_balance_no_fee if margin_balance_no_fee is not None else balance_without_fee
 
         # ---------- Margin ----------
         if balance >= trade_amount_percent * tactical_balance:
@@ -411,7 +417,7 @@ class TradeManager:
             'balance': balance,
             'balance_without_fee': balance_without_fee,
             'balance_before_trade': portfolio_balance_before_open,
-            'balance_before_trade_no_fee': free_balance_before_open_no_fee,
+            'balance_before_trade_no_fee': portfolio_balance_before_open_no_fee,
             'margin': margin,
             'trade_amount_percent': trade_amount_percent,
             'leverage': leverage,
@@ -436,9 +442,9 @@ class TradeManager:
             total_short, cooldown_after_big_pnl, leverage,
             cooldown_until_index, open_time_value, csv_logger, trade_amount_percent, 
             profit_percent_per_month, save_money, trade_power, trade_id, remaining_open_margin,
-            tactical_balance,
+            remaining_open_margin_no_fee, tactical_balance,
             balance_before_close_snapshot=None, balance_before_close_no_fee_snapshot=None,
-            balance_before_log_override=None, remaining_open_equity=None):
+            balance_before_log_override=None, balance_before_log_override_no_fee=None, remaining_open_equity=None):
 
         close_price = open_prices[i]
         if balance_before_close_snapshot is None:
@@ -505,10 +511,18 @@ class TradeManager:
                 free_balance_before_close,
                 margin,
                 profit,
+                balance_before_override=balance_before_log_override,
                 remaining_open_margin=remaining_open_margin
             )
-            logged_balance_before_no_fee = free_balance_before_close_no_fee + margin_no_fee
-            logged_balance_after_no_fee = free_balance_before_close_no_fee + margin_no_fee + pnl_no_fee
+
+            logged_balance_before_no_fee, logged_balance_after_no_fee = self._resolve_csv_balances(
+                free_balance_before_close_no_fee,
+                margin_no_fee,
+                pnl_no_fee,
+                balance_before_override=balance_before_log_override_no_fee,
+                remaining_open_margin=remaining_open_margin_no_fee
+            )
+
             print("Close SHORT at price:", close_price, "$", "| Close Time:", close_time_value, "| leverage:", leverage)
             print("Balance:", round(logged_balance_before, 2), "$", "→", round(logged_balance_after, 2), "$", "| Save Money:", round(save_money, 2), "$")
             print("Balance (no fee):",
@@ -605,9 +619,9 @@ class TradeManager:
         save_money, max_drawdown, open_time_value,
         csv_logger, trade_amount_percent,
         total_liquids, trade_id, remaining_open_margin,
-        tactical_balance,
+        remaining_open_margin_no_fee, tactical_balance,
         balance_before_close_snapshot=None, balance_before_close_no_fee_snapshot=None,
-        balance_before_log_override=None, remaining_open_equity=None
+        balance_before_log_override=None, balance_before_log_override_no_fee=None, remaining_open_equity=None
     ):
 
         liquid_price_long = entry_price * (1 - 1 / leverage)
@@ -725,9 +739,9 @@ class TradeManager:
         save_money, max_drawdown, open_time_value,
         csv_logger, trade_amount_percent,
         total_liquids, trade_id, remaining_open_margin,
-        tactical_balance,
+        remaining_open_margin_no_fee, tactical_balance,
         balance_before_close_snapshot=None, balance_before_close_no_fee_snapshot=None,
-        balance_before_log_override=None, remaining_open_equity=None
+        balance_before_log_override=None, balance_before_log_override_no_fee=None, remaining_open_equity=None
     ):
 
         liquid_price_short = entry_price * (1 + 1 / leverage)
