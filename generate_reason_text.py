@@ -16,13 +16,16 @@ def generate_entry_reason_text(trade_id, updates):
         f"Entry Price: {entry_price} $",
         f"Time: {open_time_value}",
         f"Leverage: {leverage}x",
-        f"Margin: ${margin:,.2f}"
+        f"Margin: ${margin:,.2f}",
+        "====================================\n"
     ]
     
     # Add fee-free line if available
     if 'margin_no_fee' in updates:
         margin_no_fee = updates.get('margin_no_fee', 'N/A')
+        lines.pop(-1)
         lines.append(f"Margin (Without Fee): ${margin_no_fee:,.2f}")
+        lines.append("=============================\n")
     
     # Find the longest line length
     max_length = max(len(line) for line in lines)
@@ -71,7 +74,8 @@ def generate_close_reason_text(trade_id, updates):
         f"Margin: ${margin:,.0f}",
         f"Fee: ${total_fee:,.2f}",
         f"Profit: ${profit:,.2f} ({profit_percent:.2f}%)",
-        f"Duration: {days} days, {hours} hours, {minutes} minutes"
+        f"Duration: {days} days, {hours} hours, {minutes} minutes",
+        "============================\n"
     ]
     
     # Find the longest line length

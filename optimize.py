@@ -131,6 +131,7 @@ param_grid = {
     'rsi_max_open_trades': [1],
     'rsi_trade_amount_percent': [i/10 for i in range(1, 5)],
     'rsi_leverage': [i for i in range(1, 11)],
+    'momentum_window': [i for i in range(1, 11)],
 
     # ==== spot_limbian_strategy variables ====
     'symbol_change_pct': [i/100 for i in range(-10, 11)],
@@ -145,9 +146,9 @@ param_grid = {
 }
 
 param_grid = {     
-    # 'rsi_long_open_monthly_profit': [i for i in range(10, 31)],
+    'rsi_long_open_monthly_profit': [i for i in range(5, 16)],
     # 'rsi_long_close_monthly_profit': [i for i in range(30, 81)],
-    # 'rsi_short_open_monthly_profit': [i for i in range(70, 91)],
+    'rsi_short_open_monthly_profit': [i for i in range(85, 96)],
     # 'rsi_short_close_monthly_profit': [i for i in range(20, 71)],
     # 'rsi_long_tp_pct': [i/100 for i in range(1, 5)],
     # 'rsi_long_sl_pct': [i/100 for i in range(1, 5)],
@@ -156,7 +157,8 @@ param_grid = {
     # 'rsi_max_open_trades': [1, 2, 3],
     # 'rsi_trade_amount_percent': [i/10 for i in range(1, 5)],
     # 'rsi_leverage': [i for i in range(1, 11)],
-    'monthly_compound': [i for i in range(0, 11)],
+    # 'monthly_compound': [i for i in range(0, 11)],
+    'momentum_window': [i for i in range(1, 6)],
  }
 
 # strategies setting only one of them should be True

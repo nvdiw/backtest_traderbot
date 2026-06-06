@@ -215,8 +215,24 @@ class TradeManager:
 
         # per-position net result (stable under multi-position mode)
         profit = pnl - total_fee
-        capital_before_trade = free_balance_before_close + margin
-        profit_percent = self._safe_percent(profit, capital_before_trade)
+
+        logged_balance_before, logged_balance_after = self._resolve_csv_balances(
+            free_balance_before_close,
+            margin,
+            profit,
+            balance_before_override=balance_before_log_override,
+            remaining_open_margin=remaining_open_margin
+        )
+
+        logged_balance_before_no_fee, logged_balance_after_no_fee = self._resolve_csv_balances(
+            free_balance_before_close_no_fee,
+            margin_no_fee,
+            pnl_no_fee,
+            balance_before_override=balance_before_log_override_no_fee,
+            remaining_open_margin=remaining_open_margin_no_fee
+        )
+
+        profit_percent = self._safe_percent(profit, logged_balance_before)
         total_assets = self._resolve_total_assets(balance, save_money, remaining_open_margin, remaining_open_equity)
         profit_percent_per_month = (((total_assets - save_money) * 100) / tactical_balance) - 100
         pnl_percent = self._safe_percent(pnl, margin)
@@ -251,22 +267,6 @@ class TradeManager:
 
 
         if self.verbose:
-            logged_balance_before, logged_balance_after = self._resolve_csv_balances(
-                free_balance_before_close,
-                margin,
-                profit,
-                balance_before_override=balance_before_log_override,
-                remaining_open_margin=remaining_open_margin
-            )
-
-            logged_balance_before_no_fee, logged_balance_after_no_fee = self._resolve_csv_balances(
-                free_balance_before_close_no_fee,
-                margin_no_fee,
-                pnl_no_fee,
-                balance_before_override=balance_before_log_override_no_fee,
-                remaining_open_margin=remaining_open_margin_no_fee
-            )
-
             print("Close LONG at price:", close_price, "$", "| Close Time:", close_time_value, "| leverage:", leverage)
             print("Balance:", round(logged_balance_before, 2), "$", "→", round(logged_balance_after, 2), "$", "| Save Money:", round(save_money, 2), "$")
             print("Balance (no fee):",
@@ -471,8 +471,24 @@ class TradeManager:
 
         # per-position net result (stable under multi-position mode)
         profit = pnl - total_fee
-        capital_before_trade = free_balance_before_close + margin
-        profit_percent = self._safe_percent(profit, capital_before_trade)
+
+        logged_balance_before, logged_balance_after = self._resolve_csv_balances(
+            free_balance_before_close,
+            margin,
+            profit,
+            balance_before_override=balance_before_log_override,
+            remaining_open_margin=remaining_open_margin
+        )
+
+        logged_balance_before_no_fee, logged_balance_after_no_fee = self._resolve_csv_balances(
+            free_balance_before_close_no_fee,
+            margin_no_fee,
+            pnl_no_fee,
+            balance_before_override=balance_before_log_override_no_fee,
+            remaining_open_margin=remaining_open_margin_no_fee
+        )
+
+        profit_percent = self._safe_percent(profit, logged_balance_before)
         total_assets = self._resolve_total_assets(balance, save_money, remaining_open_margin, remaining_open_equity)
         profit_percent_per_month = (((total_assets - save_money) * 100) / tactical_balance) - 100
         pnl_percent = self._safe_percent(pnl, margin)
@@ -507,22 +523,6 @@ class TradeManager:
 
 
         if self.verbose:
-            logged_balance_before, logged_balance_after = self._resolve_csv_balances(
-                free_balance_before_close,
-                margin,
-                profit,
-                balance_before_override=balance_before_log_override,
-                remaining_open_margin=remaining_open_margin
-            )
-
-            logged_balance_before_no_fee, logged_balance_after_no_fee = self._resolve_csv_balances(
-                free_balance_before_close_no_fee,
-                margin_no_fee,
-                pnl_no_fee,
-                balance_before_override=balance_before_log_override_no_fee,
-                remaining_open_margin=remaining_open_margin_no_fee
-            )
-
             print("Close SHORT at price:", close_price, "$", "| Close Time:", close_time_value, "| leverage:", leverage)
             print("Balance:", round(logged_balance_before, 2), "$", "→", round(logged_balance_after, 2), "$", "| Save Money:", round(save_money, 2), "$")
             print("Balance (no fee):",

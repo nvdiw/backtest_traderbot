@@ -16,8 +16,8 @@ from generate_reason_text import generate_entry_reason_text, generate_close_reas
 from strategy_config import build_ma_strategy_config
 
 
-# start = get_candle_index("2025-01-01")   ----> 244944 on CSV
-# end = get_candle_index("2026-05-31")     ----> 294380 on CSV
+# start = get_candle_index("2018-01-01")   ----> 1 on CSV
+# end = get_candle_index("2026-05-31")     ----> 294381 on CSV
 
 # get (index or ID) of start, end of csv
 start, end = get_candle_index(("2023-01-01","2026-02-23"))
@@ -180,6 +180,7 @@ def ma_strategy(tune: dict = None):
     rsi_max_open_trades = cfg.rsi_max_open_trades
     rsi_trade_amount_percent = cfg.rsi_trade_amount_percent
     rsi_leverage = cfg.rsi_leverage
+    momentum_window = cfg.momentum_window
 
     def build_score_reason_text(title, reasons, total_score, threshold):
         lines = [title]
@@ -745,7 +746,8 @@ def ma_strategy(tune: dict = None):
 
                 if rsi_trade_monthly_filter_on:
                     # safety open long when monthly filter is on
-                    if rsi_list[i] <= rsi_long_open_monthly_profit and len(open_positions) < rsi_max_open_trades:
+                    momentum_up = close_prices[i] > sum(close_prices[i-momentum_window:i]) / momentum_window
+                    if rsi_list[i] <= rsi_long_open_monthly_profit and len(open_positions) < rsi_max_open_trades and momentum_up:
                         # ---- open long ----
                         updates = trade_manager.open_long(
                             i,
@@ -800,7 +802,8 @@ def ma_strategy(tune: dict = None):
 
 
                     # safety open short when monthly filter is on
-                    if rsi_list[i] >= rsi_short_open_monthly_profit and len(open_positions) < rsi_max_open_trades:
+                    momentum_down = close_prices[i] < sum(close_prices[i-momentum_window:i]) / momentum_window
+                    if rsi_list[i] >= rsi_short_open_monthly_profit and len(open_positions) < rsi_max_open_trades and momentum_down:
                         # ---- open short ----
                         updates = trade_manager.open_short(
                             i,
@@ -845,7 +848,6 @@ def ma_strategy(tune: dict = None):
                                 if short_open_reasons is not None:
                                     # default texts
                                     entry_reason_text = f"opened short when monthly filter is on and rsi is upper than: {rsi_short_open_monthly_profit}\n"
-                                    entry_reason_text += generate_entry_reason_text(trade_id=next_trade_id, updates=updates)
                                     entry_reason_text += generate_entry_reason_text(trade_id=next_trade_id, updates=updates)
                                     short_open_reasons[i] = entry_reason_text
 
@@ -1288,7 +1290,7 @@ def ma_strategy(tune: dict = None):
                     if long_close_reasons is not None:
                         long_exit_reason_text += generate_close_reason_text(trade_id=p['trade_id'], updates=updates)
                         if len(long_positions_to_close) > 1:
-                            long_close_reasons[i] = f"{long_exit_reason_text}\nBatch close: all open LONG positions closed together."
+                            long_close_reasons[i] = f"\n{long_exit_reason_text}\nBatch close: all open LONG positions closed together."
                         else:
                             long_close_reasons[i] = long_exit_reason_text
                 
@@ -1779,7 +1781,7 @@ def ma_strategy(tune: dict = None):
                     if short_close_reasons is not None:
                         short_exit_reason_text += generate_close_reason_text(trade_id=p['trade_id'], updates=updates)
                         if len(short_positions_to_close) > 1:
-                            short_close_reasons[i] = f"{short_exit_reason_text}\nBatch close: all open SHORT positions closed together."
+                            short_close_reasons[i] = f"\n{short_exit_reason_text}\nBatch close: all open SHORT positions closed together."
                         else:
                             short_close_reasons[i] = short_exit_reason_text
 

@@ -304,9 +304,9 @@ class ScoreWeightConfig:
 @dataclass
 class PositionsMonthlyFilter:
     rsi_trade_monthly_filter_on: bool = True
-    rsi_long_open_monthly_profit: int = 10
+    rsi_long_open_monthly_profit: int = 13
     rsi_long_close_monthly_profit: int = 73
-    rsi_short_open_monthly_profit: int = 90
+    rsi_short_open_monthly_profit: int = 85
     rsi_short_close_monthly_profit: int = 42
     rsi_long_tp_pct: float = 0.04
     rsi_long_sl_pct: float = 0.01
@@ -315,6 +315,7 @@ class PositionsMonthlyFilter:
     rsi_max_open_trades: int = 1
     rsi_trade_amount_percent: float = 0.4
     rsi_leverage: int = 4
+    momentum_window: int = 2
 
 @dataclass
 class BaseStrategyConfig(
