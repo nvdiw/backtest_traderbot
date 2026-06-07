@@ -132,6 +132,8 @@ param_grid = {
     'rsi_trade_amount_percent': [i/10 for i in range(1, 5)],
     'rsi_leverage': [i for i in range(1, 11)],
     'momentum_window': [i for i in range(1, 11)],
+    'rsi_cooldown_bars': [i for i in range(0, 101)],
+    'rsi_cooldown_filter': [True, False],
 
     # ==== spot_limbian_strategy variables ====
     'symbol_change_pct': [i/100 for i in range(-10, 11)],
@@ -146,10 +148,10 @@ param_grid = {
 }
 
 param_grid = {     
-    'rsi_long_open_monthly_profit': [i for i in range(5, 16)],
-    # 'rsi_long_close_monthly_profit': [i for i in range(30, 81)],
-    'rsi_short_open_monthly_profit': [i for i in range(85, 96)],
-    # 'rsi_short_close_monthly_profit': [i for i in range(20, 71)],
+    # 'rsi_long_open_monthly_profit': [i for i in range(5, 16)],
+    # 'rsi_long_close_monthly_profit': [i for i in range(75, 86)],
+    # 'rsi_short_open_monthly_profit': [i for i in range(85, 96)],
+    # 'rsi_short_close_monthly_profit': [i for i in range(31, 71)],
     # 'rsi_long_tp_pct': [i/100 for i in range(1, 5)],
     # 'rsi_long_sl_pct': [i/100 for i in range(1, 5)],
     # 'rsi_short_tp_pct': [i/100 for i in range(1, 5)],
@@ -158,8 +160,17 @@ param_grid = {
     # 'rsi_trade_amount_percent': [i/10 for i in range(1, 5)],
     # 'rsi_leverage': [i for i in range(1, 11)],
     # 'monthly_compound': [i for i in range(0, 11)],
-    'momentum_window': [i for i in range(1, 6)],
- }
+    # 'momentum_window': [i for i in range(1, 11)],
+    # 'rsi_cooldown_bars': [i for i in range(0, 101)],
+    # 'rsi_cooldown_filter': [True, False],
+
+
+    'loss_scale_entry_min_score': [1, 2, 3, 4, 5, 6, 7, 8],
+    'loss_scale_entry_filter_enabled': [False, True],
+    'scale_in_enabled': [True,False],
+    'scale_entry_on_profit_enabled': [False, True],
+    'scale_entry_on_loss_enabled': [False, True],
+}
 
 # strategies setting only one of them should be True
 ma = True

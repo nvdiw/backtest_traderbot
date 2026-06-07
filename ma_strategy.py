@@ -181,6 +181,8 @@ def ma_strategy(tune: dict = None):
     rsi_trade_amount_percent = cfg.rsi_trade_amount_percent
     rsi_leverage = cfg.rsi_leverage
     momentum_window = cfg.momentum_window
+    rsi_cooldown_bars = cfg.rsi_cooldown_bars
+    rsi_cooldown_filter = cfg.rsi_cooldown_filter
 
     def build_score_reason_text(title, reasons, total_score, threshold):
         lines = [title]
@@ -250,6 +252,37 @@ def ma_strategy(tune: dict = None):
     skip_trades_left = 0
     max_drawdown = 0
 
+    # ===================== LONG SCALE ENTRY STATISTICS =====================
+    # Attempts = number of times price condition triggered scale-entry opportunity
+    long_loss_scale_entry_attempts = 0
+    long_profit_scale_entry_attempts = 0
+
+    # Filtered = loss-based attempts rejected by trend/momentum filter
+    long_filtered_loss_scale_entries = 0
+
+    # Executed entries = actual filled scale-in orders
+    long_profit_scale_entries = 0
+    long_loss_scale_entries = 0
+
+
+    # ===================== SHORT SCALE ENTRY STATISTICS =====================
+    # Attempts = number of times price condition triggered scale-entry opportunity
+    short_loss_scale_entry_attempts = 0
+    short_profit_scale_entry_attempts = 0
+
+    # Filtered = loss-based attempts rejected by trend/momentum filter
+    short_filtered_loss_scale_entries = 0
+
+    # Executed entries = actual filled scale-in orders
+    short_profit_scale_entries = 0
+    short_loss_scale_entries = 0
+
+    # COUNT PROFIT,LOSS SCALE_POSITIONS
+    scale_ma_long_profit = 0
+    scale_ma_long_loss = 0
+    scale_ma_short_profit = 0
+    scale_ma_short_loss = 0
+
     lst_profit_percent_per_month = []
     monthly_stop_reasons = []
     pending_monthly_stop_reason = None
@@ -284,6 +317,10 @@ def ma_strategy(tune: dict = None):
     last_cross_strongest_down_move_pct = 0.0
     last_trade_cross_index = None   # index of the cross used to open the last trade
     trade_power = True
+
+    # variables of rsi on monthly filter
+    rsi_last_index_stop_loss_bar = 0
+    rsi_in_cooldown = False
 
     balance_without_fee = balance
     first_balance = balance
@@ -618,6 +655,7 @@ def ma_strategy(tune: dict = None):
                     balance_without_fee = updates['balance_without_fee']
                     deducting_fee_total = updates['deducting_fee_total']
                     profits_lst = updates['profits_lst']
+                    profit_order = updates['profit']
                     total_profit_percent = updates['total_profit_percent']
                     count_closed_orders = updates['count_closed_orders']
                     equity_curve = updates['equity_curve']
@@ -641,6 +679,13 @@ def ma_strategy(tune: dict = None):
                             long_exit_reason_text = f"closed long when monthly filter is on and rsi is upper than: {rsi_long_close_monthly_profit}\n"
                             long_exit_reason_text += generate_close_reason_text(trade_id=p['trade_id'], updates=updates)
                             long_close_reasons[i] = long_exit_reason_text
+                    
+                    # calculate last stop loss with rsi on mothly filter
+                    if rsi_cooldown_filter:
+                        if profit_order < 0:
+                            rsi_in_cooldown = True
+                            rsi_last_index_stop_loss_bar = i
+
                     updates = None
 
 
@@ -699,6 +744,7 @@ def ma_strategy(tune: dict = None):
                     balance_without_fee = updates['balance_without_fee']
                     deducting_fee_total = updates['deducting_fee_total']
                     profits_lst = updates['profits_lst']
+                    profit_order = updates['profit']
                     total_profit_percent = updates['total_profit_percent']
                     count_closed_orders = updates['count_closed_orders']
                     equity_curve = updates['equity_curve']
@@ -722,6 +768,13 @@ def ma_strategy(tune: dict = None):
                             short_exit_reason_text = f"closed short when monthly filter is on and rsi is lower than: {rsi_short_close_monthly_profit}\n"
                             short_exit_reason_text += generate_close_reason_text(trade_id=p['trade_id'], updates=updates)
                             short_close_reasons[i] = short_exit_reason_text
+                    
+                    # calculate last stop loss with rsi on mothly filter
+                    if rsi_cooldown_filter:
+                        if profit_order < 0:
+                            rsi_in_cooldown = True
+                            rsi_last_index_stop_loss_bar = i
+
                     updates = None
 
 
@@ -745,9 +798,21 @@ def ma_strategy(tune: dict = None):
                     trade_power = True 
 
                 if rsi_trade_monthly_filter_on:
-                    # safety open long when monthly filter is on
+                    # ---- safety open long when monthly filter is on:
+                    # calculate momentum up
                     momentum_up = close_prices[i] > sum(close_prices[i-momentum_window:i]) / momentum_window
-                    if rsi_list[i] <= rsi_long_open_monthly_profit and len(open_positions) < rsi_max_open_trades and momentum_up:
+
+                    # calculate rsi in cooldown
+                    if rsi_in_cooldown == True:
+                        if i > rsi_last_index_stop_loss_bar + rsi_cooldown_bars:
+                            rsi_in_cooldown = False
+
+                    if (
+                        rsi_list[i] <= rsi_long_open_monthly_profit 
+                        and len(open_positions) < rsi_max_open_trades 
+                        and momentum_up 
+                        and rsi_in_cooldown == False
+                    ):
                         # ---- open long ----
                         updates = trade_manager.open_long(
                             i,
@@ -801,9 +866,21 @@ def ma_strategy(tune: dict = None):
                             updates = None
 
 
-                    # safety open short when monthly filter is on
+                    # ---- safety open short when monthly filter is on
+                    # calculate momentum down
                     momentum_down = close_prices[i] < sum(close_prices[i-momentum_window:i]) / momentum_window
-                    if rsi_list[i] >= rsi_short_open_monthly_profit and len(open_positions) < rsi_max_open_trades and momentum_down:
+
+                    # calculate rsi in cooldown
+                    if rsi_in_cooldown == True:
+                        if i > rsi_last_index_stop_loss_bar + rsi_cooldown_bars:
+                            rsi_in_cooldown = False
+
+                    if (
+                        rsi_list[i] >= rsi_short_open_monthly_profit 
+                        and len(open_positions) < rsi_max_open_trades 
+                        and momentum_down 
+                        and rsi_in_cooldown == False
+                    ):
                         # ---- open short ----
                         updates = trade_manager.open_short(
                             i,
@@ -1035,6 +1112,12 @@ def ma_strategy(tune: dict = None):
                 elif scale_entry_on_loss_enabled and close_prices[i] <= long_scale_entry_loss_trigger_price:
                     long_scale_entry_reason = "loss"
 
+                # count number of scales
+                if long_scale_entry_reason == "profit":
+                    long_profit_scale_entry_attempts += 1
+                elif long_scale_entry_reason == "loss":
+                    long_loss_scale_entry_attempts += 1
+
                 long_loss_scale_entry_score = 0
                 if long_scale_entry_reason == "loss" and loss_scale_entry_filter_enabled:
                     # loss-based scale entry is allowed only when trend and momentum still support LONG.
@@ -1048,7 +1131,13 @@ def ma_strategy(tune: dict = None):
                         long_scale_entry_atr_ratio = atr[i] / atr_ma[i]
                         if long_scale_entry_atr_ratio >= loss_scale_entry_atr_ratio_min:
                             long_loss_scale_entry_score += 1
+                    if volume_filter:
+                        vol_now = volume_prices[i]
+                        vol_avg15 = vol_avg_15_list[i]
+                        if vol_now >= volume_spike_multiplier * vol_avg15:
+                            long_loss_scale_entry_score += 2
                     if long_loss_scale_entry_score < loss_scale_entry_min_score:
+                        long_filtered_loss_scale_entries += 1
                         long_scale_entry_reason = None
 
                 if long_scale_entry_reason is not None:
@@ -1063,6 +1152,14 @@ def ma_strategy(tune: dict = None):
                         balance_without_fee + sum(p['margin_no_fee'] for p in open_positions),
                         tactical_balance)
                     if updates is not None:
+
+                        # count profits, losses Scales
+                        if long_scale_entry_reason == "profit":
+                            long_profit_scale_entries += 1
+                        elif long_scale_entry_reason == "loss":
+                            long_loss_scale_entries += 1
+                        
+                        # ==== UPDATE ====
                         balance = updates['balance']
                         balance_without_fee = updates['balance_without_fee']
                         position = {
@@ -1263,6 +1360,13 @@ def ma_strategy(tune: dict = None):
                     p['balance_before_trade'],
                     p['balance_before_trade_no_fee'],
                     remaining_open_equity=remaining_open_equity)
+                
+                # count profit,loss scales positions
+                if p.get('reason') == 'scale_ma_strategy':
+                    if updates['pnl'] > 0:
+                        scale_ma_long_profit += 1
+                    else:
+                        scale_ma_long_loss += 1
 
                 balance = updates['balance']
                 balance_without_fee = updates['balance_without_fee']
@@ -1526,6 +1630,12 @@ def ma_strategy(tune: dict = None):
                 elif scale_entry_on_loss_enabled and close_prices[i] >= short_scale_entry_loss_trigger_price:
                     short_scale_entry_reason = "loss"
 
+                # count scales
+                if short_scale_entry_reason == "profit":
+                    short_profit_scale_entry_attempts += 1
+                elif short_scale_entry_reason == "loss":
+                    short_loss_scale_entry_attempts += 1
+
                 short_loss_scale_entry_score = 0
                 if short_scale_entry_reason == "loss" and loss_scale_entry_filter_enabled:
                     # loss-based scale entry is allowed only when trend and momentum still support SHORT.
@@ -1539,7 +1649,13 @@ def ma_strategy(tune: dict = None):
                         short_scale_entry_atr_ratio = atr[i] / atr_ma[i]
                         if short_scale_entry_atr_ratio >= loss_scale_entry_atr_ratio_min:
                             short_loss_scale_entry_score += 1
+                    if volume_filter:
+                        vol_now = volume_prices[i]
+                        vol_avg15 = vol_avg_15_list[i]
+                        if vol_now >= volume_spike_multiplier * vol_avg15:
+                            short_loss_scale_entry_score += 2
                     if short_loss_scale_entry_score < loss_scale_entry_min_score:
+                        short_filtered_loss_scale_entries += 1
                         short_scale_entry_reason = None
 
                 if short_scale_entry_reason is not None:
@@ -1554,6 +1670,14 @@ def ma_strategy(tune: dict = None):
                         balance_without_fee + sum(p['margin_no_fee'] for p in open_positions),
                         tactical_balance)
                     if updates is not None:
+                        
+                        # count profits, losses Scales
+                        if short_scale_entry_reason == "profit":
+                            short_profit_scale_entries += 1
+                        elif short_scale_entry_reason == "loss":
+                            short_loss_scale_entries += 1
+
+                        # === UPDATE ===
                         balance = updates['balance']
                         balance_without_fee = updates['balance_without_fee']
                         position = {
@@ -1755,6 +1879,13 @@ def ma_strategy(tune: dict = None):
                     remaining_open_equity=remaining_open_equity
                     )
 
+                # count profit,loss scales positions
+                if p.get('reason') == 'scale_ma_strategy':
+                    if updates['pnl'] > 0:
+                        scale_ma_short_profit += 1
+                    else:
+                        scale_ma_short_loss += 1
+
                 balance = updates['balance']
                 balance_without_fee = updates['balance_without_fee']
                 deducting_fee_total = updates['deducting_fee_total']
@@ -1906,6 +2037,34 @@ def ma_strategy(tune: dict = None):
         print("Count Liquids:", total_liquids)
         print("count_profit_months:", profit_months_count)
         print("count_loss_months:", loss_months_count)
+
+
+        print("\n===== SCALE ENTRY REPORT =====")
+
+        # ===================== LONG =====================
+        print("LONG SCALE ENTRY")
+        print(f"  PROFIT  → Triggered: {long_profit_scale_entry_attempts} | Executed: {long_profit_scale_entries}")
+        print(f"  LOSS    → Triggered: {long_loss_scale_entry_attempts} | Executed: {long_loss_scale_entries} | Filtered: {long_filtered_loss_scale_entries}")
+
+        print()
+
+        # ===================== SHORT =====================
+        print("SHORT SCALE ENTRY")
+        print(f"  PROFIT  → Triggered: {short_profit_scale_entry_attempts} | Executed: {short_profit_scale_entries}")
+        print(f"  LOSS    → Triggered: {short_loss_scale_entry_attempts} | Executed: {short_loss_scale_entries} | Filtered: {short_filtered_loss_scale_entries}")
+
+        print("\n===== SCALE MA CLOSED TRADES =====")
+
+        print(f"LONG  Profit Closed : {scale_ma_long_profit}")
+        print(f"LONG  Loss Closed   : {scale_ma_long_loss}")
+
+        print(f"SHORT Profit Closed : {scale_ma_short_profit}")
+        print(f"SHORT Loss Closed   : {scale_ma_short_loss}")
+
+        print("\n----- TOTAL -----")
+        print(f"Total Profit Closed : {scale_ma_long_profit + scale_ma_short_profit}")
+        print(f"Total Loss Closed   : {scale_ma_long_loss + scale_ma_short_loss}")
+        print(f"Total Closed Trades : {scale_ma_long_profit + scale_ma_long_loss + scale_ma_short_profit + scale_ma_short_loss}")
 
     csv_logger.save_csv(
     first_balance=first_balance,

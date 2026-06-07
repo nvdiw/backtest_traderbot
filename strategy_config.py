@@ -115,7 +115,7 @@ class ScaleEntryConfig:
     # Master switch for all scale-in behavior.
     scale_in_enabled: bool = True
     # Require extra quality checks before loss-side scale-in entries.
-    loss_scale_entry_filter_enabled: bool = False
+    loss_scale_entry_filter_enabled: bool = True
     # Minimum entry score required for loss-side scale-in entries.
     loss_scale_entry_min_score: int = 2
     # Minimum ATR/ATR_MA ratio for loss-side scale-in entries.
@@ -305,9 +305,9 @@ class ScoreWeightConfig:
 class PositionsMonthlyFilter:
     rsi_trade_monthly_filter_on: bool = True
     rsi_long_open_monthly_profit: int = 13
-    rsi_long_close_monthly_profit: int = 73
+    rsi_long_close_monthly_profit: int = 80
     rsi_short_open_monthly_profit: int = 85
-    rsi_short_close_monthly_profit: int = 42
+    rsi_short_close_monthly_profit: int = 39
     rsi_long_tp_pct: float = 0.04
     rsi_long_sl_pct: float = 0.01
     rsi_short_tp_pct: float = 0.04
@@ -316,6 +316,8 @@ class PositionsMonthlyFilter:
     rsi_trade_amount_percent: float = 0.4
     rsi_leverage: int = 4
     momentum_window: int = 2
+    rsi_cooldown_filter: bool = True
+    rsi_cooldown_bars: int = 20
 
 @dataclass
 class BaseStrategyConfig(
