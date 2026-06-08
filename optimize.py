@@ -150,8 +150,8 @@ param_grid = {
 param_grid = {     
     # 'rsi_long_open_monthly_profit': [i for i in range(5, 16)],
     # 'rsi_long_close_monthly_profit': [i for i in range(75, 86)],
-    # 'rsi_short_open_monthly_profit': [i for i in range(85, 96)],
-    # 'rsi_short_close_monthly_profit': [i for i in range(31, 71)],
+    # 'rsi_short_open_monthly_profit': [i for i in range(60, 96)],
+    # 'rsi_short_close_monthly_profit': [i for i in range(10, 81)],
     # 'rsi_long_tp_pct': [i/100 for i in range(1, 5)],
     # 'rsi_long_sl_pct': [i/100 for i in range(1, 5)],
     # 'rsi_short_tp_pct': [i/100 for i in range(1, 5)],

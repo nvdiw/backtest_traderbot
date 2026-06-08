@@ -252,36 +252,70 @@ def ma_strategy(tune: dict = None):
     skip_trades_left = 0
     max_drawdown = 0
 
-    # ===================== LONG SCALE ENTRY STATISTICS =====================
-    # Attempts = number of times price condition triggered scale-entry opportunity
-    long_loss_scale_entry_attempts = 0
-    long_profit_scale_entry_attempts = 0
+    # ===================== SCALE VARIABLES =====================
+    # SCALE ENTRY STATISTICS - LONG
+    # ==========================================================
 
-    # Filtered = loss-based attempts rejected by trend/momentum filter
+    # Triggered opportunities
+    long_profit_scale_entry_attempts = 0
+    long_loss_scale_entry_attempts = 0
+
+    # Rejected by filters
     long_filtered_profit_scale_entries = 0
 
-    # Executed entries = actual filled scale-in orders
+    # Executed entries
     long_profit_scale_entries = 0
     long_loss_scale_entries = 0
 
 
-    # ===================== SHORT SCALE ENTRY STATISTICS =====================
-    # Attempts = number of times price condition triggered scale-entry opportunity
-    short_loss_scale_entry_attempts = 0
-    short_profit_scale_entry_attempts = 0
+    # ==========================================================
+    # SCALE ENTRY STATISTICS - SHORT
+    # ==========================================================
 
-    # Filtered = loss-based attempts rejected by trend/momentum filter
+    # Triggered opportunities
+    short_profit_scale_entry_attempts = 0
+    short_loss_scale_entry_attempts = 0
+
+    # Rejected by filters
     short_filtered_profit_scale_entries = 0
 
-    # Executed entries = actual filled scale-in orders
+    # Executed entries
     short_profit_scale_entries = 0
     short_loss_scale_entries = 0
 
-    # COUNT PROFIT,LOSS SCALE_POSITIONS
-    scale_ma_long_profit = 0
-    scale_ma_long_loss = 0
-    scale_ma_short_profit = 0
-    scale_ma_short_loss = 0
+
+    # ==========================================================
+    # SCALE PERFORMANCE - LONG
+    # ==========================================================
+
+    scale_ma_long_total = 0
+    scale_ma_long_wins = 0
+    scale_ma_long_losses = 0
+    scale_ma_long_total_profit = 0.0
+
+
+    # ==========================================================
+    # SCALE PERFORMANCE - SHORT
+    # ==========================================================
+
+    scale_ma_short_total = 0
+    scale_ma_short_wins = 0
+    scale_ma_short_losses = 0
+    scale_ma_short_total_profit = 0.0
+
+
+    # ========== RSI LONG STATS INIT ==========
+    rsi_long_total = 0
+    rsi_long_wins = 0
+    rsi_long_losses = 0
+    rsi_long_total_profit = 0.0
+
+    # ========== RSI SHORT STATS INIT ==========
+    rsi_short_total = 0
+    rsi_short_wins = 0
+    rsi_short_losses = 0
+    rsi_short_total_profit = 0.0
+
 
     lst_profit_percent_per_month = []
     monthly_stop_reasons = []
@@ -686,6 +720,17 @@ def ma_strategy(tune: dict = None):
                             rsi_in_cooldown = True
                             rsi_last_index_stop_loss_bar = i
 
+                    # ---- RSI LONG STATS ----
+                    rsi_long_total += 1
+
+                    if profit_order > 0:
+                        rsi_long_wins += 1
+                    else:
+                        rsi_long_losses += 1
+
+                    rsi_long_total_profit += profit_order
+
+
                     updates = None
 
 
@@ -774,6 +819,17 @@ def ma_strategy(tune: dict = None):
                         if profit_order < 0:
                             rsi_in_cooldown = True
                             rsi_last_index_stop_loss_bar = i
+
+                    # ---- RSI SHORT STATS ----
+                    rsi_short_total += 1
+
+                    if profit_order > 0:
+                        rsi_short_wins += 1
+                    else:
+                        rsi_short_losses += 1
+
+                    rsi_short_total_profit += profit_order
+
 
                     updates = None
 
@@ -1360,10 +1416,13 @@ def ma_strategy(tune: dict = None):
                 
                 # count profit,loss scales positions
                 if p.get('reason') == 'scale_ma_strategy':
-                    if updates['pnl'] > 0:
-                        scale_ma_long_profit += 1
+                    scale_ma_long_total += 1
+                    scale_ma_long_total_profit += updates['profit']
+
+                    if updates['profit'] > 0:
+                        scale_ma_long_wins += 1
                     else:
-                        scale_ma_long_loss += 1
+                        scale_ma_long_losses += 1
 
                 balance = updates['balance']
                 balance_without_fee = updates['balance_without_fee']
@@ -1875,10 +1934,13 @@ def ma_strategy(tune: dict = None):
 
                 # count profit,loss scales positions
                 if p.get('reason') == 'scale_ma_strategy':
-                    if updates['pnl'] > 0:
-                        scale_ma_short_profit += 1
+                    scale_ma_short_total += 1
+                    scale_ma_short_total_profit += updates['profit']
+
+                    if updates['profit'] > 0:
+                        scale_ma_short_wins += 1
                     else:
-                        scale_ma_short_loss += 1
+                        scale_ma_short_losses += 1
 
                 balance = updates['balance']
                 balance_without_fee = updates['balance_without_fee']
@@ -2001,6 +2063,39 @@ def ma_strategy(tune: dict = None):
     days, hours, minutes = trade_duration(first_open_time, last_close_time)
     win_rate = (total_wins / (total_wins + total_losses)) * 100 if (total_wins + total_losses) > 0 else 0
 
+    if verbose:
+        # scale calculation
+        # ---- LONG ----
+        long_total = scale_ma_long_wins + scale_ma_long_losses
+
+        long_winrate = (
+            round(scale_ma_long_wins / long_total * 100, 2)
+            if long_total > 0 else 0
+        )
+
+        # ---- SHORT ----
+        short_total = scale_ma_short_wins + scale_ma_short_losses
+
+        short_winrate = (
+            round(scale_ma_short_wins / short_total * 100, 2)
+            if short_total > 0 else 0
+        )
+
+        # ---- OVERALL ----
+        total_profit_closed = scale_ma_long_wins + scale_ma_short_wins
+        total_loss_closed = scale_ma_long_losses + scale_ma_short_losses
+
+        total_closed = total_profit_closed + total_loss_closed
+
+        total_winrate = (
+            round(total_profit_closed / total_closed * 100, 2)
+            if total_closed > 0 else 0
+        )
+
+        total_profit_amount = (
+            scale_ma_long_total_profit +
+            scale_ma_short_total_profit
+        )
 
     if monthly_stop_reasons:
         profit_months_count = sum(1 for r in monthly_stop_reasons if r == "profit")
@@ -2033,32 +2128,109 @@ def ma_strategy(tune: dict = None):
         print("count_loss_months:", loss_months_count)
 
 
-        print("\n===== SCALE ENTRY REPORT =====")
+        # SCALE ENTRY REPORT
+        print("\n================ SCALE ENTRY REPORT ================\n")
 
-        # ===================== LONG =====================
-        print("LONG SCALE ENTRY")
-        print(f"  PROFIT  → Triggered: {long_profit_scale_entry_attempts} | Executed: {long_profit_scale_entries} | Filtered: {long_filtered_profit_scale_entries}")
-        print(f"  LOSS    → Triggered: {long_loss_scale_entry_attempts} | Executed: {long_loss_scale_entries}")
-
+        # ---- LONG ENTRY ----
+        print("===== LONG SCALE ENTRY =====")
+        print(f"Profit Triggered : {long_profit_scale_entry_attempts}")
+        print(f"Profit Executed  : {long_profit_scale_entries}")
+        print(f"Profit Filtered  : {long_filtered_profit_scale_entries}")
         print()
+        print(f"Loss Triggered   : {long_loss_scale_entry_attempts}")
+        print(f"Loss Executed    : {long_loss_scale_entries}")
 
-        # ===================== SHORT =====================
-        print("SHORT SCALE ENTRY")
-        print(f"  PROFIT  → Triggered: {short_profit_scale_entry_attempts} | Executed: {short_profit_scale_entries} | Filtered: {short_filtered_profit_scale_entries}")
-        print(f"  LOSS    → Triggered: {short_loss_scale_entry_attempts} | Executed: {short_loss_scale_entries}")
+        print("\n-----------------------------------------------------\n")
 
-        print("\n===== SCALE MA CLOSED TRADES =====")
+        # ---- SHORT ENTRY ----
+        print("===== SHORT SCALE ENTRY =====")
+        print(f"Profit Triggered : {short_profit_scale_entry_attempts}")
+        print(f"Profit Executed  : {short_profit_scale_entries}")
+        print(f"Profit Filtered  : {short_filtered_profit_scale_entries}")
+        print()
+        print(f"Loss Triggered   : {short_loss_scale_entry_attempts}")
+        print(f"Loss Executed    : {short_loss_scale_entries}")
 
-        print(f"LONG  Profit Closed : {scale_ma_long_profit}")
-        print(f"LONG  Loss Closed   : {scale_ma_long_loss}")
+        print("\n=====================================================\n")
 
-        print(f"SHORT Profit Closed : {scale_ma_short_profit}")
-        print(f"SHORT Loss Closed   : {scale_ma_short_loss}")
 
-        print("\n----- TOTAL -----")
-        print(f"Total Profit Closed : {scale_ma_long_profit + scale_ma_short_profit}")
-        print(f"Total Loss Closed   : {scale_ma_long_loss + scale_ma_short_loss}")
-        print(f"Total Closed Trades : {scale_ma_long_profit + scale_ma_long_loss + scale_ma_short_profit + scale_ma_short_loss}")
+        print("================ SCALE PERFORMANCE =================\n")
+
+        # ---- LONG PERFORMANCE ----
+        print("===== LONG SCALE STATS =====")
+        print(f"Total Closed : {long_total}")
+        print(f"Wins         : {scale_ma_long_wins}")
+        print(f"Losses       : {scale_ma_long_losses}")
+        print(f"Winrate      : {long_winrate}%")
+        print(f"Total Profit : {round(scale_ma_long_total_profit, 2)}")
+
+        print("\n-----------------------------------------------------\n")
+
+        # ---- SHORT PERFORMANCE ----
+        print("===== SHORT SCALE STATS =====")
+        print(f"Total Closed : {short_total}")
+        print(f"Wins         : {scale_ma_short_wins}")
+        print(f"Losses       : {scale_ma_short_losses}")
+        print(f"Winrate      : {short_winrate}%")
+        print(f"Total Profit : {round(scale_ma_short_total_profit, 2)}")
+
+        print("\n-----------------------------------------------------\n")
+
+        # ---- OVERALL PERFORMANCE ----
+        print("===== OVERALL SCALE PERFORMANCE =====")
+        print(f"Total Trades : {total_closed}")
+        print(f"Wins         : {total_profit_closed}")
+        print(f"Losses       : {total_loss_closed}")
+        print(f"Winrate      : {total_winrate}%")
+        print(f"Total Profit : {round(total_profit_amount, 2)}")
+
+        print("\n=====================================================\n")
+
+
+        # ======== RSI STRATEGY REPORT ========
+        print("\n================ RSI STRATEGY REPORT ================\n")
+
+        # ---- LONG ----
+        print("===== RSI LONG STATS =====")
+        print("Total:", rsi_long_total)
+        print("Wins:", rsi_long_wins)
+        print("Losses:", rsi_long_losses)
+
+        if rsi_long_total > 0:
+            print("Winrate:", round(rsi_long_wins / rsi_long_total * 100, 2), "%")
+
+        print("Total Profit:", round(rsi_long_total_profit, 2))
+        print("\n")
+
+        # ---- SHORT ----
+        print("===== RSI SHORT STATS =====")
+        print("Total:", rsi_short_total)
+        print("Wins:", rsi_short_wins)
+        print("Losses:", rsi_short_losses)
+
+        if rsi_short_total > 0:
+            print("Winrate:", round(rsi_short_wins / rsi_short_total * 100, 2), "%")
+
+        print("Total Profit:", round(rsi_short_total_profit, 2))
+        print("\n-----------------------------------------------------\n")
+
+        # ---- OVERALL ----
+        total_trades = rsi_long_total + rsi_short_total
+        total_wins = rsi_long_wins + rsi_short_wins
+        total_losses = rsi_long_losses + rsi_short_losses
+        total_profit = rsi_long_total_profit + rsi_short_total_profit
+
+        print("===== OVERALL RSI PERFORMANCE =====")
+        print("Total Trades:", total_trades)
+        print("Wins:", total_wins)
+        print("Losses:", total_losses)
+
+        if total_trades > 0:
+            print("Winrate:", round(total_wins / total_trades * 100, 2), "%")
+
+        print("Total Profit:", round(total_profit, 2))
+        print("\n=====================================================\n")
+
 
     csv_logger.save_csv(
     first_balance=first_balance,

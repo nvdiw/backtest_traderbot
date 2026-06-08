@@ -62,12 +62,6 @@ class CapitalConfig:
     leverage: float = 10
     # Main order size as a fraction of tactical balance.
     trade_amount_percent: float = 0.5
-    # Extra scale-in order size as a fraction of tactical balance.
-    scale_entry_amount_percent: float = 0.2
-    # Price move needed to add another entry in the winning direction.
-    scale_entry_profit_trigger_pct: float = 0.039
-    # Price move needed to add another entry in the losing direction.
-    scale_entry_loss_trigger_pct: float = 0.03
     # Reserved capital kept outside active balance.
     save_money: float = 0
     # fee rate.
@@ -108,6 +102,12 @@ class MonthlyControlConfig:
 
 @dataclass
 class ScaleEntryConfig:
+    # Extra scale-in order size as a fraction of tactical balance.
+    scale_entry_amount_percent: float = 0.2
+    # Price move needed to add another entry in the winning direction.
+    scale_entry_profit_trigger_pct: float = 0.039
+    # Price move needed to add another entry in the losing direction.
+    scale_entry_loss_trigger_pct: float = 0.03
     # Allow scale-in entries after price moves in favor of the first entry.
     scale_entry_on_profit_enabled: bool = True
     # Allow scale-in entries after price moves against the first entry.
