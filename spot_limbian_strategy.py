@@ -428,20 +428,20 @@ def spot_limbian_strategy(tune: dict = None):
         if 'scale_entry_on_loss_enabled' in tune:
             scale_entry_on_loss_enabled = bool(tune['scale_entry_on_loss_enabled'])
 
-        if 'loss_scale_entry_filter_enabled' in tune:
-            loss_scale_entry_filter_enabled = bool(tune['loss_scale_entry_filter_enabled'])
+        if 'profit_scale_entry_filter_enabled' in tune:
+            profit_scale_entry_filter_enabled = bool(tune['profit_scale_entry_filter_enabled'])
 
-        if 'loss_scale_entry_min_score' in tune:
-            loss_scale_entry_min_score = int(tune['loss_scale_entry_min_score'])
+        if 'profit_scale_entry_min_score' in tune:
+            profit_scale_entry_min_score = int(tune['profit_scale_entry_min_score'])
 
-        if 'loss_scale_entry_atr_ratio_min' in tune:
-            loss_scale_entry_atr_ratio_min = float(tune['loss_scale_entry_atr_ratio_min'])
+        if 'profit_scale_entry_atr_ratio_min' in tune:
+            profit_scale_entry_atr_ratio_min = float(tune['profit_scale_entry_atr_ratio_min'])
         else:
             # backward compatibility with older split params
             if 'loss_scale_entry_long_atr_ratio_min' in tune:
-                loss_scale_entry_atr_ratio_min = float(tune['loss_scale_entry_long_atr_ratio_min'])
+                profit_scale_entry_atr_ratio_min = float(tune['loss_scale_entry_long_atr_ratio_min'])
             if 'loss_scale_entry_short_atr_ratio_min' in tune:
-                loss_scale_entry_atr_ratio_min = float(tune['loss_scale_entry_short_atr_ratio_min'])
+                profit_scale_entry_atr_ratio_min = float(tune['loss_scale_entry_short_atr_ratio_min'])
 
         if 'consecutive_losses_month_stop_filter' in tune:
             consecutive_losses_month_stop_filter = bool(tune['consecutive_losses_month_stop_filter'])

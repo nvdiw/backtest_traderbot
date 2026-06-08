@@ -93,9 +93,9 @@ def ma_strategy(tune: dict = None):
     scale_entry_on_profit_enabled = cfg.scale_entry_on_profit_enabled
     scale_entry_on_loss_enabled = cfg.scale_entry_on_loss_enabled
     scale_in_enabled = cfg.scale_in_enabled
-    loss_scale_entry_filter_enabled = cfg.loss_scale_entry_filter_enabled
-    loss_scale_entry_min_score = cfg.loss_scale_entry_min_score
-    loss_scale_entry_atr_ratio_min = cfg.loss_scale_entry_atr_ratio_min
+    profit_scale_entry_filter_enabled = cfg.profit_scale_entry_filter_enabled
+    profit_scale_entry_min_score = cfg.profit_scale_entry_min_score
+    profit_scale_entry_atr_ratio_min = cfg.profit_scale_entry_atr_ratio_min
     adx_filter = cfg.adx_filter
     volume_filter = cfg.volume_filter
     atr_filter = cfg.atr_filter
@@ -258,7 +258,7 @@ def ma_strategy(tune: dict = None):
     long_profit_scale_entry_attempts = 0
 
     # Filtered = loss-based attempts rejected by trend/momentum filter
-    long_filtered_loss_scale_entries = 0
+    long_filtered_profit_scale_entries = 0
 
     # Executed entries = actual filled scale-in orders
     long_profit_scale_entries = 0
@@ -271,7 +271,7 @@ def ma_strategy(tune: dict = None):
     short_profit_scale_entry_attempts = 0
 
     # Filtered = loss-based attempts rejected by trend/momentum filter
-    short_filtered_loss_scale_entries = 0
+    short_filtered_profit_scale_entries = 0
 
     # Executed entries = actual filled scale-in orders
     short_profit_scale_entries = 0
@@ -1118,26 +1118,26 @@ def ma_strategy(tune: dict = None):
                 elif long_scale_entry_reason == "loss":
                     long_loss_scale_entry_attempts += 1
 
-                long_loss_scale_entry_score = 0
-                if long_scale_entry_reason == "loss" and loss_scale_entry_filter_enabled:
-                    # loss-based scale entry is allowed only when trend and momentum still support LONG.
+                long_profit_scale_entry_score = 0
+                if long_scale_entry_reason == "profit" and profit_scale_entry_filter_enabled:
+                    # validate profit scale entry quality before adding to a winning position.
                     if ema_16[i] > ma_50[i]:
-                        long_loss_scale_entry_score += 1
-                    if ma_100[i] >= ma_200[i]:
-                        long_loss_scale_entry_score += 1
+                        long_profit_scale_entry_score += 1
+                    if ma_100[i] > ma_200[i]:
+                        long_profit_scale_entry_score += 1
                     if i > 0 and close_prices[i] > open_prices[i] and close_prices[i] > close_prices[i - 1]:
-                        long_loss_scale_entry_score += 1
+                        long_profit_scale_entry_score += 1
                     if atr[i] is not None and atr_ma[i] is not None and atr_ma[i] > 0:
                         long_scale_entry_atr_ratio = atr[i] / atr_ma[i]
-                        if long_scale_entry_atr_ratio >= loss_scale_entry_atr_ratio_min:
-                            long_loss_scale_entry_score += 1
+                        if long_scale_entry_atr_ratio >= profit_scale_entry_atr_ratio_min:
+                            long_profit_scale_entry_score += 1
                     if volume_filter:
                         vol_now = volume_prices[i]
                         vol_avg15 = vol_avg_15_list[i]
                         if vol_now >= volume_spike_multiplier * vol_avg15:
-                            long_loss_scale_entry_score += 2
-                    if long_loss_scale_entry_score < loss_scale_entry_min_score:
-                        long_filtered_loss_scale_entries += 1
+                            long_profit_scale_entry_score += 2
+                    if long_profit_scale_entry_score < profit_scale_entry_min_score:
+                        long_filtered_profit_scale_entries += 1
                         long_scale_entry_reason = None
 
                 if long_scale_entry_reason is not None:
@@ -1194,17 +1194,14 @@ def ma_strategy(tune: dict = None):
                                     long_scale_entry_text += (
                                         f"Price moved +{scale_entry_profit_trigger_pct*100:.2f}% from first LONG entry."
                                     )
-                                else:
-                                    long_scale_entry_text += (
-                                        f"Price moved -{scale_entry_loss_trigger_pct*100:.2f}% from first LONG entry."
-                                    )
-                                    if loss_scale_entry_filter_enabled:
+
+                                    if profit_scale_entry_filter_enabled:
                                         long_scale_entry_text += (
-                                            f"\nLoss filter score: {long_loss_scale_entry_score}/{loss_scale_entry_min_score}"
+                                            f"\nProfit filter score: {long_profit_scale_entry_score}/{profit_scale_entry_min_score}"
                                         )
-                                long_open_reasons[i] = (
-                                    long_scale_entry_text
-                                )
+
+                                long_open_reasons[i] = long_scale_entry_text
+                                
                     updates = None
 
 
@@ -1636,26 +1633,26 @@ def ma_strategy(tune: dict = None):
                 elif short_scale_entry_reason == "loss":
                     short_loss_scale_entry_attempts += 1
 
-                short_loss_scale_entry_score = 0
-                if short_scale_entry_reason == "loss" and loss_scale_entry_filter_enabled:
-                    # loss-based scale entry is allowed only when trend and momentum still support SHORT.
-                    if ema_16[i] <= ma_50[i]:
-                        short_loss_scale_entry_score += 1
+                short_profit_scale_entry_score = 0
+                if short_scale_entry_reason == "profit" and profit_scale_entry_filter_enabled:
+                    # validate profit scale entry quality before adding to a winning SHORT position.
+                    if ema_16[i] < ma_50[i]:
+                        short_profit_scale_entry_score += 1
                     if ma_100[i] < ma_200[i]:
-                        short_loss_scale_entry_score += 1
+                        short_profit_scale_entry_score += 1
                     if i > 0 and close_prices[i] < open_prices[i] and close_prices[i] < close_prices[i - 1]:
-                        short_loss_scale_entry_score += 1
+                        short_profit_scale_entry_score += 1
                     if atr[i] is not None and atr_ma[i] is not None and atr_ma[i] > 0:
                         short_scale_entry_atr_ratio = atr[i] / atr_ma[i]
-                        if short_scale_entry_atr_ratio >= loss_scale_entry_atr_ratio_min:
-                            short_loss_scale_entry_score += 1
+                        if short_scale_entry_atr_ratio >= profit_scale_entry_atr_ratio_min:
+                            short_profit_scale_entry_score += 1
                     if volume_filter:
                         vol_now = volume_prices[i]
                         vol_avg15 = vol_avg_15_list[i]
                         if vol_now >= volume_spike_multiplier * vol_avg15:
-                            short_loss_scale_entry_score += 2
-                    if short_loss_scale_entry_score < loss_scale_entry_min_score:
-                        short_filtered_loss_scale_entries += 1
+                            short_profit_scale_entry_score += 2
+                    if short_profit_scale_entry_score < profit_scale_entry_min_score:
+                        short_filtered_profit_scale_entries += 1
                         short_scale_entry_reason = None
 
                 if short_scale_entry_reason is not None:
@@ -1712,17 +1709,14 @@ def ma_strategy(tune: dict = None):
                                     short_scale_entry_text += (
                                         f"Price moved -{scale_entry_profit_trigger_pct*100:.2f}% from first SHORT entry."
                                     )
-                                else:
-                                    short_scale_entry_text += (
-                                        f"Price moved +{scale_entry_loss_trigger_pct*100:.2f}% from first SHORT entry."
-                                    )
-                                    if loss_scale_entry_filter_enabled:
+
+                                    if profit_scale_entry_filter_enabled:
                                         short_scale_entry_text += (
-                                            f"\nLoss filter score: {short_loss_scale_entry_score}/{loss_scale_entry_min_score}"
+                                            f"\nProfit filter score: {short_profit_scale_entry_score}/{profit_scale_entry_min_score}"
                                         )
-                                short_open_reasons[i] = (
-                                    short_scale_entry_text
-                                )
+
+                                short_open_reasons[i] = short_scale_entry_text
+
                     updates = None
 
 
@@ -2043,15 +2037,15 @@ def ma_strategy(tune: dict = None):
 
         # ===================== LONG =====================
         print("LONG SCALE ENTRY")
-        print(f"  PROFIT  → Triggered: {long_profit_scale_entry_attempts} | Executed: {long_profit_scale_entries}")
-        print(f"  LOSS    → Triggered: {long_loss_scale_entry_attempts} | Executed: {long_loss_scale_entries} | Filtered: {long_filtered_loss_scale_entries}")
+        print(f"  PROFIT  → Triggered: {long_profit_scale_entry_attempts} | Executed: {long_profit_scale_entries} | Filtered: {long_filtered_profit_scale_entries}")
+        print(f"  LOSS    → Triggered: {long_loss_scale_entry_attempts} | Executed: {long_loss_scale_entries}")
 
         print()
 
         # ===================== SHORT =====================
         print("SHORT SCALE ENTRY")
-        print(f"  PROFIT  → Triggered: {short_profit_scale_entry_attempts} | Executed: {short_profit_scale_entries}")
-        print(f"  LOSS    → Triggered: {short_loss_scale_entry_attempts} | Executed: {short_loss_scale_entries} | Filtered: {short_filtered_loss_scale_entries}")
+        print(f"  PROFIT  → Triggered: {short_profit_scale_entry_attempts} | Executed: {short_profit_scale_entries} | Filtered: {short_filtered_profit_scale_entries}")
+        print(f"  LOSS    → Triggered: {short_loss_scale_entry_attempts} | Executed: {short_loss_scale_entries}")
 
         print("\n===== SCALE MA CLOSED TRADES =====")
 

@@ -88,9 +88,9 @@ param_grid = {
     'scale_entry_loss_trigger_pct': [0.01, 0.015, 0.02, 0.03, 0.04, 0.05],
     'scale_entry_on_profit_enabled': [False, True],
     'scale_entry_on_loss_enabled': [False, True],
-    'loss_scale_entry_filter_enabled': [False, True],
-    'loss_scale_entry_min_score': [2, 3, 4],
-    'loss_scale_entry_atr_ratio_min': [0.9, 1.0, 1.1, 1.2],
+    'profit_scale_entry_filter_enabled': [False, True],
+    'profit_scale_entry_min_score': [2, 3, 4],
+    'profit_scale_entry_atr_ratio_min': [0.9, 1.0, 1.1, 1.2],
     'monthly_profit_percent_stop_trade': [5, 6, 7, 8, 9, 10],
     'monthly_loss_percent_stop_trade': [i for i in range(14, 31)],
     'monthly_profit_close_filter': [True, False],
@@ -165,8 +165,8 @@ param_grid = {
     # 'rsi_cooldown_filter': [True, False],
 
 
-    'loss_scale_entry_min_score': [1, 2, 3, 4, 5, 6, 7, 8],
-    'loss_scale_entry_filter_enabled': [False, True],
+    'profit_scale_entry_min_score': [1, 2, 3, 4, 5, 6, 7],
+    'profit_scale_entry_filter_enabled': [False, True],
     'scale_in_enabled': [True,False],
     'scale_entry_on_profit_enabled': [False, True],
     'scale_entry_on_loss_enabled': [False, True],

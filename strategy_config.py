@@ -36,9 +36,9 @@ def _apply_common_tune(config, tune):
         config.scale_entry_loss_trigger_pct = trigger_pct
 
     if 'loss_scale_entry_long_atr_ratio_min' in tune:
-        config.loss_scale_entry_atr_ratio_min = float(tune['loss_scale_entry_long_atr_ratio_min'])
+        config.profit_scale_entry_atr_ratio_min = float(tune['loss_scale_entry_long_atr_ratio_min'])
     if 'loss_scale_entry_short_atr_ratio_min' in tune:
-        config.loss_scale_entry_atr_ratio_min = float(tune['loss_scale_entry_short_atr_ratio_min'])
+        config.profit_scale_entry_atr_ratio_min = float(tune['loss_scale_entry_short_atr_ratio_min'])
 
     if 'ema_16' in tune:
         config.ema_16_period = int(tune['ema_16'])
@@ -115,11 +115,11 @@ class ScaleEntryConfig:
     # Master switch for all scale-in behavior.
     scale_in_enabled: bool = True
     # Require extra quality checks before loss-side scale-in entries.
-    loss_scale_entry_filter_enabled: bool = True
+    profit_scale_entry_filter_enabled: bool = True
     # Minimum entry score required for loss-side scale-in entries.
-    loss_scale_entry_min_score: int = 2
+    profit_scale_entry_min_score: int = 4
     # Minimum ATR/ATR_MA ratio for loss-side scale-in entries.
-    loss_scale_entry_atr_ratio_min: float = 1.0
+    profit_scale_entry_atr_ratio_min: float = 1.0
 
 
 @dataclass
