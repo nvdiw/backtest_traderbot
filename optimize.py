@@ -148,9 +148,9 @@ param_grid = {
 }
 
 param_grid = {     
-    # 'rsi_long_open_monthly_profit': [i for i in range(5, 16)],
+    'rsi_long_open_monthly_profit': [i for i in range(5, 31)],
     # 'rsi_long_close_monthly_profit': [i for i in range(75, 86)],
-    # 'rsi_short_open_monthly_profit': [i for i in range(60, 96)],
+    'rsi_short_open_monthly_profit': [i for i in range(70, 96)],
     # 'rsi_short_close_monthly_profit': [i for i in range(10, 81)],
     # 'rsi_long_tp_pct': [i/100 for i in range(1, 5)],
     # 'rsi_long_sl_pct': [i/100 for i in range(1, 5)],
@@ -165,11 +165,11 @@ param_grid = {
     # 'rsi_cooldown_filter': [True, False],
 
 
-    'profit_scale_entry_min_score': [1, 2, 3, 4, 5, 6, 7],
-    'profit_scale_entry_filter_enabled': [False, True],
-    'scale_in_enabled': [True,False],
-    'scale_entry_on_profit_enabled': [False, True],
-    'scale_entry_on_loss_enabled': [False, True],
+    # 'profit_scale_entry_min_score': [1, 2, 3, 4, 5, 6, 7],
+    # 'profit_scale_entry_filter_enabled': [False, True],
+    # 'scale_in_enabled': [True,False],
+    # 'scale_entry_on_profit_enabled': [False, True],
+    # 'scale_entry_on_loss_enabled': [False, True],
 }
 
 # strategies setting only one of them should be True
@@ -188,7 +188,60 @@ while True:
     try:
         with open(out_file, 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(keys + ['final_balance_static', 'final_balance_dynamic', 'total_profit', 'total_profit_percent', 'closed_trades', 'wins', 'losses', 'maximum_drawdown', 'win_rate', 'duration_s', 'profit_months', 'loss_months'])
+            writer.writerow(
+                keys + [
+                    'final_balance_static',
+                    'final_balance_dynamic',
+                    'total_profit',
+                    'total_profit_percent',
+                    'closed_trades',
+                    'wins',
+                    'losses',
+                    'maximum_drawdown',
+                    'win_rate',
+                    'duration_s',
+                    'profit_months',
+                    'loss_months',
+
+                    # RSI
+                    'rsi_total_trades',
+                    'rsi_wins',
+                    'rsi_losses',
+                    'rsi_winrate',
+                    'rsi_total_profit',
+
+                    'rsi_long_trades',
+                    'rsi_long_wins',
+                    'rsi_long_losses',
+                    'rsi_long_winrate',
+                    'rsi_long_profit',
+
+                    'rsi_short_trades',
+                    'rsi_short_wins',
+                    'rsi_short_losses',
+                    'rsi_short_winrate',
+                    'rsi_short_profit',
+
+                    # SCALE
+                    'scale_total_trades',
+                    'scale_wins',
+                    'scale_losses',
+                    'scale_winrate',
+                    'scale_total_profit',
+
+                    'scale_long_trades',
+                    'scale_long_wins',
+                    'scale_long_losses',
+                    'scale_long_winrate',
+                    'scale_long_profit',
+
+                    'scale_short_trades',
+                    'scale_short_wins',
+                    'scale_short_losses',
+                    'scale_short_winrate',
+                    'scale_short_profit',
+                ]
+            )
         break
 
     except PermissionError:
@@ -246,7 +299,45 @@ def _result_to_row(keys, tune, res, duration):
         res.get('win_rate'),
         round(duration, 2),
         res.get('profit_months'),
-        res.get('loss_months')
+        res.get('loss_months'),
+
+        # RSI
+        res.get('rsi_total_trades'),
+        res.get('rsi_wins'),
+        res.get('rsi_losses'),
+        res.get('rsi_winrate'),
+        res.get('rsi_total_profit'),
+
+        res.get('rsi_long_trades'),
+        res.get('rsi_long_wins'),
+        res.get('rsi_long_losses'),
+        res.get('rsi_long_winrate'),
+        res.get('rsi_long_profit'),
+
+        res.get('rsi_short_trades'),
+        res.get('rsi_short_wins'),
+        res.get('rsi_short_losses'),
+        res.get('rsi_short_winrate'),
+        res.get('rsi_short_profit'),
+
+        # SCALE
+        res.get('scale_total_trades'),
+        res.get('scale_wins'),
+        res.get('scale_losses'),
+        res.get('scale_winrate'),
+        res.get('scale_total_profit'),
+
+        res.get('scale_long_trades'),
+        res.get('scale_long_wins'),
+        res.get('scale_long_losses'),
+        res.get('scale_long_winrate'),
+        res.get('scale_long_profit'),
+
+        res.get('scale_short_trades'),
+        res.get('scale_short_wins'),
+        res.get('scale_short_losses'),
+        res.get('scale_short_winrate'),
+        res.get('scale_short_profit'),
     ]
 
 
