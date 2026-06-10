@@ -180,10 +180,12 @@ def ma_strategy(tune: dict = None):
     rsi_max_open_trades = cfg.rsi_max_open_trades
     rsi_trade_amount_percent = cfg.rsi_trade_amount_percent
     rsi_leverage = cfg.rsi_leverage
-    momentum_window = cfg.momentum_window
     rsi_cooldown_bars = cfg.rsi_cooldown_bars
     rsi_cooldown_filter = cfg.rsi_cooldown_filter
-
+    lowest_rsi_last_n_value = cfg.lowest_rsi_last_n_value
+    highest_rsi_last_n_value = cfg.highest_rsi_last_n_value
+    rsi_entry_buffer = cfg.rsi_entry_buffer
+    rsi_distance_threshold = cfg.rsi_distance_threshold
     def build_score_reason_text(title, reasons, total_score, threshold):
         lines = [title]
         if reasons:
@@ -679,6 +681,7 @@ def ma_strategy(tune: dict = None):
                         remaining_open_margin,
                         remaining_open_margin_no_fee,
                         tactical_balance,
+                        p['reason'],
                         balance_before_close_batch,
                         balance_before_close_batch_no_fee,
                         p['balance_before_trade'],
@@ -778,6 +781,7 @@ def ma_strategy(tune: dict = None):
                         remaining_open_margin,
                         remaining_open_margin_no_fee,
                         tactical_balance,
+                        p['reason'],
                         balance_before_close_batch,
                         balance_before_close_batch_no_fee,
                         p['balance_before_trade'],
@@ -853,21 +857,36 @@ def ma_strategy(tune: dict = None):
                     pending_monthly_stop_value = 0.0
                     trade_power = True 
 
-                if rsi_trade_monthly_filter_on:
-                    # ---- safety open long when monthly filter is on:
-                    # calculate momentum up
-                    momentum_up = close_prices[i] > sum(close_prices[i-momentum_window:i]) / momentum_window
 
-                    # calculate rsi in cooldown
-                    if rsi_in_cooldown == True:
+                # ==== RSI OPEN LONG ====
+                if rsi_trade_monthly_filter_on:
+
+                    momentum_up = (
+                        close_prices[i] > close_prices[i-1]
+                        and close_prices[i-1] > close_prices[i-2]
+                    )
+
+                    lowest_rsi_last_n = min(rsi_list[i - lowest_rsi_last_n_value : i])
+
+                    rsi_now = rsi_list[i]
+                    rsi_prev = rsi_list[i-1]
+
+                    rsi_rejection_up = rsi_prev < rsi_now
+
+                    rsi_distance_up = rsi_now - lowest_rsi_last_n
+
+                    if rsi_in_cooldown:
                         if i > rsi_last_index_stop_loss_bar + rsi_cooldown_bars:
                             rsi_in_cooldown = False
 
                     if (
-                        rsi_list[i] <= rsi_long_open_monthly_profit 
-                        and len(open_positions) < rsi_max_open_trades 
-                        and momentum_up 
-                        and rsi_in_cooldown == False
+                        lowest_rsi_last_n <= rsi_long_open_monthly_profit
+                        and rsi_now <= min(100, rsi_long_open_monthly_profit + rsi_entry_buffer)
+                        and rsi_rejection_up
+                        and rsi_distance_up >= rsi_distance_threshold
+                        and momentum_up
+                        and len(open_positions) < rsi_max_open_trades
+                        and not rsi_in_cooldown
                     ):
                         # ---- open long ----
                         updates = trade_manager.open_long(
@@ -921,21 +940,35 @@ def ma_strategy(tune: dict = None):
                             last_trade_cross_index = last_cross_index
                             updates = None
 
+                # ==== RSI OPEN SHORT ====
+                if rsi_trade_monthly_filter_on:
 
-                    # ---- safety open short when monthly filter is on
-                    # calculate momentum down
-                    momentum_down = close_prices[i] < sum(close_prices[i-momentum_window:i]) / momentum_window
+                    momentum_down = (
+                        close_prices[i] < close_prices[i-1]
+                        and close_prices[i-1] < close_prices[i-2]
+                    )
 
-                    # calculate rsi in cooldown
-                    if rsi_in_cooldown == True:
+                    highest_rsi_last_n = max(rsi_list[i - highest_rsi_last_n_value : i])
+
+                    rsi_now = rsi_list[i]
+                    rsi_prev = rsi_list[i-1]
+
+                    rsi_rejection_down = rsi_prev > rsi_now
+
+                    rsi_distance_down = highest_rsi_last_n - rsi_now
+
+                    if rsi_in_cooldown:
                         if i > rsi_last_index_stop_loss_bar + rsi_cooldown_bars:
                             rsi_in_cooldown = False
 
                     if (
-                        rsi_list[i] >= rsi_short_open_monthly_profit 
-                        and len(open_positions) < rsi_max_open_trades 
-                        and momentum_down 
-                        and rsi_in_cooldown == False
+                        highest_rsi_last_n >= rsi_short_open_monthly_profit
+                        and rsi_now >= max(0, rsi_short_open_monthly_profit - rsi_entry_buffer)
+                        and rsi_rejection_down
+                        and rsi_distance_down >= rsi_distance_threshold
+                        and momentum_down
+                        and len(open_positions) < rsi_max_open_trades
+                        and not rsi_in_cooldown
                     ):
                         # ---- open short ----
                         updates = trade_manager.open_short(
@@ -1408,6 +1441,7 @@ def ma_strategy(tune: dict = None):
                     remaining_open_margin,
                     remaining_open_margin_no_fee,
                     tactical_balance,
+                    p['reason'],
                     balance_before_close_batch,
                     balance_before_close_batch_no_fee,
                     p['balance_before_trade'],
@@ -1925,6 +1959,7 @@ def ma_strategy(tune: dict = None):
                     remaining_open_margin,
                     remaining_open_margin_no_fee,
                     tactical_balance,
+                    p['reason'],
                     balance_before_close_batch,
                     balance_before_close_batch_no_fee,
                     p['balance_before_trade'],

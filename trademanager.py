@@ -186,7 +186,7 @@ class TradeManager:
                 total_long, cooldown_after_big_pnl, leverage,
                 cooldown_until_index, open_time_value, csv_logger, trade_amount_percent, 
                 profit_percent_per_month, save_money, trade_power, trade_id, remaining_open_margin,
-                remaining_open_margin_no_fee, tactical_balance,
+                remaining_open_margin_no_fee, tactical_balance, reason_to_close,
                 balance_before_close_snapshot=None, balance_before_close_no_fee_snapshot=None,
                 balance_before_log_override=None, balance_before_log_override_no_fee=None, remaining_open_equity=None):
 
@@ -311,7 +311,8 @@ class TradeManager:
             minutes,
             round(save_money, 6),
             log_profit_percent_per_month,
-            has_other_open_positions_at_close
+            has_other_open_positions_at_close,
+            reason_to_close
         )
         profit_percent_per_month = log_profit_percent_per_month
 
@@ -442,7 +443,7 @@ class TradeManager:
             total_short, cooldown_after_big_pnl, leverage,
             cooldown_until_index, open_time_value, csv_logger, trade_amount_percent, 
             profit_percent_per_month, save_money, trade_power, trade_id, remaining_open_margin,
-            remaining_open_margin_no_fee, tactical_balance,
+            remaining_open_margin_no_fee, tactical_balance, reason_to_close,
             balance_before_close_snapshot=None, balance_before_close_no_fee_snapshot=None,
             balance_before_log_override=None, balance_before_log_override_no_fee=None, remaining_open_equity=None):
 
@@ -568,6 +569,7 @@ class TradeManager:
             round(save_money, 6),
             log_profit_percent_per_month,
             has_other_open_positions_at_close
+            reason_to_close
         )
         profit_percent_per_month = log_profit_percent_per_month
 

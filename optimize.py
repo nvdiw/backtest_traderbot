@@ -134,6 +134,11 @@ param_grid = {
     'momentum_window': [i for i in range(1, 11)],
     'rsi_cooldown_bars': [i for i in range(0, 101)],
     'rsi_cooldown_filter': [True, False],
+    'lowest_rsi_last_n_value': [i for i in range(1, 10)],
+    'highest_rsi_last_n_value': [i for i in range(1, 10)],
+    'rsi_entry_buffer': [3, 4, 5],
+    'rsi_distance_threshold': [2, 3, 4],
+
 
     # ==== spot_limbian_strategy variables ====
     'symbol_change_pct': [i/100 for i in range(-10, 11)],
@@ -148,9 +153,9 @@ param_grid = {
 }
 
 param_grid = {     
-    'rsi_long_open_monthly_profit': [i for i in range(5, 31)],
+    # 'rsi_long_open_monthly_profit': [i for i in range(5, 31)],
     # 'rsi_long_close_monthly_profit': [i for i in range(75, 86)],
-    'rsi_short_open_monthly_profit': [i for i in range(70, 96)],
+    # 'rsi_short_open_monthly_profit': [i for i in range(70, 96)],
     # 'rsi_short_close_monthly_profit': [i for i in range(10, 81)],
     # 'rsi_long_tp_pct': [i/100 for i in range(1, 5)],
     # 'rsi_long_sl_pct': [i/100 for i in range(1, 5)],
@@ -163,8 +168,12 @@ param_grid = {
     # 'momentum_window': [i for i in range(1, 11)],
     # 'rsi_cooldown_bars': [i for i in range(0, 101)],
     # 'rsi_cooldown_filter': [True, False],
-
-
+    'rsi_long_open_monthly_profit': [25],
+    'rsi_short_open_monthly_profit': [75],
+    'lowest_rsi_last_n_value': [1, 4, 5],
+    'highest_rsi_last_n_value': [1, 4, 5],
+    'rsi_entry_buffer': [1, 2, 3, 7, 8],
+    'rsi_distance_threshold': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     # 'profit_scale_entry_min_score': [1, 2, 3, 4, 5, 6, 7],
     # 'profit_scale_entry_filter_enabled': [False, True],
     # 'scale_in_enabled': [True,False],
