@@ -288,6 +288,8 @@ class TradeManager:
         has_other_open_positions_at_close = remaining_open_margin > 0
         log_total_assets = total_assets
         log_profit_percent_per_month = (((log_total_assets - save_money) * 100) / tactical_balance) - 100
+        if reason_to_close == "rsi_monthly_filter_strategy" and log_profit_percent_per_month > 0:
+            log_profit_percent_per_month = 0
         csv_logger.log_trade(
             trade_id,
             "LONG",
@@ -545,6 +547,8 @@ class TradeManager:
         has_other_open_positions_at_close = remaining_open_margin > 0
         log_total_assets = total_assets
         log_profit_percent_per_month = (((log_total_assets - save_money) * 100) / tactical_balance) - 100
+        if reason_to_close == "rsi_monthly_filter_strategy" and log_profit_percent_per_month > 0:
+            log_profit_percent_per_month = 0
         csv_logger.log_trade(
             trade_id,
             "SHORT",
@@ -568,7 +572,7 @@ class TradeManager:
             minutes,
             round(save_money, 6),
             log_profit_percent_per_month,
-            has_other_open_positions_at_close
+            has_other_open_positions_at_close,
             reason_to_close
         )
         profit_percent_per_month = log_profit_percent_per_month
@@ -621,13 +625,19 @@ class TradeManager:
         save_money, max_drawdown, open_time_value,
         csv_logger, trade_amount_percent,
         total_liquids, trade_id, remaining_open_margin,
-        remaining_open_margin_no_fee, tactical_balance,
-        balance_before_close_snapshot=None, balance_before_close_no_fee_snapshot=None,
-        balance_before_log_override=None, balance_before_log_override_no_fee=None, remaining_open_equity=None
+        remaining_open_margin_no_fee, tactical_balance, reason_to_close,
+        balance_before_close_snapshot=None,
+        balance_before_close_no_fee_snapshot=None,
+        balance_before_log_override=None,
+        balance_before_log_override_no_fee=None,
+        remaining_open_equity=None
     ):
 
         liquid_price_long = entry_price * (1 - 1 / leverage)
 
+        # --------------------------
+        # NOT LIQUIDATED
+        # --------------------------
         if low_prices[i] > liquid_price_long:
             return {
                 'liquidated': False,
@@ -643,78 +653,132 @@ class TradeManager:
                 'close_time_value': None
             }
 
+        # --------------------------
+        # LIQUIDATION HAPPENS
+        # --------------------------
         close_price = liquid_price_long
         close_time_value = close_times[i]
+
         if balance_before_close_snapshot is None:
-            balance_before_close = balance
+            free_balance_before_close = balance
         else:
-            balance_before_close = balance_before_close_snapshot
+            free_balance_before_close = balance_before_close_snapshot
+
         if balance_before_close_no_fee_snapshot is None:
-            balance_before_close_no_fee = balance_without_fee
+            free_balance_before_close_no_fee = balance_without_fee
         else:
-            balance_before_close_no_fee = balance_before_close_no_fee_snapshot
+            free_balance_before_close_no_fee = balance_before_close_no_fee_snapshot
 
-        profit = -margin
-        capital_before_trade = balance_before_close + margin
-        profit_percent = self._safe_percent(profit, capital_before_trade)
-        pnl_percent = -100
-        total_fee_liq = 0
+        # --------------------------
+        # PnL (FULL LOSS)
+        # --------------------------
+        pnl = -margin
+        pnl_no_fee = -margin
 
-        # Margin has already been deducted at open-time, so free balance stays unchanged on liquidation.
-        balance = balance_before_close
-        balance_without_fee = balance_before_close_no_fee
+        entry_fee = 0
+        exit_fee = 0
+        total_fee = 0
 
-        deducting_fee_total += total_fee_liq
-        count_closed_orders += 1
-        total_losses += 1
-        total_long += 1
-        total_liquids += 1
+        # --------------------------
+        # BALANCE UPDATE (same logic style as close_long)
+        # --------------------------
+        balance += margin + pnl - total_fee
+        balance_without_fee += margin + pnl_no_fee
 
-        total_assets = self._resolve_total_assets(balance, save_money, remaining_open_margin, remaining_open_equity)
-        profit_percent_per_month = (((total_assets - save_money) * 100) / tactical_balance) - 100
-        equity_curve, max_drawdown = self._update_drawdown(equity_curve, max_drawdown, total_assets)
+        profit = pnl - total_fee
 
-        days, hours, minutes = trade_duration(open_time_value, close_time_value)
-
-        if self.verbose:
-            print("\U0001F534 LONG LIQUIDATED at price:", round(close_price, 2),
-                "| Time:", close_time_value)
-
-        # -------- CSV LOG --------
+        # --------------------------
+        # CSV BALANCE (same as close_long)
+        # --------------------------
         logged_balance_before, logged_balance_after = self._resolve_csv_balances(
-            balance_before_close,
+            free_balance_before_close,
             margin,
             profit,
             balance_before_override=balance_before_log_override,
             remaining_open_margin=remaining_open_margin
         )
+
+        logged_balance_before_no_fee, logged_balance_after_no_fee = self._resolve_csv_balances(
+            free_balance_before_close_no_fee,
+            margin,
+            pnl_no_fee,
+            balance_before_override=balance_before_log_override_no_fee,
+            remaining_open_margin=remaining_open_margin_no_fee
+        )
+
+        # --------------------------
+        # METRICS (aligned with close_long)
+        # --------------------------
+        profit_percent = self._safe_percent(profit, logged_balance_before)
+        pnl_percent = self._safe_percent(pnl, margin)
+
+        deducting_fee_total += total_fee
+        count_closed_orders += 1
+        total_losses += 1
+        total_long += 1
+        total_liquids += 1
+
+        total_assets = self._resolve_total_assets(
+            balance,
+            save_money,
+            remaining_open_margin,
+            remaining_open_equity
+        )
+
+        equity_curve, max_drawdown = self._update_drawdown(
+            equity_curve,
+            max_drawdown,
+            total_assets
+        )
+
+        profit_percent_per_month = (
+            ((total_assets - save_money) * 100) / tactical_balance
+        ) - 100
+
+        # --------------------------
+        # LOG TIME
+        # --------------------------
+        days, hours, minutes = trade_duration(open_time_value, close_time_value)
+
+        if self.verbose:
+            print("🔴 LONG LIQUIDATED at price:", round(close_price, 2),
+                "| Time:", close_time_value)
+
+        # --------------------------
+        # CSV LOG (same structure as close_long)
+        # --------------------------
         has_other_open_positions_at_close = remaining_open_margin > 0
+
         csv_logger.log_trade(
             trade_id,
-            "LONG_LIQUIDATED",           # Trade type
-            open_time_value,             # Open Time
-            close_time_value,            # Close Time
-            entry_price,                 # Entry Price
-            close_price,                 # Close Price
+            "LONG_LIQUIDATED",
+            open_time_value,
+            close_time_value,
+            entry_price,
+            close_price,
             round(tactical_balance, 2),
             round(total_assets, 2),
-            round(logged_balance_before, 2),  # Balance before close
-            round(logged_balance_after, 2),            # Balance after trade
-            round(margin, 2),             # Margin used
-            leverage,                    # Leverage
-            trade_amount_percent,        # Trade amount percent
-            round(profit, 2),             # Profit in $
-            round(profit_percent, 2),     # Profit %
-            round(pnl_percent, 2),        # PnL %
-            round(total_fee_liq, 4),      # Total Fee
+            round(logged_balance_before, 2),
+            round(logged_balance_after, 2),
+            round(margin, 2),
+            leverage,
+            trade_amount_percent,
+            round(profit, 2),
+            round(profit_percent, 2),
+            round(pnl_percent, 2),
+            round(total_fee, 4),
             days,
             hours,
             minutes,
-            save_money,
+            round(save_money, 6),
             profit_percent_per_month,
-            has_other_open_positions_at_close
+            has_other_open_positions_at_close,
+            reason_to_close
         )
 
+        # --------------------------
+        # RETURN
+        # --------------------------
         return {
             'liquidated': True,
             'balance': balance,
@@ -741,13 +805,19 @@ class TradeManager:
         save_money, max_drawdown, open_time_value,
         csv_logger, trade_amount_percent,
         total_liquids, trade_id, remaining_open_margin,
-        remaining_open_margin_no_fee, tactical_balance,
-        balance_before_close_snapshot=None, balance_before_close_no_fee_snapshot=None,
-        balance_before_log_override=None, balance_before_log_override_no_fee=None, remaining_open_equity=None
+        remaining_open_margin_no_fee, tactical_balance, reason_to_close,
+        balance_before_close_snapshot=None,
+        balance_before_close_no_fee_snapshot=None,
+        balance_before_log_override=None,
+        balance_before_log_override_no_fee=None,
+        remaining_open_equity=None
     ):
 
         liquid_price_short = entry_price * (1 + 1 / leverage)
 
+        # --------------------------
+        # NOT LIQUIDATED
+        # --------------------------
         if high_prices[i] < liquid_price_short:
             return {
                 'liquidated': False,
@@ -763,78 +833,130 @@ class TradeManager:
                 'close_time_value': None
             }
 
+        # --------------------------
+        # LIQUIDATION HAPPENS
+        # --------------------------
         close_price = liquid_price_short
         close_time_value = close_times[i]
+
         if balance_before_close_snapshot is None:
-            balance_before_close = balance
+            free_balance_before_close = balance
         else:
-            balance_before_close = balance_before_close_snapshot
+            free_balance_before_close = balance_before_close_snapshot
+
         if balance_before_close_no_fee_snapshot is None:
-            balance_before_close_no_fee = balance_without_fee
+            free_balance_before_close_no_fee = balance_without_fee
         else:
-            balance_before_close_no_fee = balance_before_close_no_fee_snapshot
+            free_balance_before_close_no_fee = balance_before_close_no_fee_snapshot
 
-        profit = -margin
-        capital_before_trade = balance_before_close + margin
-        profit_percent = self._safe_percent(profit, capital_before_trade)
-        pnl_percent = -100
-        total_fee_liq = 0
+        # --------------------------
+        # PnL (FULL LOSS)
+        # --------------------------
+        pnl = -margin
+        pnl_no_fee = -margin
 
-        # Margin has already been deducted at open-time, so free balance stays unchanged on liquidation.
-        balance = balance_before_close
-        balance_without_fee = balance_before_close_no_fee
+        total_fee = 0
 
-        deducting_fee_total += total_fee_liq
-        count_closed_orders += 1
-        total_losses += 1
-        total_short += 1
-        total_liquids += 1
+        # --------------------------
+        # BALANCE UPDATE (same logic as close_long style)
+        # --------------------------
+        balance += margin + pnl - total_fee
+        balance_without_fee += margin + pnl_no_fee
 
-        total_assets = self._resolve_total_assets(balance, save_money, remaining_open_margin, remaining_open_equity)
-        profit_percent_per_month = (((total_assets - save_money) * 100) / tactical_balance) - 100
-        equity_curve, max_drawdown = self._update_drawdown(equity_curve, max_drawdown, total_assets)
+        profit = pnl - total_fee
 
-        days, hours, minutes = trade_duration(open_time_value, close_time_value)
-
-        if self.verbose:
-            print("\U0001F534 SHORT LIQUIDATED at price:", round(close_price, 2),
-                "| Time:", close_time_value)
-
-        # -------- CSV LOG --------
+        # --------------------------
+        # CSV BALANCE (aligned with close_long)
+        # --------------------------
         logged_balance_before, logged_balance_after = self._resolve_csv_balances(
-            balance_before_close,
+            free_balance_before_close,
             margin,
             profit,
             balance_before_override=balance_before_log_override,
             remaining_open_margin=remaining_open_margin
         )
+
+        logged_balance_before_no_fee, logged_balance_after_no_fee = self._resolve_csv_balances(
+            free_balance_before_close_no_fee,
+            margin,
+            pnl_no_fee,
+            balance_before_override=balance_before_log_override_no_fee,
+            remaining_open_margin=remaining_open_margin_no_fee
+        )
+
+        # --------------------------
+        # METRICS (aligned with close_long)
+        # --------------------------
+        profit_percent = self._safe_percent(profit, logged_balance_before)
+        pnl_percent = self._safe_percent(pnl, margin)
+
+        deducting_fee_total += total_fee
+        count_closed_orders += 1
+        total_losses += 1
+        total_short += 1
+        total_liquids += 1
+
+        total_assets = self._resolve_total_assets(
+            balance,
+            save_money,
+            remaining_open_margin,
+            remaining_open_equity
+        )
+
+        equity_curve, max_drawdown = self._update_drawdown(
+            equity_curve,
+            max_drawdown,
+            total_assets
+        )
+
+        profit_percent_per_month = (
+            ((total_assets - save_money) * 100) / tactical_balance
+        ) - 100
+
+        # --------------------------
+        # TIME
+        # --------------------------
+        days, hours, minutes = trade_duration(open_time_value, close_time_value)
+
+        if self.verbose:
+            print("🔴 SHORT LIQUIDATED at price:", round(close_price, 2),
+                "| Time:", close_time_value)
+
+        # --------------------------
+        # CSV LOG
+        # --------------------------
         has_other_open_positions_at_close = remaining_open_margin > 0
+
         csv_logger.log_trade(
             trade_id,
-            "SHORT_LIQUIDATED",          # Trade type
-            open_time_value,             # Open Time
-            close_time_value,            # Close Time
-            entry_price,                 # Entry Price
-            close_price,                 # Close Price
+            "SHORT_LIQUIDATED",
+            open_time_value,
+            close_time_value,
+            entry_price,
+            close_price,
             round(tactical_balance, 2),
             round(total_assets, 2),
-            round(logged_balance_before, 2),  # Balance before close
-            round(logged_balance_after, 2),            # Balance after trade
-            round(margin, 2),             # Margin used
-            leverage,                    # Leverage
-            trade_amount_percent,        # Trade amount percent
-            round(profit, 2),             # Profit in $
-            round(profit_percent, 2),     # Profit %
-            round(pnl_percent, 2),        # PnL %
-            round(total_fee_liq, 4),      # Total Fee
+            round(logged_balance_before, 2),
+            round(logged_balance_after, 2),
+            round(margin, 2),
+            leverage,
+            trade_amount_percent,
+            round(profit, 2),
+            round(profit_percent, 2),
+            round(pnl_percent, 2),
+            round(total_fee, 4),
             days,
             hours,
             minutes,
-            save_money,
+            round(save_money, 6),
             profit_percent_per_month,
-            has_other_open_positions_at_close
+            has_other_open_positions_at_close,
+            reason_to_close
         )
 
+        # --------------------------
+        # RETURN
+        # --------------------------
         return {
             'liquidated': True,
             'balance': balance,

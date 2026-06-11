@@ -306,6 +306,7 @@ def ma_strategy(tune: dict = None):
     scale_ma_short_total_profit = 0.0
 
 
+
     # ========== RSI LONG STATS INIT ==========
     rsi_long_total = 0
     rsi_long_wins = 0
@@ -318,6 +319,8 @@ def ma_strategy(tune: dict = None):
     rsi_short_losses = 0
     rsi_short_total_profit = 0.0
 
+    # rsi_profit_calculator
+    rsi_profit_calculator = 0
 
     lst_profit_percent_per_month = []
     monthly_stop_reasons = []
@@ -543,6 +546,7 @@ def ma_strategy(tune: dict = None):
                     remaining_open_margin,
                     remaining_open_margin_no_fee,
                     tactical_balance,
+                    p['reason'],
                     balance_before_close_batch,
                     balance_before_close_batch_no_fee,
                     p['balance_before_trade'],
@@ -602,6 +606,7 @@ def ma_strategy(tune: dict = None):
                     remaining_open_margin,
                     remaining_open_margin_no_fee,
                     tactical_balance,
+                    p['reason'],
                     balance_before_close_batch,
                     balance_before_close_batch_no_fee,
                     p['balance_before_trade'],
@@ -708,6 +713,9 @@ def ma_strategy(tune: dict = None):
                     # remove position
                     open_positions.remove(p)
                     
+                    # sum all profits
+                    rsi_profit_calculator += profit_order
+
                     # close point on chart
                     if long_close_points is not None:
                         long_close_points.append((i, close_price))
@@ -809,6 +817,8 @@ def ma_strategy(tune: dict = None):
                     # remove position
                     open_positions.remove(p)
 
+                    rsi_profit_calculator += profit_order
+
                     # close point on chart
                     if short_close_points is not None:
                         short_close_points.append((i, close_price))
@@ -855,6 +865,10 @@ def ma_strategy(tune: dict = None):
                     profit_percent_per_month = 0
                     pending_monthly_stop_reason = None
                     pending_monthly_stop_value = 0.0
+                    if rsi_profit_calculator > 0:
+                        save_money += rsi_profit_calculator
+                        balance -= rsi_profit_calculator
+                    rsi_profit_calculator = 0.0
                     trade_power = True 
 
 

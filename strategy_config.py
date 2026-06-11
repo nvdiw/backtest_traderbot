@@ -308,16 +308,16 @@ class PositionsMonthlyFilter:
     rsi_trade_monthly_filter_on: bool = True
 
     # --- RSI thresholds
-    rsi_long_open_monthly_profit: int = 25
+    rsi_long_open_monthly_profit: int = 20
     rsi_long_close_monthly_profit: int = 80
-    rsi_short_open_monthly_profit: int = 75
-    rsi_short_close_monthly_profit: int = 39
+    rsi_short_open_monthly_profit: int = 70
+    rsi_short_close_monthly_profit: int = 20
 
     # --- risk / trade management
     rsi_long_tp_pct: float = 0.04
     rsi_long_sl_pct: float = 0.01
     rsi_short_tp_pct: float = 0.04
-    rsi_short_sl_pct: float = 0.01
+    rsi_short_sl_pct: float = 0.03
 
     rsi_max_open_trades: int = 1
     rsi_trade_amount_percent: float = 0.4
@@ -332,8 +332,8 @@ class PositionsMonthlyFilter:
     highest_rsi_last_n_value: int = 1
 
     # --- NEW (IMPORTANT IMPROVEMENTS)
-    rsi_entry_buffer: int = 7
-    rsi_distance_threshold: int = 9
+    rsi_entry_buffer: int = 8
+    rsi_distance_threshold: int = 10
 
 @dataclass
 class BaseStrategyConfig(
