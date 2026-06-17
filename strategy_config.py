@@ -89,7 +89,7 @@ class SafeLeverageConfig:
 @dataclass
 class MonthlyControlConfig:
     # Monthly profit percent that pauses trading when profit filter is enabled.
-    monthly_profit_percent_stop_trade: int = 8
+    monthly_profit_percent_stop_trade: int = 9
     # Monthly loss percent that pauses trading when loss filter is enabled.
     monthly_loss_percent_stop_trade: int = 19
     # Tactical balance increase after a profitable stopped month.
@@ -119,7 +119,7 @@ class ScaleEntryConfig:
     # Minimum entry score required for loss-side scale-in entries.
     profit_scale_entry_min_score: int = 4
     # Minimum ATR/ATR_MA ratio for loss-side scale-in entries.
-    profit_scale_entry_atr_ratio_min: float = 1.0
+    profit_scale_entry_atr_ratio_min: float = 1.1
 
 
 @dataclass
@@ -309,13 +309,13 @@ class PositionsMonthlyFilter:
 
     # --- RSI thresholds
     rsi_long_open_monthly_profit: int = 20
-    rsi_long_close_monthly_profit: int = 80
+    rsi_long_close_monthly_profit: int = 79
     rsi_short_open_monthly_profit: int = 70
     rsi_short_close_monthly_profit: int = 20
 
     # --- risk / trade management
-    rsi_long_tp_pct: float = 0.04
-    rsi_long_sl_pct: float = 0.01
+    rsi_long_tp_pct: float = 0.06
+    rsi_long_sl_pct: float = 0.06
     rsi_short_tp_pct: float = 0.04
     rsi_short_sl_pct: float = 0.03
 
