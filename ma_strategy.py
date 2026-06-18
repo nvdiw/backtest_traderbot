@@ -20,7 +20,7 @@ from strategy_config import build_ma_strategy_config
 # end = get_candle_index("2026-05-31")     ----> 294381 on CSV
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2023-01-01","2026-02-23"))
+start, end = get_candle_index(("2019-01-01","2026-02-23"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 all_data = fetch_all_data(start, end)
@@ -2161,6 +2161,35 @@ def ma_strategy(tune: dict = None):
         profit_months_count = sum(1 for p in lst_profit_percent_per_month if p > 0)
         loss_months_count = sum(1 for p in lst_profit_percent_per_month if p < 0)
 
+
+    # =========================
+    # NORMALIZED STRATEGY SCORE
+    # =========================
+
+    final_balance = total_money_static
+
+    # --- Growth ---
+    growth = final_balance / first_balance
+
+    # --- Risk (Drawdown) ---
+    risk = abs(max_drawdown) / 100
+
+    # --- Consistency ---
+    consistency = profit_months_count / max(1, (profit_months_count + loss_months_count))
+
+    # --- Quality (Winrate) ---
+    quality = win_rate / 100
+
+    # =========================
+    # FINAL SCORE
+    # =========================
+    score = (
+        (growth ** 1.15)
+        * (0.6 + quality)
+        * (0.5 + consistency)
+        / (1 + (risk * 2))
+    )
+
     if verbose:
         print("✅ BACKTEST FINISHED")
         print("Closed Trades:", count_closed_orders, "( Longs:", total_long, "| Shorts:", total_short, ")")
@@ -2182,6 +2211,7 @@ def ma_strategy(tune: dict = None):
         print("Count Liquids:", total_liquids)
         print("count_profit_months:", profit_months_count)
         print("count_loss_months:", loss_months_count)
+        print("Total score:", score)
 
 
         # SCALE ENTRY REPORT
@@ -2374,6 +2404,9 @@ def ma_strategy(tune: dict = None):
         "profit_more_than_8%": profit_months_count,
         "profit_months": profit_months_count,
         "loss_months": loss_months_count,
+
+        # score
+        'score': score,
 
         # ==== RSI RESULTS TOTAL ====
         "rsi_total_trades": rsi_total_trades,
