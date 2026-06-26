@@ -152,17 +152,8 @@ param_grid = {
 }
 
 param_grid = {     
-    # 'scale_entry_profit_trigger_pct': [0.01, 0.015, 0.02, 0.03, 0.039, 0.05],
-    # 'scale_entry_loss_trigger_pct': [0.01, 0.015, 0.02, 0.03, 0.04, 0.05],
-    # 'profit_scale_entry_min_score': [2, 3, 4],
-    # 'profit_scale_entry_atr_ratio_min': [0.9, 1.0, 1.1, 1.2, 1.5],
-    # 'monthly_profit_percent_stop_trade': [5, 6, 7, 8, 9, 10, 11, 12, 15],
-    # 'sharp_move_threshold_pct': [i for i in range(5, 21)],
-    # 'sharp_move_lookback_candles': [100, 150, 200, 250, 300, 350, 400, 450, 500, 600, 700, 800, 1000, 2000, 5000],
-    'ema_16': [10, 14, 16, 18, 20],
-    'ma_50': [46, 50, 60, 70],
-    'ma_100': [102, 120, 140, 150, 200],
-    'ma_200': [190, 198, 200, 220, 250, 400],
+    'ma_distance_threshold': [0.0008, 0.0010, 0.0015, 0.0020, 0.0025, 0.0030, 0.005, 0.010, 0.1],
+    'candle_move_threshold': [0.001, 0.002, 0.005, 0.006, 0.008, 0.010, 0.015, 0.02, 0.05, 0.1],
 }
 
 # strategies setting only one of them should be True

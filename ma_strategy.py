@@ -20,7 +20,7 @@ from strategy_config import build_ma_strategy_config
 # end = get_candle_index("2026-05-31")     ----> 294381 on CSV
 
 # get (index or ID) of start, end of csv
-start, end = get_candle_index(("2019-01-01","2026-02-23"))
+start, end = get_candle_index(("2025-01-01","2026-02-23"))
 lst_month_starts = get_month_start_indices(start, end, just_index= True)
 
 all_data = fetch_all_data(start, end)
@@ -521,7 +521,7 @@ def ma_strategy(tune: dict = None):
             if p['side'] == "long":
                 remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
                 remaining_open_margin_no_fee = sum(x['margin_no_fee'] for x in open_positions if x is not p)
-                remaining_open_equity = _open_positions_equity(close_prices[i], p)
+                # remaining_open_equity = _open_positions_equity(close_prices[i], p)
                 liq_updates = trade_manager.check_liquidation_long(
                     i,
                     low_prices,
@@ -551,7 +551,7 @@ def ma_strategy(tune: dict = None):
                     balance_before_close_batch_no_fee,
                     p['balance_before_trade'],
                     p['balance_before_trade_no_fee'],
-                    remaining_open_equity=remaining_open_equity
+                    remaining_open_equity=remaining_open_margin
                 )
                 if liq_updates['liquidated']:
                     liq_reason_text = "LONG EXIT (Liquidation)\nForced close by liquidation rule."
@@ -581,7 +581,7 @@ def ma_strategy(tune: dict = None):
             elif p['side'] == "short":
                 remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
                 remaining_open_margin_no_fee = sum(x['margin_no_fee'] for x in open_positions if x is not p)
-                remaining_open_equity = _open_positions_equity(close_prices[i], p)
+                # remaining_open_equity = _open_positions_equity(close_prices[i], p)
                 liq_updates = trade_manager.check_liquidation_short(
                     i,
                     high_prices,
@@ -611,7 +611,7 @@ def ma_strategy(tune: dict = None):
                     balance_before_close_batch_no_fee,
                     p['balance_before_trade'],
                     p['balance_before_trade_no_fee'],
-                    remaining_open_equity=remaining_open_equity
+                    remaining_open_equity=remaining_open_margin
                 )
                 if liq_updates['liquidated']:
                     liq_reason_text = "SHORT EXIT (Liquidation)\nForced close by liquidation rule."
@@ -648,7 +648,7 @@ def ma_strategy(tune: dict = None):
                 if rsi_list[i] >= rsi_long_close_monthly_profit or close_prices[i] >= p['entry_price'] * (1 + rsi_long_tp_pct) or close_prices[i] <= p['entry_price'] * (1 - rsi_long_sl_pct):
                     remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
                     remaining_open_margin_no_fee = sum(x['margin_no_fee'] for x in open_positions if x is not p)
-                    remaining_open_equity = _open_positions_equity(close_prices[i], p)
+                    # remaining_open_equity = _open_positions_equity(close_prices[i], p)
                     close_price = close_prices[i]
                     # ---- close long ----
                     updates = trade_manager.close_long(
@@ -691,7 +691,7 @@ def ma_strategy(tune: dict = None):
                         balance_before_close_batch_no_fee,
                         p['balance_before_trade'],
                         p['balance_before_trade_no_fee'],
-                        remaining_open_equity=remaining_open_equity)
+                        remaining_open_equity=remaining_open_margin)
 
                     balance = updates['balance']
                     balance_without_fee = updates['balance_without_fee']
@@ -751,7 +751,7 @@ def ma_strategy(tune: dict = None):
                 if rsi_list[i] <= rsi_short_close_monthly_profit or close_prices[i] <= p['entry_price'] * (1 - rsi_short_tp_pct) or close_prices[i] >= p['entry_price'] * (1 + rsi_short_sl_pct):
                     remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
                     remaining_open_margin_no_fee = sum(x['margin_no_fee'] for x in open_positions if x is not p)
-                    remaining_open_equity = _open_positions_equity(close_prices[i], p)
+                    # remaining_open_equity = _open_positions_equity(close_prices[i], p)
                     close_price = close_prices[i]
                     # ---- close short ----
                     updates = trade_manager.close_short(
@@ -794,7 +794,7 @@ def ma_strategy(tune: dict = None):
                         balance_before_close_batch_no_fee,
                         p['balance_before_trade'],
                         p['balance_before_trade_no_fee'],
-                        remaining_open_equity=remaining_open_equity
+                        remaining_open_equity=remaining_open_margin
                         )
 
                     balance = updates['balance']
@@ -1418,7 +1418,7 @@ def ma_strategy(tune: dict = None):
             for p in long_positions_to_close:
                 remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
                 remaining_open_margin_no_fee = sum(x['margin_no_fee'] for x in open_positions if x is not p)
-                remaining_open_equity = _open_positions_equity(close_prices[i], p)
+                # remaining_open_equity = _open_positions_equity(close_prices[i], p)
                 close_price = close_prices[i]
                 updates = trade_manager.close_long(
                     i,
@@ -1460,7 +1460,7 @@ def ma_strategy(tune: dict = None):
                     balance_before_close_batch_no_fee,
                     p['balance_before_trade'],
                     p['balance_before_trade_no_fee'],
-                    remaining_open_equity=remaining_open_equity)
+                    remaining_open_equity=remaining_open_margin)
                 
                 # count profit,loss scales positions
                 if p.get('reason') == 'scale_ma_strategy':
@@ -1936,7 +1936,7 @@ def ma_strategy(tune: dict = None):
             for p in short_positions_to_close:
                 remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
                 remaining_open_margin_no_fee = sum(x['margin_no_fee'] for x in open_positions if x is not p)
-                remaining_open_equity = _open_positions_equity(close_prices[i], p)
+                # remaining_open_equity = _open_positions_equity(close_prices[i], p)
                 close_price = close_prices[i]
                 updates = trade_manager.close_short(
                     i,
@@ -1978,7 +1978,7 @@ def ma_strategy(tune: dict = None):
                     balance_before_close_batch_no_fee,
                     p['balance_before_trade'],
                     p['balance_before_trade_no_fee'],
-                    remaining_open_equity=remaining_open_equity
+                    remaining_open_equity=remaining_open_margin
                     )
 
                 # count profit,loss scales positions
