@@ -643,7 +643,7 @@ def ma_strategy(tune: dict = None):
 
         if rsi_trade_monthly_filter_on:
             # ---- close long when monthly filter is on
-            long_positions_to_close = [p for p in open_positions[:] if p['side'] == "long" and p['reason'] == 'rsi_monthly_filter_strategy']
+            long_positions_to_close = [p for p in open_positions[:] if p['side'] == "long" and p['reason'] == 'rsi_ma_strategy']
             for p in long_positions_to_close:
                 if rsi_list[i] >= rsi_long_close_monthly_profit or close_prices[i] >= p['entry_price'] * (1 + rsi_long_tp_pct) or close_prices[i] <= p['entry_price'] * (1 - rsi_long_sl_pct):
                     remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
@@ -746,7 +746,7 @@ def ma_strategy(tune: dict = None):
 
 
             # ---- close short when monthly filter is on
-            short_positions_to_close = [p for p in open_positions[:] if p['side'] == "short" and p['reason'] == 'rsi_monthly_filter_strategy']
+            short_positions_to_close = [p for p in open_positions[:] if p['side'] == "short" and p['reason'] == 'rsi_ma_strategy']
             for p in short_positions_to_close:
                 if rsi_list[i] <= rsi_short_close_monthly_profit or close_prices[i] <= p['entry_price'] * (1 - rsi_short_tp_pct) or close_prices[i] >= p['entry_price'] * (1 + rsi_short_sl_pct):
                     remaining_open_margin = sum(x['margin'] for x in open_positions if x is not p)
@@ -918,8 +918,9 @@ def ma_strategy(tune: dict = None):
 
                             balance = updates['balance']
                             balance_without_fee = updates['balance_without_fee']
+                            trade_reason = 'rsi_ma_strategy'
                             position = {
-                                'trade_id': next_trade_id,
+                                'trade_id': f"{trade_reason}_{next_trade_id:04d}",
                                 'side': "long",
                                 'entry_price': updates['entry_price'],
                                 'entry_index': i,
@@ -935,7 +936,7 @@ def ma_strategy(tune: dict = None):
                                 'leverage': updates['leverage'],
                                 'open_time_value': updates['open_time_value'],
                                 'target_close_price_loss': updates['entry_price'],
-                                'reason': 'rsi_monthly_filter_strategy'
+                                'reason': trade_reason
                             }
                             open_positions.append(position)
                             
@@ -1000,8 +1001,9 @@ def ma_strategy(tune: dict = None):
                             
                             balance = updates['balance']
                             balance_without_fee = updates['balance_without_fee']
+                            trade_reason = 'rsi_ma_strategy'
                             position = {
-                                'trade_id': next_trade_id,
+                                'trade_id': f"{trade_reason}_{next_trade_id:04d}",
                                 'side': "short",
                                 'entry_price': updates['entry_price'],
                                 'entry_index': i,
@@ -1017,7 +1019,7 @@ def ma_strategy(tune: dict = None):
                                 'leverage': updates['leverage'],
                                 'open_time_value': updates['open_time_value'],
                                 'target_close_price_loss': updates['entry_price'],
-                                'reason': 'rsi_monthly_filter_strategy'
+                                'reason': trade_reason
                             }
                             open_positions.append(position)
                             
@@ -1037,7 +1039,7 @@ def ma_strategy(tune: dict = None):
                             updates = None
 
 
-                if len([p for p in open_positions if p['reason'] != "rsi_monthly_filter_strategy"]) == 0:
+                if len([p for p in open_positions if p['reason'] != "rsi_ma_strategy"]) == 0:
                     continue
         
         # cooldown after good profit
@@ -1163,8 +1165,9 @@ def ma_strategy(tune: dict = None):
 
                         balance = updates['balance']
                         balance_without_fee = updates['balance_without_fee']
+                        trade_reason = 'ma_strategy'
                         position = {
-                            'trade_id': next_trade_id,
+                            'trade_id': f"{trade_reason}_{next_trade_id:04d}",
                             'side': "long",
                             'entry_price': updates['entry_price'],
                             'entry_index': i,
@@ -1180,7 +1183,7 @@ def ma_strategy(tune: dict = None):
                             'leverage': updates['leverage'],
                             'open_time_value': updates['open_time_value'],
                             'target_close_price_loss': updates['entry_price'],
-                            'reason': 'ma_strategy'
+                            'reason': trade_reason
                         }
                         open_positions.append(position)
                         
@@ -1265,8 +1268,9 @@ def ma_strategy(tune: dict = None):
                         # ==== UPDATE ====
                         balance = updates['balance']
                         balance_without_fee = updates['balance_without_fee']
+                        trade_reason = 'scale_ma_strategy'
                         position = {
-                            'trade_id': next_trade_id,
+                            'trade_id': f"{trade_reason}_{next_trade_id:04d}",
                             'side': "long",
                             'entry_price': updates['entry_price'],
                             'entry_index': i,
@@ -1282,7 +1286,7 @@ def ma_strategy(tune: dict = None):
                             'leverage': updates['leverage'],
                             'open_time_value': updates['open_time_value'],
                             'target_close_price_loss': updates['entry_price'],
-                            'reason': 'scale_ma_strategy'
+                            'reason': trade_reason
                         }
                         open_positions.append(position)
                         next_trade_id += 1
@@ -1682,8 +1686,9 @@ def ma_strategy(tune: dict = None):
                         
                         balance = updates['balance']
                         balance_without_fee = updates['balance_without_fee']
+                        trade_reason = 'ma_strategy'
                         position = {
-                            'trade_id': next_trade_id,
+                            'trade_id': f"{trade_reason}_{next_trade_id:04d}",
                             'side': "short",
                             'entry_price': updates['entry_price'],
                             'entry_index': i,
@@ -1699,7 +1704,7 @@ def ma_strategy(tune: dict = None):
                             'leverage': updates['leverage'],
                             'open_time_value': updates['open_time_value'],
                             'target_close_price_loss': updates['entry_price'],
-                            'reason': 'ma_strategy'
+                            'reason': trade_reason
                         }
                         open_positions.append(position)
                         
@@ -1784,8 +1789,9 @@ def ma_strategy(tune: dict = None):
                         # === UPDATE ===
                         balance = updates['balance']
                         balance_without_fee = updates['balance_without_fee']
+                        trade_reason = 'scale_ma_strategy'
                         position = {
-                            'trade_id': next_trade_id,
+                            'trade_id': f"{trade_reason}_{next_trade_id:04d}",
                             'side': "short",
                             'entry_price': updates['entry_price'],
                             'entry_index': i,
@@ -1801,7 +1807,7 @@ def ma_strategy(tune: dict = None):
                             'leverage': updates['leverage'],
                             'open_time_value': updates['open_time_value'],
                             'target_close_price_loss': updates['entry_price'],
-                            'reason': 'scale_ma_strategy'
+                            'reason': trade_reason
                         }
                         open_positions.append(position)
                         next_trade_id += 1

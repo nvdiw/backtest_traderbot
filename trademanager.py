@@ -288,7 +288,7 @@ class TradeManager:
         has_other_open_positions_at_close = remaining_open_margin > 0
         log_total_assets = total_assets
         log_profit_percent_per_month = (((log_total_assets - save_money) * 100) / tactical_balance) - 100
-        if reason_to_close == "rsi_monthly_filter_strategy" and log_profit_percent_per_month > 0:
+        if reason_to_close == "rsi_ma_strategy" and log_profit_percent_per_month > 0:
             log_profit_percent_per_month = 0
         csv_logger.log_trade(
             trade_id,
@@ -547,7 +547,7 @@ class TradeManager:
         has_other_open_positions_at_close = remaining_open_margin > 0
         log_total_assets = total_assets
         log_profit_percent_per_month = (((log_total_assets - save_money) * 100) / tactical_balance) - 100
-        if reason_to_close == "rsi_monthly_filter_strategy" and log_profit_percent_per_month > 0:
+        if reason_to_close == "rsi_ma_strategy" and log_profit_percent_per_month > 0:
             log_profit_percent_per_month = 0
         csv_logger.log_trade(
             trade_id,
